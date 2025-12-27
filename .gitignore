@@ -205,3 +205,15 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# TakoWorks outputs
+*_OUT.ass
+*_yomi_*.xlsx
+*_pdfclip_*.xlsx
+*_yomi_*.txt
+*_pdfclip_*.txt
+*_columns/
+*_images/
+*_yomi_md/
+*_column_excels/
+*_column_txt/
