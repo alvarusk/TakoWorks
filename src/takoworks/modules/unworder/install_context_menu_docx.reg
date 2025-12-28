@@ -1,0 +1,20 @@
+Windows Registry Editor Version 5.00
+
+; =========================
+; TakoWorks -> Unworder (.docx)
+; Instala en: C:\TakoWorks\ContextMenu\Unworder\
+; Archivos: unworder_context.py, run_unworder_context.cmd
+; =========================
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.docx\shell\TakoWorks]
+"MUIVerb"="TakoWorks"
+"SubCommands"=""
+"Icon"="C:\\TakoWorks\\Corrector\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.docx\shell\TakoWorks\shell\UnworderContext]
+"MUIVerb"="Unworder"
+"Icon"="C:\\TakoWorks\\Corrector\\takoworks_big.ico"
+"MultiSelectModel"="Player"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.docx\shell\TakoWorks\shell\UnworderContext\command]
+@="\"C:\\TakoWorks\\ContextMenu\\Unworder\\run_unworder_context.cmd\" %*"

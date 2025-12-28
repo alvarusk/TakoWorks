@@ -11,6 +11,7 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+dist_installer/
 downloads/
 eggs/
 .eggs/
@@ -217,3 +218,13 @@ __marimo__/
 *_yomi_md/
 *_column_excels/
 *_column_txt/
+
+# Bundled binaries
+bin/ffmpeg/
+
+# PyInstaller / binaries
+*.exe
+*.dll
+*.pyd
+*.pyz
+*.pkg

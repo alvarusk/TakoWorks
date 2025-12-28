@@ -1,0 +1,22 @@
+{
+  "lt_base_url": "https://api.languagetoolplus.com/v2",
+  "lt_username": "a.jimeno87@gmail.com",
+  "lt_api_key": "pit-nu1zG8oTd06D",
+  "language": "es-ES",
+  "level": "picky",
+  "mother_tongue": "es",
+  "enabled_only": false,
+  "enabled_categories": "",
+  "disabled_categories": "",
+  "enabled_rules": "",
+  "disabled_rules": "COMILLAS_TIPOGRAFICAS",
+  "open_html": true,
+  "suppress_rules": "",
+  "suppress_categories": "",
+  "_example_suppress_rules": "Aquí pon rule IDs, p.ej.: TYPOGRAPHY_QUOTES, ESPANOL_COMILLAS ... (míralos en *_LT_raw.json -> matches[].rule.id)",
+  "_example_suppress_categories": "Aquí pon category IDs, p.ej.: TYPOGRAPHY, PUNCTUATION (míralos en *_LT_raw.json -> matches[].rule.category.id)",
+  "dicts": "",
+  "apply_personal_dict_filter": true,
+  "personal_dict_ttl_hours": 1,
+  "personal_dict_dicts": ""
+}

@@ -1,0 +1,5 @@
+Windows Registry Editor Version 5.00
+
+; Quita el menú contextual de Stylizer
+[-HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ass\shell\TakoWorks\shell\StylizerContext]
+[-HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ssa\shell\TakoWorks\shell\StylizerContext]

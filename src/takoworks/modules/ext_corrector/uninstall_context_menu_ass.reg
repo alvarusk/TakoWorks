@@ -1,0 +1,5 @@
+Windows Registry Editor Version 5.00
+
+[-HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ass\shell\TakoWorks]
+[-HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ssa\shell\TakoWorks]
+[-HKEY_CURRENT_USER\Software\Classes\.ass\shell\TakoWorks]

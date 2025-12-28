@@ -1,0 +1,35 @@
+Windows Registry Editor Version 5.00
+
+; =========================
+; TakoWorks -> Stylizer (.ass / .ssa)
+; Instala en: C:\TakoWorks\ContextMenu\Stylizer\
+; Archivos: stylizer_context.py, run_stylizer_context.cmd
+; =========================
+
+; ---- .ass ----
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ass\shell\TakoWorks]
+"MUIVerb"="TakoWorks"
+"SubCommands"=""
+"Icon"="C:\\TakoWorks\\Corrector\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ass\shell\TakoWorks\shell\StylizerContext]
+"MUIVerb"="Stylizer (full)"
+"Icon"="C:\\TakoWorks\\Corrector\\takoworks_big.ico"
+"MultiSelectModel"="Player"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ass\shell\TakoWorks\shell\StylizerContext\command]
+@="\"C:\\TakoWorks\\ContextMenu\\Stylizer\\run_stylizer_context.cmd\" %*"
+
+; ---- .ssa ----
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ssa\shell\TakoWorks]
+"MUIVerb"="TakoWorks"
+"SubCommands"=""
+"Icon"="C:\\TakoWorks\\Corrector\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ssa\shell\TakoWorks\shell\StylizerContext]
+"MUIVerb"="Stylizer (full)"
+"Icon"="C:\\TakoWorks\\Corrector\\takoworks_big.ico"
+"MultiSelectModel"="Player"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ssa\shell\TakoWorks\shell\StylizerContext\command]
+@="\"C:\\TakoWorks\\ContextMenu\\Stylizer\\run_stylizer_context.cmd\" %*"
