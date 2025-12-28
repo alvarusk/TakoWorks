@@ -1,0 +1,17 @@
+TROUBLESHOOTING (ruta con espacios)
+
+Si sigues viendo:
+  corrector: error: unrecognized arguments: - Algo...
+
+Entonces NO se está usando el launcher .cmd.
+
+1) Reinstala:
+   - Ejecuta uninstall_context_menu_ass.reg
+   - Ejecuta install_context_menu_ass.reg
+   - Reinicia el Explorador de Windows (Administrador de tareas -> Explorador -> Reiniciar)
+
+2) Prueba y mira este log:
+   C:\TakoWorks\Corrector\launch_log.txt
+Si el log NO se actualiza al usar el menú contextual, Windows no está llamando a run_corrector*.cmd.
+
+3) Si usas Windows 11 con el menú nuevo, prueba desde "Mostrar más opciones" (menú clásico) o activa el tweak del menú clásico.

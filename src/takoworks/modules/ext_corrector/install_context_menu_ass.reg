@@ -1,0 +1,69 @@
+Windows Registry Editor Version 5.00
+
+; =========================
+; TakoWorks -> Corrector (.ass / .ssa)
+; Instala en: C:\TakoWorks\Corrector\
+; Archivos: corrector.py, run_corrector.cmd, run_corrector_serve.cmd, takoworks_big.ico
+; =========================
+
+; ---- .ass (SystemFileAssociations) ----
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ass\shell\TakoWorks]
+"MUIVerb"="TakoWorks"
+"SubCommands"=""
+"Icon"="C:\\TakoWorks\\Corrector\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ass\shell\TakoWorks\shell\CorrectorServe]
+"MUIVerb"="Corrector (con diccionario)"
+"Icon"="C:\\TakoWorks\\Corrector\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ass\shell\TakoWorks\shell\CorrectorServe\command]
+@="\"C:\\TakoWorks\\Corrector\\run_corrector_serve.cmd\" \"%1\""
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ass\shell\TakoWorks\shell\Corrector]
+"MUIVerb"="Corrector (solo informe)"
+"Icon"="C:\\TakoWorks\\Corrector\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ass\shell\TakoWorks\shell\Corrector\command]
+@="\"C:\\TakoWorks\\Corrector\\run_corrector.cmd\" \"%1\""
+
+
+; ---- .ass (extension key, fallback) ----
+[HKEY_CURRENT_USER\Software\Classes\.ass\shell\TakoWorks]
+"MUIVerb"="TakoWorks"
+"SubCommands"=""
+"Icon"="C:\\TakoWorks\\Corrector\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\.ass\shell\TakoWorks\shell\CorrectorServe]
+"MUIVerb"="Corrector (con diccionario)"
+"Icon"="C:\\TakoWorks\\Corrector\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\.ass\shell\TakoWorks\shell\CorrectorServe\command]
+@="\"C:\\TakoWorks\\Corrector\\run_corrector_serve.cmd\" \"%1\""
+
+[HKEY_CURRENT_USER\Software\Classes\.ass\shell\TakoWorks\shell\Corrector]
+"MUIVerb"="Corrector (solo informe)"
+"Icon"="C:\\TakoWorks\\Corrector\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\.ass\shell\TakoWorks\shell\Corrector\command]
+@="\"C:\\TakoWorks\\Corrector\\run_corrector.cmd\" \"%1\""
+
+
+; ---- .ssa (SystemFileAssociations) ----
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ssa\shell\TakoWorks]
+"MUIVerb"="TakoWorks"
+"SubCommands"=""
+"Icon"="C:\\TakoWorks\\Corrector\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ssa\shell\TakoWorks\shell\CorrectorServe]
+"MUIVerb"="Corrector (con diccionario)"
+"Icon"="C:\\TakoWorks\\Corrector\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ssa\shell\TakoWorks\shell\CorrectorServe\command]
+@="\"C:\\TakoWorks\\Corrector\\run_corrector_serve.cmd\" \"%1\""
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ssa\shell\TakoWorks\shell\Corrector]
+"MUIVerb"="Corrector (solo informe)"
+"Icon"="C:\\TakoWorks\\Corrector\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ssa\shell\TakoWorks\shell\Corrector\command]
+@="\"C:\\TakoWorks\\Corrector\\run_corrector.cmd\" \"%1\""

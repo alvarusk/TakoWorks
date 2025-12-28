@@ -1,0 +1,37 @@
+[20/12/2025 11:18:07,10] "C:\Users\ajime\OneDrive\Documentos\PENDING\140 - Immortal King S5\3 - Scripts esES\DailyLifeOfImmo_S5E2.0_TDISIM0053_364559_subtitle_edited_es-es.ass" --serve 
+[20/12/2025 11:24:01,17] "C:\Users\ajime\OneDrive\Documentos\PENDING\140 - Immortal King S5\3 - Scripts esES\DailyLifeOfImmo_S5E1.0_TDISIM0052_364557_subtitle_edited_es-es.ass" 
+[26/12/2025 11:38:59,53] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 11:39:36,81] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 11:40:37,38] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 11:40:56,08] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 11:42:15,30] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 11:43:45,83] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 11:44:57,72] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 12:00:45,86] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 12:01:45,28] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 12:18:01,85] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 19:31:47,45] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 19:33:00,77] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 19:34:22,98] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 19:36:32,13] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 19:39:03,25] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 21:39:52,78] "C:\TakoWorks\src\takoworks\modules\corrector\test.ass" --serve 
+[26/12/2025 21:57:10,17] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 22:09:46,61] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 22:18:35,90] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 22:19:02,65] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 22:19:33,53] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 22:22:34,43] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 22:31:01,67] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 23:33:14,23] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 23:34:31,31] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[26/12/2025 23:52:52,25] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[27/12/2025  0:04:12,29] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[27/12/2025  0:32:39,85] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[27/12/2025  1:24:11,93] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[27/12/2025  5:44:46,56] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[27/12/2025  8:22:28,31] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[27/12/2025  8:35:49,02] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[27/12/2025 10:54:31,96] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[27/12/2025 10:55:12,51] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[27/12/2025 11:26:21,06] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 

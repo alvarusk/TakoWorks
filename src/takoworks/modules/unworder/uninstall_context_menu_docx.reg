@@ -1,0 +1,4 @@
+Windows Registry Editor Version 5.00
+
+; Quita el menú contextual de Unworder
+[-HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.docx\shell\TakoWorks\shell\UnworderContext]
