@@ -124,6 +124,71 @@ def cv_imwrite_u(path: Path, img: np.ndarray) -> None:
     path.write_bytes(buf.tobytes())
 
 
+def pixmap_to_bgr(pix: fitz.Pixmap) -> np.ndarray:
+    """
+    ConversiЦn robusta de fitz.Pixmap -> BGR (maneja CMYK/DeviceN, alfa y stride).
+    """
+    base = pix
+    if pix.colorspace is None or (pix.colorspace.n not in (1, 3)) or pix.n not in (1, 3, 4):
+        base = fitz.Pixmap(fitz.csRGB, pix)
+    elif pix.n in (3, 4) and pix.colorspace.n != 3:
+        base = fitz.Pixmap(fitz.csRGB, pix)
+
+    n = base.n
+    h, w = base.h, base.w
+    stride = base.stride
+
+    buf = np.frombuffer(base.samples, dtype=np.uint8)
+    arr = buf.reshape((h, stride))
+    arr = arr[:, : w * n].copy()
+    arr = arr.reshape((h, w, n))
+
+    if n == 1:
+        arr = cv2.cvtColor(arr, cv2.COLOR_GRAY2RGB)
+    elif n >= 4 or base.alpha:
+        rgb = arr[:, :, :3]
+        alpha = arr[:, :, 3] if arr.shape[2] > 3 else np.full((h, w), 255, dtype=np.uint8)
+        bg = np.full_like(rgb, 255, dtype=np.uint8)
+        rgb = ((rgb.astype(np.uint16) * alpha[..., None] + bg.astype(np.uint16) * (255 - alpha[..., None])) // 255).astype(np.uint8)
+        arr = rgb
+
+    bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
+    return bgr
+
+
+def rotate_bgr(img: np.ndarray, deg: float) -> np.ndarray:
+    if img is None or img.size == 0:
+        return img
+    if abs(deg) < 1e-3:
+        return img
+    h, w = img.shape[:2]
+    center = (w / 2.0, h / 2.0)
+    m = cv2.getRotationMatrix2D(center, deg, 1.0)
+    cos = abs(m[0, 0])
+    sin = abs(m[0, 1])
+    new_w = int((h * sin) + (w * cos))
+    new_h = int((h * cos) + (w * sin))
+    m[0, 2] += (new_w / 2) - center[0]
+    m[1, 2] += (new_h / 2) - center[1]
+    return cv2.warpAffine(img, m, (new_w, new_h), flags=cv2.INTER_LINEAR, borderValue=(255, 255, 255))
+
+
+def apply_skip_rects(bgr: np.ndarray, skips: List[Tuple[float, float, float, float]]) -> np.ndarray:
+    if not skips or bgr is None or bgr.size == 0:
+        return bgr
+    h, w = bgr.shape[:2]
+    out = bgr.copy()
+    for (x0r, y0r, x1r, y1r) in skips:
+        x0 = max(0, min(w, int(x0r * w)))
+        x1 = max(0, min(w, int(x1r * w)))
+        y0 = max(0, min(h, int(y0r * h)))
+        y1 = max(0, min(h, int(y1r * h)))
+        if x1 <= x0 or y1 <= y0:
+            continue
+        out[y0:y1, x0:x1] = 255
+    return out
+
+
 def has_visible_ink_image(img_bgr: np.ndarray) -> bool:
     if img_bgr is None or img_bgr.size == 0:
         return False
@@ -611,6 +676,7 @@ def _ocr_one_column_to_rows(
     sec: int,
     md_dir: Path,
     log: LogFn,
+    actor_override: Optional[str] = None,
 ) -> List[dict]:
     if not col_img_path.exists():
         log(f"[WARN] Imagen no encontrada: {col_img_path}")
@@ -661,7 +727,116 @@ def _ocr_one_column_to_rows(
             "actor": (d.get("actor") or "").strip(),
             "texto": (d.get("texto") or "").strip(),
         })
+    actor_clean = (actor_override or "").strip()
+    if actor_clean:
+        for r in out_rows:
+            if not r.get("actor"):
+                r["actor"] = actor_clean
     return out_rows
+
+
+def _ocr_actor_strip(
+    yomitoku_exe: str,
+    actor_img_path: Path,
+    page_num: int,
+    sec: int,
+    md_dir: Path,
+    log: LogFn,
+) -> str:
+    """
+    OCR específico para la banda de actores. Devuelve el mejor candidato limpio.
+    """
+    if not actor_img_path.exists():
+        return ""
+
+    outdir = md_dir / (safe_name(actor_img_path.stem) + "_actor")
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        yomitoku_exe,
+        str(actor_img_path),
+        "-f", "md",
+        "-o", str(outdir),
+        "-d", "cpu",
+        "--ignore_line_break",
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        err = (proc.stderr or "").strip()
+        if err:
+            log(err)
+        log(f"[WARN] YomiToku actor error ({proc.returncode}) en {actor_img_path.name}")
+        return ""
+
+    candidates = list(outdir.rglob("*.md"))
+    if not candidates:
+        candidates = [p for p in md_dir.rglob("*.md") if re.search(rf"_p{page_num:03d}s{sec:03d}", p.name)]
+    if not candidates:
+        return ""
+
+    md_path = max(candidates, key=lambda p: p.stat().st_mtime)
+    md = _post_edit_and_persist_md(md_path, log)
+    merged = merge_jp_lines(md)
+    merged = merge_unbalanced_jp_quotes(merged)
+    for ln in merged:
+        s = clean_text(ln).replace("Æ?O", "").replace("Æ??", "").strip()
+        if looks_like_actor(s):
+            return s
+        if s:
+            return s
+    return ""
+
+
+def _process_legacy_page(
+    doc: fitz.Document,
+    page_index: int,
+    page_num: int,
+    stem: str,
+    images_dir: Path,
+    md_dir: Path,
+    upper_ratio: Optional[float],
+    lower_ratio: Optional[float],
+    yomitoku_exe: str,
+    log: LogFn,
+    cancel_event=None,
+    angle_deg: float = 0.0,
+    skip_rects: Optional[List[Tuple[float, float, float, float]]] = None,
+) -> List[dict]:
+    """
+    Procesa una página con el flujo legacy (upper/lower + detección de columnas).
+    """
+    _check_cancel(cancel_event)
+    page = doc.load_page(page_index)
+    zoom = OCR_DPI / 72.0
+    pix_full = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=True)
+    bgr_full = rotate_bgr(pixmap_to_bgr(pix_full), angle_deg)
+    bgr_full = apply_skip_rects(bgr_full, skip_rects or [])
+
+    h, w = bgr_full.shape[:2]
+    if upper_ratio is None or lower_ratio is None:
+        y0, y1 = 0, h
+    else:
+        y0 = max(0, min(h, int(h * float(upper_ratio))))
+        y1 = max(0, min(h, int(h * float(lower_ratio))))
+        if y1 <= y0 + 1:
+            y0, y1 = int(h * 0.4), int(h * 0.9)
+
+    bgr = bgr_full[y0:y1, :].copy()
+
+    crop_img_path = images_dir / f"{stem}_p{page_num:03d}_crop.png"
+    cv_imwrite_u(crop_img_path, bgr)
+
+    lines_x = detect_vertical_separators_long_global(bgr, dpi=OCR_DPI)
+    cols = slice_columns_from_image(bgr, lines_x)
+    if not cols and has_visible_ink_image(bgr):
+        cols = [(1, bgr)]
+
+    rows: List[dict] = []
+    for sec, col_img in cols:
+        col_img_path = images_dir / f"{stem}_p{page_num:03d}s{sec:03d}.png"
+        cv_imwrite_u(col_img_path, col_img)
+        rows.extend(_ocr_one_column_to_rows(yomitoku_exe, col_img_path, page_num, sec, md_dir, log))
+    return rows
 
 
 # =========================
@@ -812,6 +987,10 @@ def run_scanner(
     make_txt: bool = False,
     cleanup: bool = False,
     yomitoku_exe: Optional[str] = None,
+    rects_by_page: Optional[Dict[int, List[Tuple[float, float, float, float]]]] = None,
+    rot_deg_by_page: Optional[Dict[int, float]] = None,
+    actor_band_by_page: Optional[Dict[int, Tuple[float, float]]] = None,
+    skip_rects_by_page: Optional[Dict[int, List[Tuple[float, float, float, float]]]] = None,
     log: LogFn = lambda s: None,
     cancel_event=None,
 ) -> Dict[str, ScanOutputs]:
@@ -851,6 +1030,10 @@ def run_scanner(
             make_txt=make_txt,
             cleanup=cleanup,
             yomitoku_exe=exe,
+            rects_by_page=rects_by_page or {},
+            rot_deg_by_page=rot_deg_by_page or {},
+            actor_band_by_page=actor_band_by_page or {},
+            skip_rects_by_page=skip_rects_by_page or {},
             log=log,
             cancel_event=cancel_event,
         )
@@ -871,6 +1054,10 @@ def _process_one_pdf(
     make_txt: bool,
     cleanup: bool,
     yomitoku_exe: str,
+    rects_by_page: Dict[int, List[Tuple[float, float, float, float]]],
+    rot_deg_by_page: Dict[int, float],
+    actor_band_by_page: Dict[int, Tuple[float, float]],
+    skip_rects_by_page: Dict[int, List[Tuple[float, float, float, float]]],
     log: LogFn,
     cancel_event=None,
 ) -> ScanOutputs:
@@ -879,7 +1066,6 @@ def _process_one_pdf(
     # Intermedios se guardan junto al PDF por compatibilidad con tus carpetas existentes
     base_dir = pdf_path.parent
 
-    cropped_pdf_path = base_dir / f"{stem}_CROPPED.pdf"
     images_dir = base_dir / f"{stem}_images"
     md_dir = base_dir / f"{stem}_yomi_md"
     images_dir.mkdir(parents=True, exist_ok=True)
@@ -924,75 +1110,62 @@ def _process_one_pdf(
             df = finalize_df(pd.DataFrame(rows)) if rows else pd.DataFrame(columns=["pagina", "seccion", "actor", "texto"])
             return _write_outputs(pdf_path, out_dir, df, make_excel, make_ass, make_txt, log, cancel_event)
 
-    # C) Pipeline completo
-    if upper_ratio is None or lower_ratio is None:
+    if not rects_by_page and (upper_ratio is None or lower_ratio is None):
         raise RuntimeError("Faltan cortes upper/lower. Usa la vista previa o activa reuse.")
 
     doc = fitz.open(str(pdf_path))
     try:
-        crop_doc = fitz.open()
-        crop_clips: List[Tuple[float, float, float, float]] = []
-        for pi in range(len(doc)):
-            _check_cancel(cancel_event)
-            page = doc.load_page(pi)
-            rect = page.rect
-            y0 = max(0.0, min(rect.height, rect.height * float(upper_ratio)))
-            y1 = max(0.0, min(rect.height, rect.height * float(lower_ratio)))
-            if y1 <= y0 + 1:
-                y0, y1 = rect.height * 0.4, rect.height * 0.9
-            clip = fitz.Rect(rect.x0, y0, rect.x1, y1)
-            crop_clips.append((clip.x0, clip.y0, clip.x1, clip.y1))
-
-            new_page = crop_doc.new_page(width=clip.width, height=clip.height)
-            new_page.show_pdf_page(new_page.rect, doc, pi, clip=clip)
-
-        crop_doc.save(str(cropped_pdf_path))
-        crop_doc.close()
-        log(f"PDF recortado: {cropped_pdf_path.name}")
-
         rows: List[dict] = []
-        for pi in range(len(doc)):
-            _check_cancel(cancel_event)
-            page_num = pi + 1
-            page = doc.load_page(pi)
-            clip = fitz.Rect(*crop_clips[pi])
+        if rects_by_page:
+            for pi in range(len(doc)):
+                _check_cancel(cancel_event)
+                page_num = pi + 1
+                angle = float(rot_deg_by_page.get(page_num, 0.0) or 0.0)
+                rects = rects_by_page.get(page_num, [])
 
-            zoom = OCR_DPI / 72.0
-            pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), clip=clip, alpha=False)
-            arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
-            if pix.n == 4:
-                bgr = cv2.cvtColor(arr, cv2.COLOR_BGRA2BGR)
-            elif pix.n == 3:
-                bgr = arr
-            else:
-                bgr = cv2.cvtColor(arr, cv2.COLOR_GRAY2BGR)
+                if rects:
+                    zoom = OCR_DPI / 72.0
+                    pix = doc.load_page(pi).get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=True)
+                    bgr_full = rotate_bgr(pixmap_to_bgr(pix), angle)
+                    bgr_full = apply_skip_rects(bgr_full, skip_rects_by_page.get(page_num, []))
+                    h, w = bgr_full.shape[:2]
 
-            # Guardar recorte página (debug/cache)
-            crop_img_path = images_dir / f"{stem}_p{page_num:03d}_crop.png"
-            cv_imwrite_u(crop_img_path, bgr)
+                    for idx, (x0r, y0r, x1r, y1r) in enumerate(rects, start=1):
+                        x0 = max(0, min(w - 1, int(x0r * w)))
+                        x1 = max(0, min(w, int(x1r * w)))
+                        y0 = max(0, min(h - 1, int(y0r * h)))
+                        y1 = max(0, min(h, int(y1r * h)))
+                        if x1 <= x0 + 2 or y1 <= y0 + 2:
+                            continue
+                        col_img = bgr_full[y0:y1, x0:x1].copy()
+                        if not has_visible_ink_image(col_img):
+                            continue
+                        col_img_path = images_dir / f"{stem}_p{page_num:03d}s{idx:03d}.png"
+                        cv_imwrite_u(col_img_path, col_img)
 
-            lines_x = detect_vertical_separators_long_global(bgr, dpi=OCR_DPI)
-            cols = slice_columns_from_image(bgr, lines_x)
-            if not cols and has_visible_ink_image(bgr):
-                cols = [(1, bgr)]
+                        actor_override = None
+                        band = actor_band_by_page.get(page_num)
+                        if band:
+                            band_y0 = max(y0, int(band[0] * h))
+                            band_y1 = min(y1, int(band[1] * h))
+                            if band_y1 - band_y0 > 4:
+                                actor_img = bgr_full[band_y0:band_y1, x0:x1].copy()
+                                actor_path = images_dir / f"{stem}_p{page_num:03d}s{idx:03d}_actor.png"
+                                cv_imwrite_u(actor_path, actor_img)
+                                actor_override = _ocr_actor_strip(yomitoku_exe, actor_path, page_num, idx, md_dir, log)
 
-            for sec, col_img in cols:
-                col_img_path = images_dir / f"{stem}_p{page_num:03d}s{sec:03d}.png"
-                cv_imwrite_u(col_img_path, col_img)
-                rows.extend(_ocr_one_column_to_rows(yomitoku_exe, col_img_path, page_num, sec, md_dir, log))
+                        rows.extend(_ocr_one_column_to_rows(yomitoku_exe, col_img_path, page_num, idx, md_dir, log, actor_override=actor_override))
+                else:
+                    rows.extend(_process_legacy_page(doc, pi, page_num, stem, images_dir, md_dir, upper_ratio, lower_ratio, yomitoku_exe, log, cancel_event, angle_deg=angle, skip_rects=skip_rects_by_page.get(page_num)))
+        else:
+            for pi in range(len(doc)):
+                _check_cancel(cancel_event)
+                page_num = pi + 1
+                angle = float(rot_deg_by_page.get(page_num, 0.0) or 0.0)
+                rows.extend(_process_legacy_page(doc, pi, page_num, stem, images_dir, md_dir, upper_ratio, lower_ratio, yomitoku_exe, log, cancel_event, angle_deg=angle, skip_rects=skip_rects_by_page.get(page_num)))
 
         df = finalize_df(pd.DataFrame(rows)) if rows else pd.DataFrame(columns=["pagina", "seccion", "actor", "texto"])
         outputs = _write_outputs(pdf_path, out_dir, df, make_excel, make_ass, make_txt, log, cancel_event)
-
-        if cleanup:
-            # Por defecto, NO borro _images/_yomi_md porque sirven de cache.
-            # Solo borro el CROPPED para evitar confusión.
-            try:
-                if cropped_pdf_path.exists():
-                    cropped_pdf_path.unlink()
-            except Exception:
-                pass
-
         return outputs
 
     finally:
