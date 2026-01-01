@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .ui.main_window import MainWindow
 from .paths import app_root
+from . import __version__
 
 
 def run_app(cfg: dict) -> None:
@@ -18,7 +19,7 @@ def run_app(cfg: dict) -> None:
         except Exception:
             pass
 
-    root.title("TakoWorks")
+    root.title(f"TakoWorks v{__version__}")
     root.geometry("980x720")
 
     try:
