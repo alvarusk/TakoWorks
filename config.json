@@ -17,6 +17,11 @@
     "clean_text": false,
     "remove_linebreaks": true
   },
+  "supabase": {
+    "url": "https://ugckzygeultwmnmgbsve.supabase.co",
+    "service_key": "REDACTED",
+    "anon_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnY2t6eWdldWx0d21ubWdic3ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcwOTk2MDUsImV4cCI6MjA4MjY3NTYwNX0.HAVNGQx0whgmX0zP7mYWUe8q8DUGtkPjZPsvAMO9ZFY"
+  },
   "cost_per_1k": {
     "gpt": {
       "input": 0.00125,
@@ -41,7 +46,7 @@
     "word_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/0 - Ref/XW5#06_台词本_净版_250418.docx",
     "pdf_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/141 - MF Ghost S3/0 - Ref/ep02/#26_MF GHOST_Final script.pdf",
     "out_dir": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/3 - Scripts esES/s5e06",
-    "splitter_pos": 481,
+    "splitter_pos": 492,
     "scanner_batch": false,
     "yomitoku_exe": "C:/TakoWorks/bin/yomitoku/yomitoku.exe",
     "cut_upper_ratio": 0.462,

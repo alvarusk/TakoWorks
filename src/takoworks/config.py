@@ -48,6 +48,12 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "clean_text": False,
     },
 
+    "supabase": {
+        "url": "",
+        "service_key": "",
+        "anon_key": "",
+    },
+
     # Costes por 1K tokens (USD) para cada motor
     "cost_per_1k": {
         "gpt": {"input": 0.0, "output": 0.0},
@@ -151,6 +157,10 @@ def load_config() -> Dict[str, Any]:
         cfg["api_keys"].update(data["api_keys"])
     if isinstance(local_data.get("api_keys"), dict):
         cfg["api_keys"].update(local_data["api_keys"])
+    if isinstance(data.get("supabase"), dict):
+        cfg["supabase"].update(data["supabase"])
+    if isinstance(local_data.get("supabase"), dict):
+        cfg["supabase"].update(local_data["supabase"])
 
     for k in _REL_KEYS:
         cfg[k] = _from_portable_path(cfg.get(k, ""))
