@@ -220,6 +220,9 @@ def process_events(
                 # Reglas por Name (prioridad para carteles)
                 if "text" in n_low or "sign" in n_low:
                     new_style = "Cart_A_Tre"
+                # Narrador
+                if "narr" in n_low or "narrator" in n_low:
+                    new_style = "Gen_Italics"
 
                 parts[style_idx] = new_style
                 style_val = new_style  # para chequeos posteriores
