@@ -33,6 +33,12 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "cndict_dir": "",
     "ffmpeg_dir": "",      # si lo embebes: bin/ffmpeg
     "yomitoku_dir": "",    # si lo embebes: bin/yomitoku
+    "api_keys": {
+        "openai": "",
+        "anthropic": "",
+        "gemini": "",
+        "deepseek": "",
+    },
 
     "stylizer_options": {
         "clean_carteles": False,
@@ -77,6 +83,11 @@ def _user_config_path() -> Path:
     return base / "config.json"
 
 
+def _user_local_config_path() -> Path:
+    # Fichero opcional para secretos (no versionado): %APPDATA%/TakoWorks/config.local.json
+    return _user_config_path().with_name("config.local.json")
+
+
 def config_path() -> Path:
     p = _portable_config_path()
     try:
@@ -97,20 +108,31 @@ def load_config() -> Dict[str, Any]:
     if not p.exists():
         return json.loads(json.dumps(DEFAULT_CONFIG))
 
-    try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-    except Exception:
-        data = {}
+    def _load_optional(path: Path) -> Dict[str, Any]:
+        try:
+            if path.exists():
+                return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+        return {}
+
+    data = _load_optional(p)
+    local_data = _load_optional(_user_local_config_path())
 
     # merge suave
     cfg = json.loads(json.dumps(DEFAULT_CONFIG))
     cfg.update({k: v for k, v in data.items() if k in cfg})
+    cfg.update({k: v for k, v in local_data.items() if k in cfg})
 
     # sub-merge
     if isinstance(data.get("stylizer_options"), dict):
         cfg["stylizer_options"].update(data["stylizer_options"])
+    if isinstance(local_data.get("stylizer_options"), dict):
+        cfg["stylizer_options"].update(local_data["stylizer_options"])
     if isinstance(data.get("last"), dict):
         cfg["last"].update(data["last"])
+    if isinstance(local_data.get("last"), dict):
+        cfg["last"].update(local_data["last"])
     if isinstance(data.get("cost_per_1k"), dict):
         for k, v in data["cost_per_1k"].items():
             if isinstance(v, dict):
@@ -118,6 +140,17 @@ def load_config() -> Dict[str, Any]:
                     "input": v.get("input", cfg["cost_per_1k"].get(k, {}).get("input", 0.0)),
                     "output": v.get("output", cfg["cost_per_1k"].get(k, {}).get("output", 0.0)),
                 }
+    if isinstance(local_data.get("cost_per_1k"), dict):
+        for k, v in local_data["cost_per_1k"].items():
+            if isinstance(v, dict):
+                cfg["cost_per_1k"][k] = {
+                    "input": v.get("input", cfg["cost_per_1k"].get(k, {}).get("input", 0.0)),
+                    "output": v.get("output", cfg["cost_per_1k"].get(k, {}).get("output", 0.0)),
+                }
+    if isinstance(data.get("api_keys"), dict):
+        cfg["api_keys"].update(data["api_keys"])
+    if isinstance(local_data.get("api_keys"), dict):
+        cfg["api_keys"].update(local_data["api_keys"])
 
     for k in _REL_KEYS:
         cfg[k] = _from_portable_path(cfg.get(k, ""))
