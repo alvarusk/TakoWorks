@@ -33,13 +33,17 @@ def read_version() -> str:
 def write_version(new_version: str) -> None:
     # __init__.py
     txt = INIT_PATH.read_text(encoding="utf-8")
-    txt = re.sub(r'(__version__\s*=\s*")([^"]+)(")', rf'\1{new_version}\3', txt)
+    def _repl_init(m: re.Match) -> str:
+        return f'{m.group(1)}{new_version}{m.group(3)}'
+    txt = re.sub(r'(__version__\s*=\s*")([^"]+)(")', _repl_init, txt)
     INIT_PATH.write_text(txt, encoding="utf-8")
 
     # README (encabezado)
     if README_PATH.exists():
         rtxt = README_PATH.read_text(encoding="utf-8")
-        rtxt = re.sub(r"(TakoWorks \(v)([^)]+)(\))", rf"\g<1>{new_version}\3", rtxt, count=1)
+        def _repl_readme(m: re.Match) -> str:
+            return f'{m.group(1)}{new_version}{m.group(3)}'
+        rtxt = re.sub(r"(TakoWorks \(v)([^)]+)(\))", _repl_readme, rtxt, count=1)
         README_PATH.write_text(rtxt, encoding="utf-8")
 
 
