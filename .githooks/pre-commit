@@ -1,0 +1,25 @@
+#!/bin/sh
+# Bump version automatically before commit:
+#  - main  -> +0.1.0 (minor, patch reset)
+#  - others -> +0.0.1 (patch)
+# Skips if SKIP_VERSION_BUMP is set.
+
+ROOT="$(cd -- "$(dirname -- "$0")/.." && pwd)"
+INIT_FILE="$ROOT/src/takoworks/__init__.py"
+
+if [ -n "$SKIP_VERSION_BUMP" ]; then
+  exit 0
+fi
+
+# Si ya está staged el __init__, asumimos que el bump ya se hizo.
+if git diff --cached --name-only | grep -q "src/takoworks/__init__.py"; then
+  exit 0
+fi
+
+python "$ROOT/bin/bump_version.py" --mode auto || exit 1
+
+# Añadir cambios de versión al commit
+git add "$INIT_FILE"
+if [ -f "$ROOT/README.md" ]; then
+  git add "$ROOT/README.md"
+fi

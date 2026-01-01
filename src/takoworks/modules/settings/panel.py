@@ -63,7 +63,7 @@ class SettingsPanel(ttk.Frame):
         ttk.Separator(frm).pack(fill="x", pady=10)
 
         ttk.Label(frm, text=f"Updates (current v{__version__})").pack(anchor="w")
-        ttk.Button(frm, text="Check updates (git pull origin <branch>)", command=self._check_updates).pack(anchor="w", pady=4)
+        ttk.Button(frm, text="Check updates", command=self._check_updates).pack(anchor="w", pady=4)
 
     def _row(self, parent, label, var, browse_cmd):
         r = ttk.Frame(parent)
@@ -110,7 +110,9 @@ class SettingsPanel(ttk.Frame):
             res = subprocess.run(["git"] + args, cwd=repo_root, capture_output=True, text=True)
             if res.returncode != 0:
                 raise RuntimeError(res.stderr.strip() or res.stdout.strip() or "git error")
-            return res.stdout.strip()
+            out = res.stdout.strip()
+            self.runner._console_write(f"[Update] git {' '.join(args)}\n{out}")
+            return out
 
         try:
             _git(["rev-parse", "--is-inside-work-tree"])
