@@ -275,7 +275,6 @@ def persist_costs_to_supabase(
     series_name: str,
     episode: str,
     lang: str,
-    source_type: str,
     usage_by_model: Dict[str, ApiUsage],
 ) -> None:
     if not usage_by_model:
@@ -299,7 +298,6 @@ def persist_costs_to_supabase(
                 "series": series_name,
                 "episode": episode,
                 "lang": lang,
-                "source_type": source_type,
                 "engine": key,
                 "model_name": usage.model_name,
                 "input_tokens": usage.prompt_tokens,
@@ -2159,7 +2157,7 @@ def main():
 
     if usage_by_model:
         log_cost_summary(run_id, usage_by_model, series_name, base_name)
-        persist_costs_to_supabase(run_id, series_name, base_name, lang, source_type, usage_by_model)
+        persist_costs_to_supabase(run_id, series_name, base_name, lang, usage_by_model)
 
     # 3) HTML opcional
     if args.html:
