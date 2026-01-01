@@ -14,45 +14,17 @@ import re
 from collections import defaultdict
 from functools import lru_cache
 from ... import config as app_config
+from .ass_utils import (
+    _ass_hide,
+    _ass_hide_prefix,
+    _ass_sanitize_braces,
+    _ass_unsanitize_braces,
+)
 
 try:
     import requests  # type: ignore
 except Exception:
     requests = None
-
-# ============================================================
-#  HELPERS ASS (comentarios invisibles en Aegisub)
-# ============================================================
-
-def _ass_sanitize_braces(s: str) -> str:
-    # Evita romper tags ASS si el texto contiene llaves
-    return (s or "").replace("{", "｛").replace("}", "｝")
-
-def _ass_unsanitize_braces(s: str) -> str:
-    # Revierte la sanitización de llaves aplicada para ASS
-    return (s or "").replace("｛", "{").replace("｝", "}")
-
-def _ass_hide(s: str) -> str:
-    # Texto oculto en render, visible como "comentario" dentro del evento en Aegisub
-    return "{" + _ass_sanitize_braces(s) + "}"
-
-def _ass_hide_prefix(existing: str) -> str:
-    # Oculta todas las líneas existentes (y sus \N) para que no dejen líneas en blanco.
-    raw = existing or ""
-    if not raw.strip():
-        return ""
-    lines = raw.split(r"\N")
-    out = []
-    for ln in lines:
-        if ln == "":
-            continue
-        # Si ya viene como { ... }, evitamos doble llave
-        if ln.startswith("{") and ln.endswith("}"):
-            ln = ln[1:-1]
-        out.append("{" + _ass_sanitize_braces(ln) + r"\N" + "}")
-    return "".join(out)
-
-
 
 import pysubs2
 import torch
@@ -266,8 +238,26 @@ def _warn_missing_usage(model_key: str) -> None:
     _WARNED_MISSING_USAGE.add(model_key)
 
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+def _read_supabase_value(field: str, env_names) -> str:
+    for env in env_names:
+        val = os.getenv(env)
+        if val:
+            return val
+    try:
+        cfg = app_config.load_config()
+        supabase_cfg = cfg.get("supabase", {})
+        if isinstance(supabase_cfg, dict):
+            return str(supabase_cfg.get(field, "") or "")
+    except Exception:
+        pass
+    return ""
+
+
+SUPABASE_URL = _read_supabase_value("url", ["SUPABASE_URL"])
+SUPABASE_SERVICE_KEY = _read_supabase_value(
+    "service_key",
+    ["SUPABASE_SERVICE_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_ANON_KEY"],
+)
 SUPABASE_COST_TABLE = os.getenv("SUPABASE_COST_TABLE", "voicex_api_costs")
 
 
@@ -1569,16 +1559,22 @@ def translate_with_openai(
     lang: str,
     series_name: str,
     source_type: str,
-) -> Tuple[List[str], ApiUsage]:
+) -> Tuple[List[str], ApiUsage, Optional[str]]:
     if not OPENAI_API_KEY:
         print("[GPT-5] Se omite GPT porque falta OPENAI_API_KEY (env o config.local.json).")
-        return src_lines, ApiUsage(engine="gpt", model_name=OPENAI_MODEL)
+        return src_lines, ApiUsage(engine="gpt", model_name=OPENAI_MODEL), "missing_key"
 
-    client = get_openai_client()
+    try:
+        client = get_openai_client()
+    except Exception as e:
+        print(f"[GPT-5] No se puede inicializar el cliente: {e}. Se omite GPT.")
+        return src_lines, ApiUsage(engine="gpt", model_name=OPENAI_MODEL), "client_error"
+
     system_prompt = build_system_prompt(lang, series_name, source_type)
     all_translations: List[str] = []
     total = len(src_lines)
     usage = ApiUsage(engine="gpt", model_name=OPENAI_MODEL)
+    skipped_reason: Optional[str] = None
 
     for start in range(0, total, CHUNK_SIZE):
         chunk = src_lines[start:start + CHUNK_SIZE]
@@ -1600,6 +1596,7 @@ def translate_with_openai(
             print(f"[GPT-5] Error al traducir; se omite GPT en este bloque. Detalle: {e}")
             translations = chunk
             all_translations.extend(translations)
+            skipped_reason = skipped_reason or "partial_error"
             continue
 
         resp_usage = getattr(response, "usage", None)
@@ -1614,7 +1611,7 @@ def translate_with_openai(
         translations = parse_json_translations(content, fallback_lines=chunk)
         all_translations.extend(translations)
 
-    return all_translations, usage
+    return all_translations, usage, skipped_reason
 
 
 def translate_with_deepseek(
@@ -1622,12 +1619,17 @@ def translate_with_deepseek(
     lang: str,
     series_name: str,
     source_type: str,
-) -> Tuple[List[str], ApiUsage]:
-    client = get_deepseek_client()
+) -> Tuple[List[str], ApiUsage, Optional[str]]:
+    try:
+        client = get_deepseek_client()
+    except Exception as e:
+        print(f"[DeepSeek] Se omite DeepSeek (cliente no inicializado): {e}")
+        return src_lines, ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL), "client_error"
     system_prompt = build_system_prompt(lang, series_name, source_type)
     all_translations: List[str] = []
     total = len(src_lines)
     usage = ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL)
+    skipped_reason: Optional[str] = None
 
     for start in range(0, total, CHUNK_SIZE):
         chunk = src_lines[start:start + CHUNK_SIZE]
@@ -1635,15 +1637,22 @@ def translate_with_deepseek(
         end_line = min(start + CHUNK_SIZE, total)
         print(f"[DeepSeek] Líneas {start + 1}-{end_line} de {total}...")
 
-        response = client.chat.completions.create(
-            model=DEEPSEEK_MODEL,
-            temperature=0.1,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
-        content = response.choices[0].message.content.strip()
+        try:
+            response = client.chat.completions.create(
+                model=DEEPSEEK_MODEL,
+                temperature=0.1,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+            )
+            content = response.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"[DeepSeek] Error al traducir; se omite DeepSeek en este bloque. Detalle: {e}")
+            skipped_reason = skipped_reason or "partial_error"
+            translations = chunk
+            all_translations.extend(translations)
+            continue
         resp_usage = getattr(response, "usage", None)
         if resp_usage:
             pt = _safe_int(getattr(resp_usage, "prompt_tokens", 0))
@@ -1656,7 +1665,7 @@ def translate_with_deepseek(
         translations = parse_json_translations(content, fallback_lines=chunk)
         all_translations.extend(translations)
 
-    return all_translations, usage
+    return all_translations, usage, skipped_reason
 
 
 def translate_with_claude(
@@ -1664,12 +1673,18 @@ def translate_with_claude(
     lang: str,
     series_name: str,
     source_type: str,
-) -> Tuple[List[str], ApiUsage]:
-    client = get_claude_client()
+) -> Tuple[List[str], ApiUsage, Optional[str]]:
+    try:
+        client = get_claude_client()
+    except Exception as e:
+        print(f"[Claude] Se omite Claude (cliente no inicializado): {e}")
+        return src_lines, ApiUsage(engine="claude", model_name=CLAUDE_MODEL), "client_error"
+
     system_prompt = build_system_prompt(lang, series_name, source_type)
     all_translations: List[str] = []
     total = len(src_lines)
     usage = ApiUsage(engine="claude", model_name=CLAUDE_MODEL)
+    skipped_reason: Optional[str] = None
 
     for start in range(0, total, CHUNK_SIZE):
         chunk = src_lines[start:start + CHUNK_SIZE]
@@ -1677,21 +1692,36 @@ def translate_with_claude(
         end_line = min(start + CHUNK_SIZE, total)
         print(f"[Claude] Líneas {start + 1}-{end_line} de {total}...")
 
-        message = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=4096,
-            temperature=0.1,
-            system=system_prompt,
-            messages=[
-                {
-                    "role": "user",
-                    "content": user_prompt,
-                }
-            ],
-        )
+        try:
+            message = client.messages.create(
+                model=CLAUDE_MODEL,
+                max_tokens=4096,
+                temperature=0.1,
+                system=system_prompt,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": user_prompt,
+                    }
+                ],
+            )
+        except Exception as e:
+            print(f"[Claude] Error al traducir; se omite Claude en este bloque. Detalle: {e}")
+            skipped_reason = skipped_reason or "partial_error"
+            translations = chunk
+            all_translations.extend(translations)
+            continue
+
         content = "".join(
             block.text for block in message.content if getattr(block, "type", None) == "text"
         ).strip()
+
+        if not content:
+            print("[Claude] Respuesta vacía, se devuelven líneas originales para este bloque.")
+            skipped_reason = skipped_reason or "partial_error"
+            translations = chunk
+            all_translations.extend(translations)
+            continue
 
         msg_usage = getattr(message, "usage", None)
         if msg_usage:
@@ -1706,7 +1736,7 @@ def translate_with_claude(
         translations = parse_json_translations(content, fallback_lines=chunk)
         all_translations.extend(translations)
 
-    return all_translations, usage
+    return all_translations, usage, skipped_reason
 
 
 def translate_with_gemini(
@@ -1714,15 +1744,20 @@ def translate_with_gemini(
     lang: str,
     series_name: str,
     source_type: str,
-) -> Tuple[List[str], ApiUsage]:
+) -> Tuple[List[str], ApiUsage, Optional[str]]:
     """
     Usa Gemini 2.5 Flash, con bloques más pequeños y max_output_tokens
     limitado para ir algo más rápido/estable.
     """
-    model = get_gemini_model(lang, series_name, source_type)
+    try:
+        model = get_gemini_model(lang, series_name, source_type)
+    except Exception as e:
+        print(f"[Gemini 2.5 Flash] Se omite Gemini (cliente no inicializado): {e}")
+        return src_lines, ApiUsage(engine="gemini", model_name=GEMINI_MODEL), "client_error"
     all_translations: List[str] = []
     total = len(src_lines)
     usage = ApiUsage(engine="gemini", model_name=GEMINI_MODEL)
+    skipped_reason: Optional[str] = None
 
     for start in range(0, total, GEMINI_CHUNK):
         chunk = src_lines[start:start + GEMINI_CHUNK]
@@ -1772,6 +1807,7 @@ def translate_with_gemini(
                   "Se devuelven las líneas originales para este bloque.")
             print(f"[Gemini DEBUG] safety_ratings={safety}")
             translations = chunk
+            skipped_reason = skipped_reason or "partial_error"
         else:
             text_parts = [
                 getattr(part, "text", "")
@@ -1787,12 +1823,13 @@ def translate_with_gemini(
                       "Se devuelven las líneas originales para este bloque.")
                 print(f"[Gemini DEBUG] safety_ratings={safety}")
                 translations = chunk
+                skipped_reason = skipped_reason or "partial_error"
             else:
                 translations = parse_json_translations(raw, chunk)
 
         all_translations.extend(translations)
 
-    return all_translations, usage
+    return all_translations, usage, skipped_reason
 
 
 # ============================================================
@@ -1950,6 +1987,9 @@ def process_all_models_with_subs(
     models: Set[str],
     out_dir: str,
 ) -> Tuple[Dict[str, List[str]], Dict[str, ApiUsage]]:
+    def _should_write_output(reason: Optional[str]) -> bool:
+        return reason not in {"missing_key", "client_error", "auth_error"}
+
     # Normalizar por si nos llegan nombres “bonitos”
     norm: Set[str] = set()
     for m in (models or set()):
@@ -1977,50 +2017,74 @@ def process_all_models_with_subs(
 
     translations_by_model: Dict[str, List[str]] = {}
     usage_by_model: Dict[str, ApiUsage] = {}
+    skipped: Dict[str, str] = {}
 
     if "gpt" in models:
         print(f"=== {DISPLAY_NAMES['gpt']} ===")
         start = time.time()
-        gpt_trans, gpt_usage = translate_with_openai(src_lines, lang, series_name, source_type)
+        gpt_trans, gpt_usage, gpt_skip = translate_with_openai(src_lines, lang, series_name, source_type)
         elapsed = time.time() - start
         translations_by_model["gpt"] = gpt_trans
         usage_by_model["gpt"] = gpt_usage
-        gpt_out = os.path.join(out_dir, f"{base_name}_gpt.ass")
-        apply_translations_and_save_subs(subs, gpt_trans, gpt_out)
+        if gpt_skip:
+            skipped["gpt"] = gpt_skip
+        if _should_write_output(gpt_skip):
+            gpt_out = os.path.join(out_dir, f"{base_name}_gpt.ass")
+            apply_translations_and_save_subs(subs, gpt_trans, gpt_out)
+        else:
+            print(f"[{DISPLAY_NAMES['gpt']}] No se escribe archivo (motivo: {gpt_skip}).")
         print(f"[{DISPLAY_NAMES['gpt']}] Tiempo total: {elapsed:.1f} s\n")
 
     if "claude" in models:
         print(f"=== {DISPLAY_NAMES['claude']} ===")
         start = time.time()
-        claude_trans, claude_usage = translate_with_claude(src_lines, lang, series_name, source_type)
+        claude_trans, claude_usage, claude_skip = translate_with_claude(src_lines, lang, series_name, source_type)
         elapsed = time.time() - start
         translations_by_model["claude"] = claude_trans
         usage_by_model["claude"] = claude_usage
-        claude_out = os.path.join(out_dir, f"{base_name}_claude.ass")
-        apply_translations_and_save_subs(subs, claude_trans, claude_out)
+        if claude_skip:
+            skipped["claude"] = claude_skip
+        if _should_write_output(claude_skip):
+            claude_out = os.path.join(out_dir, f"{base_name}_claude.ass")
+            apply_translations_and_save_subs(subs, claude_trans, claude_out)
+        else:
+            print(f"[{DISPLAY_NAMES['claude']}] No se escribe archivo (motivo: {claude_skip}).")
         print(f"[{DISPLAY_NAMES['claude']}] Tiempo total: {elapsed:.1f} s\n")
 
     if "gemini" in models:
         print(f"=== {DISPLAY_NAMES['gemini']} ===")
         start = time.time()
-        gemini_trans, gemini_usage = translate_with_gemini(src_lines, lang, series_name, source_type)
+        gemini_trans, gemini_usage, gemini_skip = translate_with_gemini(src_lines, lang, series_name, source_type)
         elapsed = time.time() - start
         translations_by_model["gemini"] = gemini_trans
         usage_by_model["gemini"] = gemini_usage
-        gemini_out = os.path.join(out_dir, f"{base_name}_gemini.ass")
-        apply_translations_and_save_subs(subs, gemini_trans, gemini_out)
+        if gemini_skip:
+            skipped["gemini"] = gemini_skip
+        if _should_write_output(gemini_skip):
+            gemini_out = os.path.join(out_dir, f"{base_name}_gemini.ass")
+            apply_translations_and_save_subs(subs, gemini_trans, gemini_out)
+        else:
+            print(f"[{DISPLAY_NAMES['gemini']}] No se escribe archivo (motivo: {gemini_skip}).")
         print(f"[{DISPLAY_NAMES['gemini']}] Tiempo total: {elapsed:.1f} s\n")
 
     if "deepseek" in models:
         print(f"=== {DISPLAY_NAMES['deepseek']} ===")
         start = time.time()
-        deepseek_trans, deepseek_usage = translate_with_deepseek(src_lines, lang, series_name, source_type)
+        deepseek_trans, deepseek_usage, deepseek_skip = translate_with_deepseek(src_lines, lang, series_name, source_type)
         elapsed = time.time() - start
         translations_by_model["deepseek"] = deepseek_trans
         usage_by_model["deepseek"] = deepseek_usage
-        deepseek_out = os.path.join(out_dir, f"{base_name}_deepseek.ass")
-        apply_translations_and_save_subs(subs, deepseek_trans, deepseek_out)
+        if deepseek_skip:
+            skipped["deepseek"] = deepseek_skip
+        if _should_write_output(deepseek_skip):
+            deepseek_out = os.path.join(out_dir, f"{base_name}_deepseek.ass")
+            apply_translations_and_save_subs(subs, deepseek_trans, deepseek_out)
+        else:
+            print(f"[{DISPLAY_NAMES['deepseek']}] No se escribe archivo (motivo: {deepseek_skip}).")
         print(f"[{DISPLAY_NAMES['deepseek']}] Tiempo total: {elapsed:.1f} s\n")
+
+    if skipped:
+        print("[Modelos] Saltados parcial/total:", ", ".join(f"{DISPLAY_NAMES[k]} ({v})" for k, v in skipped.items()))
 
     return translations_by_model, usage_by_model
 
