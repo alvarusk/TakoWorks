@@ -42,6 +42,14 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "clean_text": False,
     },
 
+    # Costes por 1K tokens (USD) para cada motor
+    "cost_per_1k": {
+        "gpt": {"input": 0.0, "output": 0.0},
+        "claude": {"input": 0.0, "output": 0.0},
+        "gemini": {"input": 0.0, "output": 0.0},
+        "deepseek": {"input": 0.0, "output": 0.0},
+    },
+
     "last": {
         "ass_in": "",
         "video_in": "",
@@ -103,6 +111,13 @@ def load_config() -> Dict[str, Any]:
         cfg["stylizer_options"].update(data["stylizer_options"])
     if isinstance(data.get("last"), dict):
         cfg["last"].update(data["last"])
+    if isinstance(data.get("cost_per_1k"), dict):
+        for k, v in data["cost_per_1k"].items():
+            if isinstance(v, dict):
+                cfg["cost_per_1k"][k] = {
+                    "input": v.get("input", cfg["cost_per_1k"].get(k, {}).get("input", 0.0)),
+                    "output": v.get("output", cfg["cost_per_1k"].get(k, {}).get("output", 0.0)),
+                }
 
     for k in _REL_KEYS:
         cfg[k] = _from_portable_path(cfg.get(k, ""))

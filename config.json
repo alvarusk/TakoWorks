@@ -11,6 +11,29 @@
     "clean_text": false,
     "remove_linebreaks": true
   },
+  "cost_per_1k": {
+    "gpt": {
+      "input": 0.00125,
+      "output": 0.01,
+      "cached_input": 0.00013
+    },
+    "claude": {
+      "input": 0.005,
+      "output": 0.025
+    },
+    "gemini": {
+      "input": 0.00125,
+      "output": 0.01,
+      "input_over_200k": 0.0025,
+      "output_over_200k": 0.015,
+      "cached_input": 0.000125
+    },
+    "deepseek": {
+      "input": 0.00028,
+      "output": 0.00042,
+      "input_cache_hit": 0.000028
+    }
+  },
   "last": {
     "ass_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/137 - Hell's Paradise S2/3 - Scripts esES/HellsParadiseS2_SCR_CON_01_subtitle_edited_es-es.ass",
     "video_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/1 - Vídeos/CR_DailyLifeOfImmo_S5E4.0_TDISIM0055_364563_video_cmn-cn_J5837147.mp4",

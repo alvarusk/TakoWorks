@@ -5,11 +5,20 @@ import time
 import copy
 import subprocess
 import tempfile
-from typing import List, Set, Dict, Optional
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
+from typing import List, Set, Dict, Optional, Tuple
 import html
 import re
 from collections import defaultdict
 from functools import lru_cache
+from ... import config as app_config
+
+try:
+    import requests  # type: ignore
+except Exception:
+    requests = None
 
 # ============================================================
 #  HELPERS ASS (comentarios invisibles en Aegisub)
@@ -134,6 +143,189 @@ def normalize_models_arg(models_str: str) -> Set[str]:
             out.add(key)
 
     return out
+
+# ============================================================
+#  COSTES API + SUPABASE
+# ============================================================
+
+
+@dataclass
+class ApiUsage:
+    engine: str
+    model_name: str
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    cost_usd: float = 0.0
+
+    @property
+    def total_tokens(self) -> int:
+        return self.prompt_tokens + self.completion_tokens
+
+
+def _safe_int(val) -> int:
+    try:
+        return int(val or 0)
+    except Exception:
+        return 0
+
+
+def _read_price(model_key: str, kind: str, default: float) -> float:
+    env_name = f"COST_{model_key.upper()}_{kind.upper()}_PER_1K"
+    raw = os.getenv(env_name)
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        return float(raw)
+    except Exception:
+        print(f"[Costes] Valor no valido en {env_name}: {raw}. Se usa {default}.")
+        return default
+
+
+DEFAULT_PRICE_PER_1K: Dict[str, Dict[str, float]] = {
+    "gpt": {"input": 0.0, "output": 0.0},
+    "claude": {"input": 0.0, "output": 0.0},
+    "gemini": {"input": 0.0, "output": 0.0},
+    "deepseek": {"input": 0.0, "output": 0.0},
+}
+
+
+def _load_price_table() -> Dict[str, Dict[str, float]]:
+    cfg_costs: Dict[str, Dict[str, float]] = {}
+    try:
+        cfg = app_config.load_config()
+        raw = cfg.get("cost_per_1k", {})
+        if isinstance(raw, dict):
+            cfg_costs = raw  # shallow; se accede con get seguro abajo
+    except Exception as e:
+        print(f"[Costes] No se pudo leer cost_per_1k de config.json: {e}")
+
+    table: Dict[str, Dict[str, float]] = {}
+    for key, defaults in DEFAULT_PRICE_PER_1K.items():
+        cfg_entry = cfg_costs.get(key, {}) if isinstance(cfg_costs, dict) else {}
+        table[key] = {
+            "input": _read_price(
+                key,
+                "input",
+                cfg_entry.get("input", defaults.get("input", 0.0)) if isinstance(cfg_entry, dict) else defaults.get("input", 0.0),
+            ),
+            "output": _read_price(
+                key,
+                "output",
+                cfg_entry.get("output", defaults.get("output", 0.0)) if isinstance(cfg_entry, dict) else defaults.get("output", 0.0),
+            ),
+        }
+    return table
+
+
+_PRICE_TABLE = _load_price_table()
+_WARNED_PRICING: Set[str] = set()
+_WARNED_MISSING_USAGE: Set[str] = set()
+
+
+def estimate_cost(model_key: str, prompt_tokens: int, completion_tokens: int) -> float:
+    prices = _PRICE_TABLE.get(model_key, {})
+    in_price = float(prices.get("input", 0.0) or 0.0)
+    out_price = float(prices.get("output", 0.0) or 0.0)
+
+    if (in_price <= 0 or out_price <= 0) and model_key not in _WARNED_PRICING:
+        print(
+            f"[Costes] Precios por token no configurados para {DISPLAY_NAMES.get(model_key, model_key)}. "
+            f"Define COST_{model_key.upper()}_INPUT_PER_1K y COST_{model_key.upper()}_OUTPUT_PER_1K para costes reales."
+        )
+        _WARNED_PRICING.add(model_key)
+
+    return (prompt_tokens / 1000.0) * in_price + (completion_tokens / 1000.0) * out_price
+
+
+def _warn_missing_usage(model_key: str) -> None:
+    if model_key in _WARNED_MISSING_USAGE:
+        return
+    display = DISPLAY_NAMES.get(model_key, model_key)
+    print(
+        f"[Costes] {display} no devolvió metadatos de uso; se asume coste=0. "
+        "Revisa la versión del SDK o las opciones de la API si quieres token counts reales."
+    )
+    _WARNED_MISSING_USAGE.add(model_key)
+
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_COST_TABLE = os.getenv("SUPABASE_COST_TABLE", "voicex_api_costs")
+
+
+def log_cost_summary(run_id: str, usage_by_model: Dict[str, ApiUsage], series_name: str, episode: str) -> None:
+    if not usage_by_model:
+        return
+
+    print(f"[Costes] Resumen tokens/coste para {series_name or 'serie-desconocida'} / {episode} (run {run_id}):")
+    for key in sorted(usage_by_model.keys()):
+        usage = usage_by_model[key]
+        display = DISPLAY_NAMES.get(key, key)
+        print(
+            f"[Costes] {display}: prompt={usage.prompt_tokens} completion={usage.completion_tokens} "
+            f"total={usage.total_tokens} cost_usd=${usage.cost_usd:.4f}"
+        )
+    total_tokens = sum(u.total_tokens for u in usage_by_model.values())
+    total_cost = sum(u.cost_usd for u in usage_by_model.values())
+    print(f"[Costes] TOTAL: tokens={total_tokens} cost_usd=${total_cost:.4f}")
+
+
+def persist_costs_to_supabase(
+    run_id: str,
+    series_name: str,
+    episode: str,
+    lang: str,
+    source_type: str,
+    usage_by_model: Dict[str, ApiUsage],
+) -> None:
+    if not usage_by_model:
+        return
+    if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+        print("[Costes] SUPABASE_URL/SUPABASE_SERVICE_KEY no definidos; se omite guardado remoto.")
+        return
+    if requests is None:
+        print("[Costes] Libreria requests no disponible; no se envian datos a Supabase.")
+        return
+
+    base_url = SUPABASE_URL.rstrip("/")
+    url = f"{base_url}/rest/v1/{SUPABASE_COST_TABLE}"
+    ts = datetime.utcnow().isoformat() + "Z"
+
+    rows = []
+    for key, usage in usage_by_model.items():
+        rows.append(
+            {
+                "run_id": run_id,
+                "series": series_name,
+                "episode": episode,
+                "lang": lang,
+                "source_type": source_type,
+                "engine": key,
+                "model_name": usage.model_name,
+                "input_tokens": usage.prompt_tokens,
+                "output_tokens": usage.completion_tokens,
+                "total_tokens": usage.total_tokens,
+                "cost_usd": round(usage.cost_usd, 6),
+                "currency": "USD",
+                "created_at": ts,
+            }
+        )
+
+    headers = {
+        "apikey": SUPABASE_SERVICE_KEY,
+        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+
+    try:
+        resp = requests.post(url, headers=headers, json=rows, timeout=15)
+        if resp.status_code not in (200, 201):
+            print(f"[Costes] Error al escribir en Supabase ({resp.status_code}): {resp.text}")
+        else:
+            print(f"[Costes] Costes guardados en Supabase ({len(rows)} filas).")
+    except Exception as e:
+        print(f"[Costes] No se pudo enviar a Supabase: {e}")
 
 # ============================================================
 #  ESTADO GLOBAL PARA ANÁLISIS
@@ -1356,11 +1548,17 @@ def get_gemini_model(lang: str, series_name: str, source_type: str):
 #  TRADUCCIÓN POR MODELO
 # ============================================================
 
-def translate_with_openai(src_lines: List[str], lang: str, series_name: str, source_type: str) -> List[str]:
+def translate_with_openai(
+    src_lines: List[str],
+    lang: str,
+    series_name: str,
+    source_type: str,
+) -> Tuple[List[str], ApiUsage]:
     client = get_openai_client()
     system_prompt = build_system_prompt(lang, series_name, source_type)
     all_translations: List[str] = []
     total = len(src_lines)
+    usage = ApiUsage(engine="gpt", model_name=OPENAI_MODEL)
 
     for start in range(0, total, CHUNK_SIZE):
         chunk = src_lines[start:start + CHUNK_SIZE]
@@ -1377,17 +1575,32 @@ def translate_with_openai(src_lines: List[str], lang: str, series_name: str, sou
             ],
         )
         content = response.choices[0].message.content.strip()
+        resp_usage = getattr(response, "usage", None)
+        if resp_usage:
+            pt = _safe_int(getattr(resp_usage, "prompt_tokens", 0))
+            ct = _safe_int(getattr(resp_usage, "completion_tokens", 0))
+            usage.prompt_tokens += pt
+            usage.completion_tokens += ct
+            usage.cost_usd += estimate_cost("gpt", pt, ct)
+        else:
+            _warn_missing_usage("gpt")
         translations = parse_json_translations(content, fallback_lines=chunk)
         all_translations.extend(translations)
 
-    return all_translations
+    return all_translations, usage
 
 
-def translate_with_deepseek(src_lines: List[str], lang: str, series_name: str, source_type: str) -> List[str]:
+def translate_with_deepseek(
+    src_lines: List[str],
+    lang: str,
+    series_name: str,
+    source_type: str,
+) -> Tuple[List[str], ApiUsage]:
     client = get_deepseek_client()
     system_prompt = build_system_prompt(lang, series_name, source_type)
     all_translations: List[str] = []
     total = len(src_lines)
+    usage = ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL)
 
     for start in range(0, total, CHUNK_SIZE):
         chunk = src_lines[start:start + CHUNK_SIZE]
@@ -1404,17 +1617,32 @@ def translate_with_deepseek(src_lines: List[str], lang: str, series_name: str, s
             ],
         )
         content = response.choices[0].message.content.strip()
+        resp_usage = getattr(response, "usage", None)
+        if resp_usage:
+            pt = _safe_int(getattr(resp_usage, "prompt_tokens", 0))
+            ct = _safe_int(getattr(resp_usage, "completion_tokens", 0))
+            usage.prompt_tokens += pt
+            usage.completion_tokens += ct
+            usage.cost_usd += estimate_cost("deepseek", pt, ct)
+        else:
+            _warn_missing_usage("deepseek")
         translations = parse_json_translations(content, fallback_lines=chunk)
         all_translations.extend(translations)
 
-    return all_translations
+    return all_translations, usage
 
 
-def translate_with_claude(src_lines: List[str], lang: str, series_name: str, source_type: str) -> List[str]:
+def translate_with_claude(
+    src_lines: List[str],
+    lang: str,
+    series_name: str,
+    source_type: str,
+) -> Tuple[List[str], ApiUsage]:
     client = get_claude_client()
     system_prompt = build_system_prompt(lang, series_name, source_type)
     all_translations: List[str] = []
     total = len(src_lines)
+    usage = ApiUsage(engine="claude", model_name=CLAUDE_MODEL)
 
     for start in range(0, total, CHUNK_SIZE):
         chunk = src_lines[start:start + CHUNK_SIZE]
@@ -1438,13 +1666,28 @@ def translate_with_claude(src_lines: List[str], lang: str, series_name: str, sou
             block.text for block in message.content if getattr(block, "type", None) == "text"
         ).strip()
 
+        msg_usage = getattr(message, "usage", None)
+        if msg_usage:
+            pt = _safe_int(getattr(msg_usage, "input_tokens", 0))
+            ct = _safe_int(getattr(msg_usage, "output_tokens", 0))
+            usage.prompt_tokens += pt
+            usage.completion_tokens += ct
+            usage.cost_usd += estimate_cost("claude", pt, ct)
+        else:
+            _warn_missing_usage("claude")
+
         translations = parse_json_translations(content, fallback_lines=chunk)
         all_translations.extend(translations)
 
-    return all_translations
+    return all_translations, usage
 
 
-def translate_with_gemini(src_lines: List[str], lang: str, series_name: str, source_type: str) -> List[str]:
+def translate_with_gemini(
+    src_lines: List[str],
+    lang: str,
+    series_name: str,
+    source_type: str,
+) -> Tuple[List[str], ApiUsage]:
     """
     Usa Gemini 2.5 Flash, con bloques más pequeños y max_output_tokens
     limitado para ir algo más rápido/estable.
@@ -1452,6 +1695,7 @@ def translate_with_gemini(src_lines: List[str], lang: str, series_name: str, sou
     model = get_gemini_model(lang, series_name, source_type)
     all_translations: List[str] = []
     total = len(src_lines)
+    usage = ApiUsage(engine="gemini", model_name=GEMINI_MODEL)
 
     for start in range(0, total, GEMINI_CHUNK):
         chunk = src_lines[start:start + GEMINI_CHUNK]
@@ -1482,6 +1726,18 @@ def translate_with_gemini(src_lines: List[str], lang: str, series_name: str, sou
             print(f"[Gemini DEBUG] finish_reason={getattr(cand, 'finish_reason', None)}")
             print(f"[Gemini DEBUG] safety_ratings={getattr(cand, 'safety_ratings', None)}")
 
+        usage_md = getattr(response, "usage_metadata", None)
+        if usage_md is None and cand is not None and getattr(cand, "usage_metadata", None):
+            usage_md = cand.usage_metadata
+        if usage_md:
+            pt = _safe_int(getattr(usage_md, "prompt_token_count", 0))
+            ct = _safe_int(getattr(usage_md, "candidates_token_count", 0))
+            usage.prompt_tokens += pt
+            usage.completion_tokens += ct
+            usage.cost_usd += estimate_cost("gemini", pt, ct)
+        else:
+            _warn_missing_usage("gemini")
+
         if not cand or not getattr(cand, "content", None) or not getattr(cand.content, "parts", None):
             finish_reason = getattr(cand, "finish_reason", None) if cand else None
             safety = getattr(cand, "safety_ratings", None) if cand else None
@@ -1509,7 +1765,7 @@ def translate_with_gemini(src_lines: List[str], lang: str, series_name: str, sou
 
         all_translations.extend(translations)
 
-    return all_translations
+    return all_translations, usage
 
 
 # ============================================================
@@ -1664,7 +1920,7 @@ def process_all_models_with_subs(
     base_name: str,
     models: Set[str],
     out_dir: str,
-) -> Dict[str, List[str]]:
+) -> Tuple[Dict[str, List[str]], Dict[str, ApiUsage]]:
     # Normalizar por si nos llegan nombres “bonitos”
     norm: Set[str] = set()
     for m in (models or set()):
@@ -1686,18 +1942,20 @@ def process_all_models_with_subs(
         print("[Modelos] Ejecutando:", ", ".join(DISPLAY_NAMES[m] for m in sorted(models)))
     else:
         print("[Modelos] Ninguno seleccionado; se omite la traducción.")
-        return {}
+        return {}, {}
 
     os.makedirs(out_dir, exist_ok=True)
 
     translations_by_model: Dict[str, List[str]] = {}
+    usage_by_model: Dict[str, ApiUsage] = {}
 
     if "gpt" in models:
         print(f"=== {DISPLAY_NAMES['gpt']} ===")
         start = time.time()
-        gpt_trans = translate_with_openai(src_lines, lang, series_name, source_type)
+        gpt_trans, gpt_usage = translate_with_openai(src_lines, lang, series_name, source_type)
         elapsed = time.time() - start
         translations_by_model["gpt"] = gpt_trans
+        usage_by_model["gpt"] = gpt_usage
         gpt_out = os.path.join(out_dir, f"{base_name}_gpt.ass")
         apply_translations_and_save_subs(subs, gpt_trans, gpt_out)
         print(f"[{DISPLAY_NAMES['gpt']}] Tiempo total: {elapsed:.1f} s\n")
@@ -1705,9 +1963,10 @@ def process_all_models_with_subs(
     if "claude" in models:
         print(f"=== {DISPLAY_NAMES['claude']} ===")
         start = time.time()
-        claude_trans = translate_with_claude(src_lines, lang, series_name, source_type)
+        claude_trans, claude_usage = translate_with_claude(src_lines, lang, series_name, source_type)
         elapsed = time.time() - start
         translations_by_model["claude"] = claude_trans
+        usage_by_model["claude"] = claude_usage
         claude_out = os.path.join(out_dir, f"{base_name}_claude.ass")
         apply_translations_and_save_subs(subs, claude_trans, claude_out)
         print(f"[{DISPLAY_NAMES['claude']}] Tiempo total: {elapsed:.1f} s\n")
@@ -1715,9 +1974,10 @@ def process_all_models_with_subs(
     if "gemini" in models:
         print(f"=== {DISPLAY_NAMES['gemini']} ===")
         start = time.time()
-        gemini_trans = translate_with_gemini(src_lines, lang, series_name, source_type)
+        gemini_trans, gemini_usage = translate_with_gemini(src_lines, lang, series_name, source_type)
         elapsed = time.time() - start
         translations_by_model["gemini"] = gemini_trans
+        usage_by_model["gemini"] = gemini_usage
         gemini_out = os.path.join(out_dir, f"{base_name}_gemini.ass")
         apply_translations_and_save_subs(subs, gemini_trans, gemini_out)
         print(f"[{DISPLAY_NAMES['gemini']}] Tiempo total: {elapsed:.1f} s\n")
@@ -1725,14 +1985,15 @@ def process_all_models_with_subs(
     if "deepseek" in models:
         print(f"=== {DISPLAY_NAMES['deepseek']} ===")
         start = time.time()
-        deepseek_trans = translate_with_deepseek(src_lines, lang, series_name, source_type)
+        deepseek_trans, deepseek_usage = translate_with_deepseek(src_lines, lang, series_name, source_type)
         elapsed = time.time() - start
         translations_by_model["deepseek"] = deepseek_trans
+        usage_by_model["deepseek"] = deepseek_usage
         deepseek_out = os.path.join(out_dir, f"{base_name}_deepseek.ass")
         apply_translations_and_save_subs(subs, deepseek_trans, deepseek_out)
         print(f"[{DISPLAY_NAMES['deepseek']}] Tiempo total: {elapsed:.1f} s\n")
 
-    return translations_by_model
+    return translations_by_model, usage_by_model
 
 # ============================================================
 #  MAIN
@@ -1830,6 +2091,7 @@ def main():
         out_dir = os.path.dirname(ass_in) or "."
 
     base_name = args.base_name or os.path.splitext(os.path.basename(ass_in))[0]
+    run_id = str(uuid.uuid4())
 
     if not args.skip_asr and not video_in:
         raise SystemExit("Falta video_in (obligatorio si NO usas --skip-asr).")
@@ -1885,7 +2147,7 @@ def main():
 
     # 2) Traducir
     models = normalize_models_arg(args.models)
-    translations_by_model = process_all_models_with_subs(
+    translations_by_model, usage_by_model = process_all_models_with_subs(
         subs,
         lang,
         series_name,
@@ -1894,6 +2156,10 @@ def main():
         models,
         out_dir,
     )
+
+    if usage_by_model:
+        log_cost_summary(run_id, usage_by_model, series_name, base_name)
+        persist_costs_to_supabase(run_id, series_name, base_name, lang, source_type, usage_by_model)
 
     # 3) HTML opcional
     if args.html:
