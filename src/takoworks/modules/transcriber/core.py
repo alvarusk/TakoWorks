@@ -28,6 +28,10 @@ def _ass_sanitize_braces(s: str) -> str:
     # Evita romper tags ASS si el texto contiene llaves
     return (s or "").replace("{", "｛").replace("}", "｝")
 
+def _ass_unsanitize_braces(s: str) -> str:
+    # Revierte la sanitización de llaves aplicada para ASS
+    return (s or "").replace("｛", "{").replace("｝", "}")
+
 def _ass_hide(s: str) -> str:
     # Texto oculto en render, visible como "comentario" dentro del evento en Aegisub
     return "{" + _ass_sanitize_braces(s) + "}"
@@ -81,10 +85,24 @@ CLAUDE_MODEL   = "claude-opus-4-5-20251101" # Anthropic (ajusta si hace falta)
 GEMINI_MODEL   = "gemini-2.5-flash"         # Gemini 2.5 Flash
 DEEPSEEK_MODEL = "deepseek-chat"            # DeepSeek (OpenAI-like)
 
-OPENAI_API_KEY   = os.getenv("OPENAI_API_KEY")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-GEMINI_API_KEY    = os.getenv("GEMINI_API_KEY")
-DEEPSEEK_API_KEY  = os.getenv("DEEPSEEK_API_KEY")
+def _read_api_key(key: str, env_name: str) -> str:
+    env_val = os.getenv(env_name)
+    if env_val:
+        return env_val
+    try:
+        cfg = app_config.load_config()
+        api_keys = cfg.get("api_keys", {})
+        if isinstance(api_keys, dict):
+            return str(api_keys.get(key, "") or "")
+    except Exception:
+        pass
+    return ""
+
+
+OPENAI_API_KEY   = _read_api_key("openai", "OPENAI_API_KEY")
+ANTHROPIC_API_KEY = _read_api_key("anthropic", "ANTHROPIC_API_KEY")
+GEMINI_API_KEY    = _read_api_key("gemini", "GEMINI_API_KEY")
+DEEPSEEK_API_KEY  = _read_api_key("deepseek", "DEEPSEEK_API_KEY")
 
 CHUNK_SIZE   = 20  # tamaño de lote para GPT/Claude/DeepSeek
 GEMINI_CHUNK = 3  # bloques más pequeños para Gemini, más estable
@@ -532,7 +550,7 @@ def _get_zh_punct_components():
     Si falta algo, lanza RuntimeError (lo capturaremos más arriba).
     """
     try:
-        from zhpr.predict import DocumentDataset, merge_stride, decode_pred
+        from zhpr.predict import DocumentDataset, merge_stride, decode_pred  # type: ignore
         from transformers import AutoModelForTokenClassification, AutoTokenizer
     except ImportError as e:
         raise RuntimeError(
@@ -1154,7 +1172,7 @@ def transcribe_ass(
                             _ja_tagger = Tagger()
                         romaji = japanese_to_romaji_pretty(base_text, romaji_converter, _ja_tagger)
                     if romaji:
-                        lines.append(romaji)
+                        lines.append("{" + _ass_sanitize_braces(romaji) + "}")
 
                     morph_line = analyze_japanese_morph(base_text)
                     if morph_line:
@@ -1163,7 +1181,7 @@ def transcribe_ass(
                 elif lang == "zh":
                     pinyin = text_to_pinyin(base_text)
                     if pinyin:
-                        lines.append(pinyin)
+                        lines.append("{" + _ass_sanitize_braces(pinyin) + "}")
                     morph_line = analyze_chinese_morph(base_text)
                     if morph_line:
                         lines.append(_ass_hide(morph_line))
@@ -1230,7 +1248,7 @@ def add_roman_morph_to_subs(subs: pysubs2.SSAFile, lang: str) -> pysubs2.SSAFile
             if romaji_converter is not None and _ja_tagger is not None:
                 romaji = japanese_to_romaji_pretty(base_text, romaji_converter, _ja_tagger)
             if romaji:
-                lines.append(romaji)
+                lines.append("{" + _ass_sanitize_braces(romaji) + "}")
 
             # Análisis diccionario JA→EN (si tienes jpdict configurado)
             morph_line = analyze_japanese_morph(base_text)
@@ -1241,7 +1259,7 @@ def add_roman_morph_to_subs(subs: pysubs2.SSAFile, lang: str) -> pysubs2.SSAFile
             # Pinyin
             pinyin = text_to_pinyin(base_text)
             if pinyin:
-                lines.append(pinyin)
+                lines.append("{" + _ass_sanitize_braces(pinyin) + "}")
 
             # Análisis diccionario ZH→EN (si tienes cndict configurado)
             morph_line = analyze_chinese_morph(base_text)
@@ -1515,7 +1533,7 @@ def parse_json_translations(raw_content: str, fallback_lines: List[str]) -> List
     return fallback_lines
 def get_openai_client() -> OpenAI:
     if not OPENAI_API_KEY:
-        raise RuntimeError("Falta OPENAI_API_KEY. Define la variable de entorno.")
+        raise RuntimeError("Falta OPENAI_API_KEY (env o api_keys en config.local.json).")
     return OpenAI(api_key=OPENAI_API_KEY)
 
 
@@ -1552,6 +1570,10 @@ def translate_with_openai(
     series_name: str,
     source_type: str,
 ) -> Tuple[List[str], ApiUsage]:
+    if not OPENAI_API_KEY:
+        print("[GPT-5] Se omite GPT porque falta OPENAI_API_KEY (env o config.local.json).")
+        return src_lines, ApiUsage(engine="gpt", model_name=OPENAI_MODEL)
+
     client = get_openai_client()
     system_prompt = build_system_prompt(lang, series_name, source_type)
     all_translations: List[str] = []
@@ -1564,15 +1586,22 @@ def translate_with_openai(
         end_line = min(start + CHUNK_SIZE, total)
         print(f"[{DISPLAY_NAMES['gpt']}] Líneas {start + 1}-{end_line} de {total}...")
 
-        response = client.chat.completions.create(
-            model=OPENAI_MODEL,
-            temperature=0.1,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        )
-        content = response.choices[0].message.content.strip()
+        try:
+            response = client.chat.completions.create(
+                model=OPENAI_MODEL,
+                temperature=0.1,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+            )
+            content = response.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"[GPT-5] Error al traducir; se omite GPT en este bloque. Detalle: {e}")
+            translations = chunk
+            all_translations.extend(translations)
+            continue
+
         resp_usage = getattr(response, "usage", None)
         if resp_usage:
             pt = _safe_int(getattr(resp_usage, "prompt_tokens", 0))
@@ -1784,15 +1813,11 @@ def apply_translations_and_save_subs(
 
     for i in range(n):
         ev = events_out[i]
-        existing = ev.text or ""
         trans = translations[i].strip()
         if not trans:
             continue
 
-        if existing:
-            ev.text = _ass_hide_prefix(existing) + trans
-        else:
-            ev.text = trans
+        ev.text = trans
 
     subs_out.save(output_path, encoding="utf-8-sig")
     print(f"Guardado: {output_path}")
@@ -1847,6 +1872,12 @@ def generate_html(
     def safe_get(lst: List[str], idx: int) -> str:
         return lst[idx].strip() if idx < len(lst) else ""
 
+    def extract_braced(raw: str) -> str:
+        txt = (raw or "").strip()
+        if txt.startswith("{") and txt.endswith("}"):
+            txt = txt[1:-1]
+        return _ass_unsanitize_braces(txt)
+
     with open(output_path, "w", encoding="utf-8") as f:
         f.write("<!DOCTYPE html><html><head><meta charset='utf-8'>")
         f.write("<title>Resumen de subtítulos</title>")
@@ -1879,8 +1910,8 @@ def generate_html(
         for i, ev in enumerate(events):
             parts = (ev.text or "").split("\\N")
             original = parts[0].strip() if parts else ""
-            roman   = parts[1].strip() if len(parts) > 1 else ""
-            morph   = parts[2].strip() if len(parts) > 2 else ""
+            roman   = extract_braced(parts[1]) if len(parts) > 1 else ""
+            morph   = extract_braced(parts[2]) if len(parts) > 2 else ""
 
             row_vals = [
                 original,
