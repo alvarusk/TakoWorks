@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import os
-from tkinter import ttk, filedialog, messagebox
-import tkinter as tk
+import shutil
 import subprocess
+import tkinter as tk
 from pathlib import Path
+from tkinter import filedialog, messagebox, ttk
 
-from ...config import save_config
 from ... import __version__
+from ...config import save_config
 
 
 def _add_to_path(*dirs: str) -> None:
@@ -55,9 +56,9 @@ class SettingsPanel(ttk.Frame):
         ttk.Label(
             frm,
             text="- Transcriber reads YOMI_JA_DIR/YOMI_ZH_DIR when importing.\n"
-                 "- As it's imported when run, changing here before the run works.\n"
-                 "- PATH is applied to sub-processes (ffmpeg/yomitoku).",
-            justify="left"
+            "- As it's imported when run, changing here before the run works.\n"
+            "- PATH is applied to sub-processes (ffmpeg/yomitoku).",
+            justify="left",
         ).pack(anchor="w", pady=6)
 
         ttk.Separator(frm).pack(fill="x", pady=10)
@@ -115,9 +116,27 @@ class SettingsPanel(ttk.Frame):
             return out
 
         try:
+            if not shutil.which("git"):
+                raise RuntimeError("git no esta en PATH.")
+            if not (repo_root / ".git").exists():
+                updater = repo_root / "bin" / "run_takoworks_with_update.cmd"
+                if updater.exists():
+                    messagebox.showinfo(
+                        "Update",
+                        "Esta instalacion viene de un ZIP/release y no tiene .git.\n\n"
+                        f"Para actualizar, cierra TakoWorks y ejecuta:\n{updater}",
+                    )
+                else:
+                    messagebox.showinfo(
+                        "Update",
+                        "Esta instalacion viene de un ZIP/release y no tiene .git.\n\n"
+                        "Descarga la ultima release y reinstala encima, "
+                        "o clona el repo si prefieres actualizar con git.",
+                    )
+                return
             _git(["rev-parse", "--is-inside-work-tree"])
         except Exception as e:
-            messagebox.showerror("Update", f"No es un repo git o git no está disponible.\n\n{e}")
+            messagebox.showerror("Update", f"No es un repo git o git no esta disponible.\n\n{e}")
             return
 
         try:
@@ -126,10 +145,10 @@ class SettingsPanel(ttk.Frame):
             remote = f"origin/{branch}"
             pending = _git(["log", "HEAD.." + remote, "--oneline"])
             if not pending:
-                messagebox.showinfo("Update", "Ya estás al día con " + remote)
+                messagebox.showinfo("Update", "Ya estas al dia con " + remote)
                 return
             show = "\n".join(pending.splitlines()[:10])
-            if messagebox.askyesno("Update", f"HAY cambios en {remote}:\n\n{show}\n\n¿Hacer git pull origin {branch}?"):
+            if messagebox.askyesno("Update", f"HAY cambios en {remote}:\n\n{show}\n\nHacer git pull origin {branch}?"):
                 _git(["pull", "origin", branch])
                 messagebox.showinfo("Update", "Actualizado. Reinicia TakoWorks para aplicar cambios.")
         except Exception as e:

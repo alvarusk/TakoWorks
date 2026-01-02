@@ -7,6 +7,24 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Assert-InstallWritable {
+    param([string]$TargetPath)
+    $parent = Split-Path -Path $TargetPath -Parent
+    if (-not $parent) { $parent = $TargetPath }
+    if (-not (Test-Path -Path $parent)) {
+        New-Item -ItemType Directory -Path $parent -Force -ErrorAction Stop | Out-Null
+    }
+    $probe = Join-Path $parent ("._takoworks_probe_" + [guid]::NewGuid().ToString("N"))
+    try {
+        Set-Content -Path $probe -Value "probe" -ErrorAction Stop
+        Remove-Item -Path $probe -Force -ErrorAction SilentlyContinue
+    } catch {
+        throw "No write permission at '$parent'. Run PowerShell as Administrator or choose a writable -InstallDir (e.g. `$env:LOCALAPPDATA\\TakoWorks`)."
+    }
+}
+
+Assert-InstallWritable -TargetPath $InstallDir
+
 function Get-AuthHeaders {
     $headers = @{ "User-Agent" = "TakoWorks-Updater" }
     if ($env:GITHUB_TOKEN) {
