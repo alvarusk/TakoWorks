@@ -67,12 +67,16 @@ jobs:
       - name: Check spec exists
         shell: pwsh
         run: |
-          Get-ChildItem -Path . -Filter "*.spec"
-          if (-not (Test-Path ".\TakoWorks.spec")) { throw "TakoWorks.spec not found" }
+          Write-Host "Workspace: $Env:GITHUB_WORKSPACE"
+          Get-ChildItem -Path $Env:GITHUB_WORKSPACE -Filter "*.spec" -Recurse
+          $spec = Join-Path $Env:GITHUB_WORKSPACE "TakoWorks.spec"
+          if (-not (Test-Path $spec)) { throw "TakoWorks.spec not found at $spec" }
 
       - name: Build executable (PyInstaller)
         shell: pwsh
-        run: pyinstaller --clean .\TakoWorks.spec
+        run: |
+          $spec = Join-Path $Env:GITHUB_WORKSPACE "TakoWorks.spec"
+          pyinstaller --clean $spec
 
       - name: Package artifact (zip)
         shell: pwsh
