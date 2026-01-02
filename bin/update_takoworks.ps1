@@ -35,7 +35,11 @@ New-Item -ItemType Directory -Path $tmpDir | Out-Null
 $zipPath = Join-Path $tmpDir $asset.name
 
 Write-Host "Downloading $($asset.name) from release $($release.tag_name)..."
-Invoke-WebRequest -Uri $asset.browser_download_url -Headers (Get-AuthHeaders) -OutFile $zipPath
+# Para repos privados, usa el endpoint de assets con Accept octet-stream (browser_download_url puede dar 404)
+$assetUri = "https://api.github.com/repos/$Repo/releases/assets/$($asset.id)"
+$headers = Get-AuthHeaders
+$headers["Accept"] = "application/octet-stream"
+Invoke-WebRequest -Uri $assetUri -Headers $headers -OutFile $zipPath
 
 $extractDir = Join-Path $tmpDir "extracted"
 Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
