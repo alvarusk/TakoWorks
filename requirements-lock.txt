@@ -1,0 +1,16 @@
+openai>=1.40.0
+anthropic>=0.30.0
+google-generativeai>=0.7.0
+requests>=2.31.0
+pysubs2>=1.6.0
+torch>=2.2.0
+transformers>=4.38.0
+pykakasi>=2.2.1
+pypinyin>=0.50.0
+fugashi[unidic-lite]>=1.2.1
+jieba>=0.42.1
+pandas>=2.2.0
+numpy>=1.26.0
+opencv-python>=4.9.0.80
+PyMuPDF>=1.24.1
+pytest>=8.0.0
