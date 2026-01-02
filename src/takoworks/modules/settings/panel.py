@@ -3,8 +3,11 @@ from __future__ import annotations
 import os
 from tkinter import ttk, filedialog, messagebox
 import tkinter as tk
+import subprocess
+from pathlib import Path
 
 from ...config import save_config
+from ... import __version__
 
 
 def _add_to_path(*dirs: str) -> None:
@@ -57,6 +60,11 @@ class SettingsPanel(ttk.Frame):
             justify="left"
         ).pack(anchor="w", pady=6)
 
+        ttk.Separator(frm).pack(fill="x", pady=10)
+
+        ttk.Label(frm, text=f"Updates (current v{__version__})").pack(anchor="w")
+        ttk.Button(frm, text="Check updates", command=self._check_updates).pack(anchor="w", pady=4)
+
     def _row(self, parent, label, var, browse_cmd):
         r = ttk.Frame(parent)
         r.pack(fill="x", pady=3)
@@ -94,3 +102,35 @@ class SettingsPanel(ttk.Frame):
             os.environ["YOMI_ZH_DIR"] = zh
 
         _add_to_path(ff, yo)
+
+    def _check_updates(self):
+        repo_root = Path(__file__).resolve().parents[4]
+
+        def _git(args):
+            res = subprocess.run(["git"] + args, cwd=repo_root, capture_output=True, text=True)
+            if res.returncode != 0:
+                raise RuntimeError(res.stderr.strip() or res.stdout.strip() or "git error")
+            out = res.stdout.strip()
+            self.runner._console_write(f"[Update] git {' '.join(args)}\n{out}")
+            return out
+
+        try:
+            _git(["rev-parse", "--is-inside-work-tree"])
+        except Exception as e:
+            messagebox.showerror("Update", f"No es un repo git o git no está disponible.\n\n{e}")
+            return
+
+        try:
+            _git(["fetch", "origin"])
+            branch = _git(["rev-parse", "--abbrev-ref", "HEAD"]) or "main"
+            remote = f"origin/{branch}"
+            pending = _git(["log", "HEAD.." + remote, "--oneline"])
+            if not pending:
+                messagebox.showinfo("Update", "Ya estás al día con " + remote)
+                return
+            show = "\n".join(pending.splitlines()[:10])
+            if messagebox.askyesno("Update", f"HAY cambios en {remote}:\n\n{show}\n\n¿Hacer git pull origin {branch}?"):
+                _git(["pull", "origin", branch])
+                messagebox.showinfo("Update", "Actualizado. Reinicia TakoWorks para aplicar cambios.")
+        except Exception as e:
+            messagebox.showerror("Update", f"Error al actualizar:\n\n{e}")
