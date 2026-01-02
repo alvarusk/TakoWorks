@@ -1,11 +1,11 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [string]$Repo = "alvarusk/TakoWorks",
-    [string]$InstallDir = (Join-Path (Split-Path -Parent $PSCommandPath) "TakoWorks"),
+    [string]$InstallDir = (Join-Path $PSScriptRoot "TakoWorks"),
     [string]$AssetPattern = "TakoWorks_win64.zip",
     [switch]$AllowPrerelease
 )
+
+$ErrorActionPreference = "Stop"
 
 function Get-AuthHeaders {
     $headers = @{ "User-Agent" = "TakoWorks-Updater" }

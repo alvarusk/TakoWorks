@@ -35,3 +35,4 @@
 [27/12/2025 10:54:31,96] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
 [27/12/2025 10:55:12,51] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
 [27/12/2025 11:26:21,06] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S01_E0001_Screener_subtitle_edited_es-es.ass" --serve 
+[02/01/2026 11:13:55,14] "C:\Users\ajime\OneDrive\Documentos\PENDING\140 - Immortal King S5\3 - Scripts esES\DailyLifeOfImmo_S5E5_TDISIM0056_364565_subtitle_edited_es-es.ass" --serve 
