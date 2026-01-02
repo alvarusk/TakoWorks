@@ -45,6 +45,7 @@ class MainWindow(ttk.Frame):
         self.notebook.add(UnworderPanel(self.notebook, self.runner, self.cfg), text="Unworder")
         self.notebook.add(ScannerPanel(self.notebook, self.runner, self.cfg), text="Scanner")
         self.notebook.add(CorrectorPanel(self.notebook, self.runner, self.cfg), text="Corrector")
+        self.console.write("Auto-update: este lanzador comprueba y aplica actualizaciones al arrancar.")
 
     def _restore_splitter(self):
         # Si hay valor guardado, úsalo; si no, un 70% para tabs
