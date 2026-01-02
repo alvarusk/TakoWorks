@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 param(
-    [string]$Repo = "OWNER/TakoWorks",
+    [string]$Repo = "alvarusk/TakoWorks",
     [string]$InstallDir = (Join-Path (Split-Path -Parent $PSCommandPath) "TakoWorks"),
     [string]$AssetPattern = "TakoWorks_win64.zip",
     [switch]$AllowPrerelease
