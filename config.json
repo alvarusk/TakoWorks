@@ -18,9 +18,9 @@
     "remove_linebreaks": true
   },
   "supabase": {
-    "url": "https://ugckzygeultwmnmgbsve.supabase.co",
-    "service_key": "REDACTED",
-    "anon_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnY2t6eWdldWx0d21ubWdic3ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcwOTk2MDUsImV4cCI6MjA4MjY3NTYwNX0.HAVNGQx0whgmX0zP7mYWUe8q8DUGtkPjZPsvAMO9ZFY"
+    "url": "",
+    "service_key": "",
+    "anon_key": ""
   },
   "cost_per_1k": {
     "gpt": {
