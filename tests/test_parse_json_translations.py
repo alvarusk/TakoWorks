@@ -4,7 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from takoworks.modules.transcriber.core import parse_json_translations  # type: ignore
+from takoworks.modules.transcriber.json_utils import parse_json_translations  # type: ignore
 
 
 def test_parse_valid_json_object():
