@@ -1,5 +1,5 @@
 param(
-    [string]$Repo = "alvarusk/TakoWorks",
+    [string]$Repo = "alvarusk/takoworks",
     [string]$InstallDir = (Join-Path $PSScriptRoot "TakoWorks"),
     [string]$AssetPattern = "TakoWorks_win64.zip",
     [switch]$AllowPrerelease
