@@ -18,9 +18,9 @@
     "remove_linebreaks": true
   },
   "supabase": {
-    "url": "https://ugckzygeultwmnmgbsve.supabase.co",
-    "service_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnY2t6eWdldWx0d21ubWdic3ZlIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NzA5OTYwNSwiZXhwIjoyMDgyNjc1NjA1fQ.Sgq_plN8NLfpL-_iZ0Z0rO673YSGx9SWPASQUJQgHPA",
-    "anon_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnY2t6eWdldWx0d21ubWdic3ZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcwOTk2MDUsImV4cCI6MjA4MjY3NTYwNX0.HAVNGQx0whgmX0zP7mYWUe8q8DUGtkPjZPsvAMO9ZFY"
+    "url": "",
+    "service_key": "",
+    "anon_key": ""
   },
   "cost_per_1k": {
     "gpt": {
@@ -41,12 +41,12 @@
     }
   },
   "last": {
-    "ass_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/3 - Scripts esES/s5e06/DailyLifeOfImmo_S5E6_TDISIM0057_364566_subtitle_zh-cn_not-timed.ass",
+    "ass_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/3 - Scripts esES/s5e05/DailyLifeOfImmo_S5E5_TDISIM0056_364565_subtitle_zh-cn.ass",
     "video_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/1 - Vídeos/CR_DailyLifeOfImmo_S5.0E5_TDISIM0056_364565_video_cmn-cn_J5837143.mp4",
     "word_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/0 - Ref/XW5#06_台词本_净版_250418.docx",
     "pdf_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/141 - MF Ghost S3/0 - Ref/ep02/#26_MF GHOST_Final script.pdf",
-    "out_dir": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/3 - Scripts esES/s5e06",
-    "splitter_pos": 492,
+    "out_dir": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/3 - Scripts esES/s5e05",
+    "splitter_pos": 468,
     "scanner_batch": false,
     "yomitoku_exe": "C:/TakoWorks/bin/yomitoku/yomitoku.exe",
     "cut_upper_ratio": 0.462,
