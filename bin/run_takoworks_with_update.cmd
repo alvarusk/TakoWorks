@@ -3,7 +3,8 @@ REM Actualiza desde la ultima release y lanza TakoWorks.
 REM Ajusta las rutas si instalas en otro sitio.
 
 set REPO=alvarusk/takoworks
-set INSTALL_DIR=C:\Program Files\TakoWorks
+REM Instala en carpeta de usuario para evitar permisos de admin.
+set INSTALL_DIR=%LOCALAPPDATA%\TakoWorks
 set SCRIPT_DIR=%~dp0
 
 REM Lanza el updater (usa GITHUB_TOKEN si el repo es privado)
