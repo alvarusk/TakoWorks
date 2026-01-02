@@ -1,29 +1,38 @@
 import re
-import torch
 from pathlib import Path
 from functools import lru_cache
-from transformers import BertTokenizer, BertModel
+from typing import Any, Optional
 
 MODEL_NAME = "tohoku-nlp/bert-base-japanese-char-v3"
 WEIGHT_PATH = Path(__file__).resolve().parent / "weight" / "punctuation_position_model.pth"
-
-
-class PunctuationPredictor(torch.nn.Module):
-    def __init__(self, base_model):
-        super().__init__()
-        self.base_model = base_model
-        self.dropout = torch.nn.Dropout(0.2)
-        self.linear = torch.nn.Linear(768, 2)
-
-    def forward(self, input_ids, attention_mask):
-        last_hidden_state = self.base_model(
-            input_ids=input_ids, attention_mask=attention_mask
-        ).last_hidden_state
-        return self.linear(self.dropout(last_hidden_state))
+_TORCH: Optional[Any] = None
 
 
 @lru_cache(maxsize=1)
 def _get_components():
+    try:
+        import torch  # type: ignore
+        from transformers import BertTokenizer, BertModel  # type: ignore
+    except ImportError as exc:
+        raise RuntimeError(
+            "Falta torch/transformers para restaurar puntuación (pip install torch transformers)."
+        ) from exc
+    global _TORCH
+    _TORCH = torch
+
+    class PunctuationPredictor(torch.nn.Module):
+        def __init__(self, base_model):
+            super().__init__()
+            self.base_model = base_model
+            self.dropout = torch.nn.Dropout(0.2)
+            self.linear = torch.nn.Linear(768, 2)
+
+        def forward(self, input_ids, attention_mask):
+            last_hidden_state = self.base_model(
+                input_ids=input_ids, attention_mask=attention_mask
+            ).last_hidden_state
+            return self.linear(self.dropout(last_hidden_state))
+
     # Si no quieres descargas en runtime, aquí podrías pasar local_files_only=True
     tokenizer = BertTokenizer.from_pretrained(MODEL_NAME)
     base_model = BertModel.from_pretrained(MODEL_NAME)
@@ -101,9 +110,9 @@ def process_long_text(text, max_length=256, comma_thresh=0.1, period_thresh=0.1)
             return_tensors="pt",
         )
 
-        with torch.no_grad():
+        with _TORCH.no_grad():
             output = model(inputs.input_ids, inputs.attention_mask)
-            output = torch.sigmoid(output)
+            output = _TORCH.sigmoid(output)
 
         comma_pos = output[0].detach().cpu().numpy().T[0] > comma_thresh
         period_pos = output[0].detach().cpu().numpy().T[1] > period_thresh
