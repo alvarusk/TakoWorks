@@ -29,6 +29,8 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
+        env:
+          PIP_EXTRA_INDEX_URL: https://download.pytorch.org/whl/cpu
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-lock.txt
@@ -50,6 +52,8 @@ jobs:
           cache: "pip"
 
       - name: Install build dependencies
+        env:
+          PIP_EXTRA_INDEX_URL: https://download.pytorch.org/whl/cpu
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
