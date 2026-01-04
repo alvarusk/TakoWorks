@@ -34,19 +34,27 @@ $resolvedAssets = Resolve-Path -LiteralPath $AssetsDir -ErrorAction Stop
 $resolvedBuildDir = Resolve-Path -LiteralPath $BuildDir -ErrorAction Stop
 
 $xml = [xml](Get-Content -LiteralPath $resolvedManifest.Path)
-$ns = @{ uap = "http://schemas.microsoft.com/appx/manifest/uap/windows10" }
+$nsm = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
+$nsm.AddNamespace("d", "http://schemas.microsoft.com/appx/manifest/foundation/windows10")
+$nsm.AddNamespace("uap", "http://schemas.microsoft.com/appx/manifest/uap/windows10")
 
 # Collect asset paths referenced in manifest
 $assetPaths = @()
-$logo = $xml.Package.Properties.Logo
-if ($logo) { $assetPaths += $logo }
-$visual = $xml.Package.Applications.Application.uap:VisualElements
+$logoNode = $xml.SelectSingleNode("//d:Properties/d:Logo", $nsm)
+if ($logoNode) { $assetPaths += $logoNode.InnerText }
+
+$visual = $xml.SelectSingleNode("//uap:VisualElements", $nsm)
 if ($visual) {
-    $assetPaths += $visual.Square44x44Logo
-    $assetPaths += $visual.Square150x150Logo
-    if ($visual.uap:DefaultTile) {
-        $assetPaths += $visual.uap:DefaultTile.Square310x310Logo
-        $assetPaths += $visual.uap:DefaultTile.Wide310x150Logo
+    foreach ($attrName in @("Square44x44Logo","Square150x150Logo")) {
+        $attr = $visual.Attributes[$attrName]
+        if ($attr) { $assetPaths += $attr.Value }
+    }
+    $defaultTile = $xml.SelectSingleNode("//uap:DefaultTile", $nsm)
+    if ($defaultTile) {
+        foreach ($attrName in @("Square310x310Logo","Wide310x150Logo")) {
+            $attr = $defaultTile.Attributes[$attrName]
+            if ($attr) { $assetPaths += $attr.Value }
+        }
     }
 }
 $assetPaths = $assetPaths | Where-Object { $_ -and $_ -ne "" } | Select-Object -Unique
