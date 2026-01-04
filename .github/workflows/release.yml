@@ -99,6 +99,7 @@ jobs:
           if ($verLine -notmatch '"([^"]+)"') { throw "Could not parse version from $verLine" }
           $ver = $Matches[1]
           $manifest = Join-Path $Env:GITHUB_WORKSPACE "dist_installer/AppxManifest.xml"
+          if (-not (Test-Path $manifest)) { throw "AppxManifest.xml not found at $manifest" }
           $xml = [xml](Get-Content $manifest)
           $xml.Package.Identity.Version = "$ver.0"
           $xml.Save($manifest)
