@@ -105,6 +105,11 @@ jobs:
           $xml.Save($manifest)
           Write-Host "Set AppxManifest version to $ver.0"
 
+      - name: Validate AppxManifest schema (makeappx)
+        shell: pwsh
+        run: |
+          pwsh bin/validate_appxmanifest.ps1
+
       - name: Build MSIX (makeappx)
         shell: pwsh
         run: |
