@@ -7,7 +7,8 @@
   <Identity
     Name="KingdomM.TakoWorks"
     Publisher="CN=CCDE0167-EDA3-4A6F-B196-577B92A14DEC"
-    Version="1.7.0.0" />
+    ProcessorArchitecture="x64"
+    Version="1.14.0.0" />
   <Properties>
     <DisplayName>TakoWorks</DisplayName>
     <PublisherDisplayName>Kingdom M</PublisherDisplayName>
@@ -31,7 +32,7 @@
         Square44x44Logo="assets\takoworks_150x150.png">
         <uap:DefaultTile
           Square310x310Logo="assets\tako_300x300.png"
-          Wide310x150Logo="assets\takoworks_150x150.png" />
+          Wide310x150Logo="assets\tako_310x150.png" />
       </uap:VisualElements>
     </Application>
   </Applications>
