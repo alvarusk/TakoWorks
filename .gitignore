@@ -12,6 +12,11 @@ build/
 develop-eggs/
 dist/
 dist_installer/
+!dist_installer/
+dist_installer/*
+!dist_installer/AppxManifest.xml
+!dist_installer/assets/
+!dist_installer/assets/**
 downloads/
 eggs/
 .eggs/

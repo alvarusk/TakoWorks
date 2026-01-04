@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  IgnorableNamespaces="uap">
+  <Identity
+    Name="KingdomM.TakoWorks"
+    Publisher="CN=CCDE0167-EDA3-4A6F-B196-577B92A14DEC"
+    Version="1.7.0.0" />
+  <Properties>
+    <DisplayName>TakoWorks</DisplayName>
+    <PublisherDisplayName>Kingdom M</PublisherDisplayName>
+    <Logo>assets\takoworks_150x150.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.22621.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+  <Applications>
+    <Application Id="App"
+      Executable="TakoWorks.exe"
+      EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="TakoWorks"
+        Description="Toolkit para transcribir, romanizar y traducir guiones/ASS."
+        BackgroundColor="transparent"
+        Square150x150Logo="assets\takoworks_150x150.png"
+        Square44x44Logo="assets\takoworks_150x150.png">
+        <uap:DefaultTile
+          Square150x150Logo="assets\takoworks_150x150.png"
+          Square310x310Logo="assets\\tako_300x300.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <Capability Name="internetClient" />
+  </Capabilities>
+</Package>
