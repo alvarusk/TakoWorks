@@ -90,9 +90,51 @@ jobs:
           name: takoworks-windows
           path: ${{ env.ARTIFACT_NAME }}
 
+      - name: Set MSIX version from __version__
+        shell: pwsh
+        run: |
+          $init = Join-Path $Env:GITHUB_WORKSPACE "src/takoworks/__init__.py"
+          $verLine = Get-Content $init | Where-Object { $_ -match '__version__' } | Select-Object -First 1
+          if (-not $verLine) { throw "__version__ not found in $init" }
+          if ($verLine -notmatch '"([^"]+)"') { throw "Could not parse version from $verLine" }
+          $ver = $Matches[1]
+          $manifest = Join-Path $Env:GITHUB_WORKSPACE "dist_installer/AppxManifest.xml"
+          $xml = [xml](Get-Content $manifest)
+          $xml.Package.Identity.Version = "$ver.0"
+          $xml.Save($manifest)
+          Write-Host "Set AppxManifest version to $ver.0"
+
+      - name: Build MSIX (makeappx)
+        shell: pwsh
+        run: |
+          $manifest = Join-Path $Env:GITHUB_WORKSPACE "dist_installer/AppxManifest.xml"
+          if (-not (Test-Path $manifest)) { throw "AppxManifest not found at $manifest" }
+          makeappx pack /d "${{ env.BUILD_DIR }}" /p "TakoWorks.msix" /m $manifest
+
+      - name: Sign MSIX
+        shell: pwsh
+        env:
+          PFX_CERT: ${{ secrets.PFX_CERT }}
+          PFX_PASS: ${{ secrets.PFX_PASS }}
+        run: |
+          if (-not $env:PFX_CERT) { throw "PFX_CERT secret not set" }
+          if (-not $env:PFX_PASS) { throw "PFX_PASS secret not set" }
+          $pfxPath = Join-Path $Env:RUNNER_TEMP "sig.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:PFX_CERT))
+          signtool sign /f $pfxPath /p $env:PFX_PASS /fd sha256 /a "TakoWorks.msix"
+          signtool verify /pa "TakoWorks.msix"
+
+      - name: Upload MSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: takoworks-msix
+          path: TakoWorks.msix
+
       - name: Attach artifact to release
         if: github.event_name == 'release' && github.event.action == 'published'
         uses: softprops/action-gh-release@v1
         with:
-          files: ${{ env.ARTIFACT_NAME }}
+          files: |
+            ${{ env.ARTIFACT_NAME }}
+            TakoWorks.msix
           fail_on_unmatched_files: true
