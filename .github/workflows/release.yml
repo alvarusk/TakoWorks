@@ -110,7 +110,12 @@ jobs:
         run: |
           $manifest = Join-Path $Env:GITHUB_WORKSPACE "dist_installer/AppxManifest.xml"
           if (-not (Test-Path $manifest)) { throw "AppxManifest not found at $manifest" }
-          makeappx pack /d "${{ env.BUILD_DIR }}" /p "TakoWorks.msix" /m $manifest
+          $makeappx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter makeappx.exe |
+            Where-Object { $_.FullName -match '\\x64\\' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $makeappx) { throw "makeappx.exe not found under Windows Kits" }
+          & $makeappx.FullName pack /d "${{ env.BUILD_DIR }}" /p "TakoWorks.msix" /m $manifest
 
       - name: Sign MSIX
         shell: pwsh
