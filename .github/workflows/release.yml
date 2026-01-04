@@ -151,7 +151,8 @@ jobs:
             Select-Object -First 1
           if (-not $signtool) { throw "signtool.exe not found under Windows Kits" }
           function Invoke-Signtool {
-            param([string]$Args, [int]$TimeoutSec = 240)
+            param([string]$Args, [string]$Label = "signtool", [int]$TimeoutSec = 120)
+            Write-Host "Starting $Label (timeout ${TimeoutSec}s): $Args"
             $psi = New-Object System.Diagnostics.ProcessStartInfo
             $psi.FileName = $signtool.FullName
             $psi.Arguments = $Args
@@ -170,15 +171,27 @@ jobs:
             if ($err) { Write-Host $err }
             if ($p.ExitCode -ne 0) { throw "signtool failed (exit $($p.ExitCode)): $Args" }
           }
-          $signArgs = "/debug /fd sha256 /td sha256 /tr http://timestamp.digicert.com /a /f `"$pfxPath`" /p $env:PFX_PASS `"TakoWorks.msix`""
-          try {
-            Invoke-Signtool -Args $signArgs -TimeoutSec 240
-          } catch {
-            Write-Host "Timestamped signing failed, retrying without timestamp..."
-            $fallbackArgs = "/debug /fd sha256 /a /f `"$pfxPath`" /p $env:PFX_PASS `"TakoWorks.msix`""
-            Invoke-Signtool -Args $fallbackArgs -TimeoutSec 120
+          $signBase = "/debug /fd sha256 /td sha256 /a /f `"$pfxPath`" /p $env:PFX_PASS `"TakoWorks.msix`""
+          $tsServers = @(
+            "http://timestamp.digicert.com",
+            "http://timestamp.sectigo.com",
+            "http://timestamp.globalsign.com/?signature=sha2"
+          )
+          $signed = $false
+          foreach ($ts in $tsServers) {
+            try {
+              Invoke-Signtool -Args ("$signBase /tr $ts") -Label "sign(ts:$ts)" -TimeoutSec 120
+              $signed = $true
+              break
+            } catch {
+              Write-Host "Timestamped signing with $ts failed: $_"
+            }
           }
-          Invoke-Signtool -Args "/debug /pa /all `"TakoWorks.msix`"" -TimeoutSec 120
+          if (-not $signed) {
+            Write-Host "Timestamped signing failed on all servers, retrying without timestamp..."
+            Invoke-Signtool -Args "/debug /fd sha256 /a /f `"$pfxPath`" /p $env:PFX_PASS `"TakoWorks.msix`"" -Label "sign(no-ts)" -TimeoutSec 60
+          }
+          Invoke-Signtool -Args "/debug /pa /all `"TakoWorks.msix`"" -Label "verify" -TimeoutSec 90
 
       - name: Upload MSIX artifact
         uses: actions/upload-artifact@v4
