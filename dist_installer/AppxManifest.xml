@@ -29,7 +29,6 @@
         Square150x150Logo="assets\takoworks_150x150.png"
         Square44x44Logo="assets\takoworks_150x150.png">
         <uap:DefaultTile
-          Square150x150Logo="assets\takoworks_150x150.png"
           Square310x310Logo="assets\\tako_300x300.png" />
       </uap:VisualElements>
     </Application>
