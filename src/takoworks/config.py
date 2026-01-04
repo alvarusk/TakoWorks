@@ -54,6 +54,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "anon_key": "",
     },
 
+    "updates": {
+        "pending_version": "",
+        "installed_run_id": 0,
+    },
+
     # Costes por 1K tokens (USD) para cada motor
     "cost_per_1k": {
         "gpt": {"input": 0.0, "output": 0.0},
