@@ -1,6 +1,7 @@
 # Validate AppxManifest.xml with makeappx (schema check only).
 param(
     [string]$Manifest = "dist_installer/AppxManifest.xml",
+    [string]$AssetsDir = "dist_installer/assets",
     [string]$BuildDir = "dist/TakoWorks"
 )
 
@@ -29,6 +30,7 @@ function Find-MakeAppx {
 }
 
 $resolvedManifest = Resolve-Path -LiteralPath $Manifest -ErrorAction Stop
+$resolvedAssets = Resolve-Path -LiteralPath $AssetsDir -ErrorAction Stop
 $resolvedBuildDir = Resolve-Path -LiteralPath $BuildDir -ErrorAction Stop
 
 $makeappxPath = Find-MakeAppx
@@ -37,6 +39,10 @@ Write-Host "Validating manifest by packing temp MSIX..."
 
 $tmpManifest = Join-Path $resolvedBuildDir.Path "AppxManifest.xml"
 Copy-Item -LiteralPath $resolvedManifest.Path -Destination $tmpManifest -Force
+
+$dstAssets = Join-Path $resolvedBuildDir.Path "assets"
+if (-not (Test-Path $dstAssets)) { New-Item -ItemType Directory -Path $dstAssets | Out-Null }
+Copy-Item -Path (Join-Path $resolvedAssets.Path "*") -Destination $dstAssets -Recurse -Force
 
 $tmpOut = Join-Path ([IO.Path]::GetTempPath()) "manifest_validate.msix"
 if (Test-Path $tmpOut) { Remove-Item $tmpOut -Force }

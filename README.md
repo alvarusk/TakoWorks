@@ -1,4 +1,4 @@
-# TakoWorks (v1.17.0)
+# TakoWorks (v1.18.0)
 
 Toolkit para transcribir, romanizar y traducir guiones/ASS de japonés y chino. Genera ASS por modelo, HTML resumen y registra costes (opcional Supabase).
 
