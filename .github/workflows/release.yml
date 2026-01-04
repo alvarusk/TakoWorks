@@ -151,20 +151,31 @@ jobs:
             Select-Object -First 1
           if (-not $signtool) { throw "signtool.exe not found under Windows Kits" }
           function Invoke-Signtool {
-            param([string]$Args, [string]$Label = "signtool", [int]$TimeoutSec = 120)
+            param([string]$Args, [string]$Label = "signtool", [int]$TimeoutSec = 90)
             Write-Host "Starting $Label (timeout ${TimeoutSec}s): $Args"
             $logOut = Join-Path $Env:RUNNER_TEMP "$Label.out.log"
             $logErr = Join-Path $Env:RUNNER_TEMP "$Label.err.log"
             $p = Start-Process -FilePath $signtool.FullName -ArgumentList $Args -RedirectStandardOutput $logOut -RedirectStandardError $logErr -PassThru -WindowStyle Hidden
-            if (-not $p.WaitForExit($TimeoutSec * 1000)) {
-              try { $p.Kill() } catch {}
-              throw "signtool timed out after $TimeoutSec s: $Args"
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            while (-not $p.HasExited) {
+              Start-Sleep -Seconds 5
+              if ($sw.Elapsed.TotalSeconds -gt $TimeoutSec) {
+                try { $p.Kill() } catch {}
+                Write-Host "---- $Label stdout so far ----"
+                if (Test-Path $logOut) { Get-Content $logOut | Write-Host }
+                Write-Host "---- $Label stderr so far ----"
+                if (Test-Path $logErr) { Get-Content $logErr | Write-Host }
+                throw "signtool timed out after $TimeoutSec s: $Args"
+              }
             }
+            Write-Host "---- $Label stdout ----"
             if (Test-Path $logOut) { Get-Content $logOut | Write-Host }
+            Write-Host "---- $Label stderr ----"
             if (Test-Path $logErr) { Get-Content $logErr | Write-Host }
             if ($p.ExitCode -ne 0) { throw "signtool failed (exit $($p.ExitCode)): $Args" }
           }
           $signBase = "/debug /fd sha256 /td sha256 /a /f `"$pfxPath`" /p $env:PFX_PASS `"TakoWorks.msix`""
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
           $tsServers = @(
             "http://timestamp.digicert.com",
             "http://timestamp.sectigo.com",
