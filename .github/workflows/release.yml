@@ -153,22 +153,15 @@ jobs:
           function Invoke-Signtool {
             param([string]$Args, [string]$Label = "signtool", [int]$TimeoutSec = 120)
             Write-Host "Starting $Label (timeout ${TimeoutSec}s): $Args"
-            $psi = New-Object System.Diagnostics.ProcessStartInfo
-            $psi.FileName = $signtool.FullName
-            $psi.Arguments = $Args
-            $psi.RedirectStandardOutput = $true
-            $psi.RedirectStandardError = $true
-            $psi.UseShellExecute = $false
-            $psi.CreateNoWindow = $true
-            $p = [System.Diagnostics.Process]::Start($psi)
+            $logOut = Join-Path $Env:RUNNER_TEMP "$Label.out.log"
+            $logErr = Join-Path $Env:RUNNER_TEMP "$Label.err.log"
+            $p = Start-Process -FilePath $signtool.FullName -ArgumentList $Args -RedirectStandardOutput $logOut -RedirectStandardError $logErr -PassThru -WindowStyle Hidden
             if (-not $p.WaitForExit($TimeoutSec * 1000)) {
-              $p.Kill()
+              try { $p.Kill() } catch {}
               throw "signtool timed out after $TimeoutSec s: $Args"
             }
-            $out = $p.StandardOutput.ReadToEnd()
-            $err = $p.StandardError.ReadToEnd()
-            if ($out) { Write-Host $out }
-            if ($err) { Write-Host $err }
+            if (Test-Path $logOut) { Get-Content $logOut | Write-Host }
+            if (Test-Path $logErr) { Get-Content $logErr | Write-Host }
             if ($p.ExitCode -ne 0) { throw "signtool failed (exit $($p.ExitCode)): $Args" }
           }
           $signBase = "/debug /fd sha256 /td sha256 /a /f `"$pfxPath`" /p $env:PFX_PASS `"TakoWorks.msix`""
