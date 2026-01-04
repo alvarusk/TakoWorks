@@ -1,6 +1,7 @@
 # Validate AppxManifest.xml with makeappx (schema check only).
 param(
-    [string]$Manifest = "dist_installer/AppxManifest.xml"
+    [string]$Manifest = "dist_installer/AppxManifest.xml",
+    [string]$BuildDir = "dist/TakoWorks"
 )
 
 function Find-MakeAppx {
@@ -28,12 +29,22 @@ function Find-MakeAppx {
 }
 
 $resolvedManifest = Resolve-Path -LiteralPath $Manifest -ErrorAction Stop
+$resolvedBuildDir = Resolve-Path -LiteralPath $BuildDir -ErrorAction Stop
+
 $makeappxPath = Find-MakeAppx
 Write-Host "Using makeappx at: $makeappxPath"
-Write-Host "Validating manifest: $resolvedManifest"
+Write-Host "Validating manifest by packing temp MSIX..."
 
-& $makeappxPath validate /m $resolvedManifest
-if ($LASTEXITCODE -ne 0) {
-    throw "makeappx validate failed with exit code $LASTEXITCODE"
+$tmpManifest = Join-Path $resolvedBuildDir.Path "AppxManifest.xml"
+Copy-Item -LiteralPath $resolvedManifest.Path -Destination $tmpManifest -Force
+
+$tmpOut = Join-Path ([IO.Path]::GetTempPath()) "manifest_validate.msix"
+if (Test-Path $tmpOut) { Remove-Item $tmpOut -Force }
+
+& $makeappxPath pack /o /d $resolvedBuildDir.Path /p $tmpOut
+$exit = $LASTEXITCODE
+if (Test-Path $tmpOut) { Remove-Item $tmpOut -Force }
+if ($exit -ne 0) {
+    throw "makeappx pack (validation) failed with exit code $exit"
 }
 Write-Host "Manifest validation succeeded."

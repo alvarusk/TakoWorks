@@ -108,7 +108,7 @@ jobs:
       - name: Validate AppxManifest schema (makeappx)
         shell: pwsh
         run: |
-          pwsh bin/validate_appxmanifest.ps1
+          pwsh bin/validate_appxmanifest.ps1 -Manifest dist_installer/AppxManifest.xml -BuildDir "${{ env.BUILD_DIR }}"
 
       - name: Build MSIX (makeappx)
         shell: pwsh
@@ -120,7 +120,8 @@ jobs:
             Sort-Object FullName -Descending |
             Select-Object -First 1
           if (-not $makeappx) { throw "makeappx.exe not found under Windows Kits" }
-          & $makeappx.FullName pack /d "${{ env.BUILD_DIR }}" /p "TakoWorks.msix" /m $manifest
+          Copy-Item -LiteralPath $manifest -Destination (Join-Path "${{ env.BUILD_DIR }}" "AppxManifest.xml") -Force
+          & $makeappx.FullName pack /o /d "${{ env.BUILD_DIR }}" /p "TakoWorks.msix"
 
       - name: Sign MSIX
         shell: pwsh
