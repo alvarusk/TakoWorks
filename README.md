@@ -1,4 +1,4 @@
-# TakoWorks (v1.7.0)
+# TakoWorks (v1.7.2)
 
 Toolkit para transcribir, romanizar y traducir guiones/ASS de japonés y chino. Genera ASS por modelo, HTML resumen y registra costes (opcional Supabase).
 
@@ -27,6 +27,12 @@ Toolkit para transcribir, romanizar y traducir guiones/ASS de japonés y chino. 
 ```
 - Variables de entorno (tienen prioridad): `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`, `SUPABASE_COST_TABLE` (por defecto `voicex_api_costs`).
 - Rutas opcionales en `config.json`: `jpdict_dir`, `cndict_dir`, `ffmpeg_dir`, `yomitoku_dir`, costes por 1K tokens en `cost_per_1k`.
+
+## Versionado y releases
+- Versión fuente: `src/takoworks/__init__.py` (el encabezado de este README se actualiza con el bump).
+- Script de bump: `python bin/bump_version.py --mode auto|minor|patch` (auto: `minor` en main, `patch` en ramas).
+- Releases: publica tag/release en GitHub con la versión (ej. v1.7.1) para que Actions genere `TakoWorks_win64.zip`.
+- MS Store: usa versión semver sin sufijos; al empaquetar MSIX fija la versión del manifest (ej. 1.7.1.0) alineada con `__version__`.
 
 ## Uso rápido
 - Transcribir + traducir:
