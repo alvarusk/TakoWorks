@@ -137,8 +137,13 @@ jobs:
           if (-not $env:PFX_PASS) { throw "PFX_PASS secret not set" }
           $pfxPath = Join-Path $Env:RUNNER_TEMP "sig.pfx"
           [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:PFX_CERT))
-          signtool sign /f $pfxPath /p $env:PFX_PASS /fd sha256 /a "TakoWorks.msix"
-          signtool verify /pa "TakoWorks.msix"
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -match '\\x64\\' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signtool) { throw "signtool.exe not found under Windows Kits" }
+          & $signtool.FullName sign /f $pfxPath /p $env:PFX_PASS /fd sha256 /a "TakoWorks.msix"
+          & $signtool.FullName verify /pa "TakoWorks.msix"
 
       - name: Upload MSIX artifact
         uses: actions/upload-artifact@v4
