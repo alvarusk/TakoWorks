@@ -137,6 +137,11 @@ jobs:
           if (-not $env:PFX_PASS) { throw "PFX_PASS secret not set" }
           $pfxPath = Join-Path $Env:RUNNER_TEMP "sig.pfx"
           [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:PFX_CERT))
+          # Import cert to trust store so verify doesn't fail on untrusted root
+          $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($pfxPath, $env:PFX_PASS)
+          $cerPath = Join-Path $Env:RUNNER_TEMP "sig.cer"
+          [IO.File]::WriteAllBytes($cerPath, $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+          Import-Certificate -FilePath $cerPath -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
             Where-Object { $_.FullName -match '\\x64\\' } |
             Sort-Object FullName -Descending |
