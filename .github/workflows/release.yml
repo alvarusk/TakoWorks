@@ -150,8 +150,35 @@ jobs:
             Sort-Object FullName -Descending |
             Select-Object -First 1
           if (-not $signtool) { throw "signtool.exe not found under Windows Kits" }
-          & $signtool.FullName sign /f $pfxPath /p $env:PFX_PASS /fd sha256 /tr http://timestamp.digicert.com /td sha256 /a "TakoWorks.msix"
-          & $signtool.FullName verify /pa /all "TakoWorks.msix"
+          function Invoke-Signtool {
+            param([string]$Args, [int]$TimeoutSec = 240)
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = $signtool.FullName
+            $psi.Arguments = $Args
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            $psi.UseShellExecute = $false
+            $psi.CreateNoWindow = $true
+            $p = [System.Diagnostics.Process]::Start($psi)
+            if (-not $p.WaitForExit($TimeoutSec * 1000)) {
+              $p.Kill()
+              throw "signtool timed out after $TimeoutSec s: $Args"
+            }
+            $out = $p.StandardOutput.ReadToEnd()
+            $err = $p.StandardError.ReadToEnd()
+            if ($out) { Write-Host $out }
+            if ($err) { Write-Host $err }
+            if ($p.ExitCode -ne 0) { throw "signtool failed (exit $($p.ExitCode)): $Args" }
+          }
+          $signArgs = "/debug /fd sha256 /td sha256 /tr http://timestamp.digicert.com /a /f `"$pfxPath`" /p $env:PFX_PASS `"TakoWorks.msix`""
+          try {
+            Invoke-Signtool -Args $signArgs -TimeoutSec 240
+          } catch {
+            Write-Host "Timestamped signing failed, retrying without timestamp..."
+            $fallbackArgs = "/debug /fd sha256 /a /f `"$pfxPath`" /p $env:PFX_PASS `"TakoWorks.msix`""
+            Invoke-Signtool -Args $fallbackArgs -TimeoutSec 120
+          }
+          Invoke-Signtool -Args "/debug /pa /all `"TakoWorks.msix`"" -TimeoutSec 120
 
       - name: Upload MSIX artifact
         uses: actions/upload-artifact@v4
