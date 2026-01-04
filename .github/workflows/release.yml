@@ -138,13 +138,20 @@ jobs:
           $pfxPath = Join-Path $Env:RUNNER_TEMP "sig.pfx"
           [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:PFX_CERT))
           $securePass = ConvertTo-SecureString $env:PFX_PASS -AsPlainText -Force
+          $sw = [Diagnostics.Stopwatch]::StartNew()
           # Import PFX into personal + trusted people (leaf/intermediate) and root store (root)
+          Write-Host "Importing PFX into CurrentUser\\My..."
           Import-PfxCertificate -FilePath $pfxPath -Password $securePass -CertStoreLocation "Cert:\CurrentUser\My" -Exportable | Out-Null
+          Write-Host "OK My in $($sw.Elapsed)"
+          Write-Host "Importing PFX into CurrentUser\\TrustedPeople..."
           Import-PfxCertificate -FilePath $pfxPath -Password $securePass -CertStoreLocation "Cert:\CurrentUser\TrustedPeople" -Exportable | Out-Null
+          Write-Host "OK TrustedPeople in $($sw.Elapsed)"
           $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($pfxPath, $env:PFX_PASS)
           $cerPath = Join-Path $Env:RUNNER_TEMP "sig.cer"
           [IO.File]::WriteAllBytes($cerPath, $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+          Write-Host "Importing CER into CurrentUser\\Root..."
           Import-Certificate -FilePath $cerPath -CertStoreLocation "Cert:\CurrentUser\Root" | Out-Null
+          Write-Host "OK Root in $($sw.Elapsed)"
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
             Where-Object { $_.FullName -match '\\x64\\' } |
             Sort-Object FullName -Descending |
@@ -177,9 +184,9 @@ jobs:
           $signBase = "/debug /fd sha256 /td sha256 /a /f `"$pfxPath`" /p $env:PFX_PASS `"TakoWorks.msix`""
           [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
           $tsServers = @(
-            "http://timestamp.digicert.com",
-            "http://timestamp.sectigo.com",
-            "http://timestamp.globalsign.com/?signature=sha2"
+            "https://timestamp.digicert.com",
+            "https://timestamp.sectigo.com",
+            "https://timestamp.globalsign.com/?signature=sha2"
           )
           $signed = $false
           foreach ($ts in $tsServers) {
