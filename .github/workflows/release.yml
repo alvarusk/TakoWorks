@@ -241,8 +241,6 @@ jobs:
           }
 
           Invoke-Signtool -ArgumentList @("verify","/debug","/pa","/all",$msixPath) -Label "verify" -TimeoutSec 90
-
-
       - name: Upload MSIX artifact
         uses: actions/upload-artifact@v4
         with:
