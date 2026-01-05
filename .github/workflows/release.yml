@@ -135,29 +135,37 @@ jobs:
         run: |
           if (-not $env:PFX_CERT) { throw "PFX_CERT secret not set" }
           if (-not $env:PFX_PASS) { throw "PFX_PASS secret not set" }
+
+          $msixPath = Join-Path $PWD "TakoWorks.msix"
+          if (-not (Test-Path $msixPath)) { throw "MSIX not found: $msixPath" }
+
           $pfxPath = Join-Path $Env:RUNNER_TEMP "sig.pfx"
           [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:PFX_CERT))
-          $securePass = ConvertTo-SecureString $env:PFX_PASS -AsPlainText -Force
-          $sw = [Diagnostics.Stopwatch]::StartNew()
-          # Import PFX into personal + trusted people
-          Write-Host "Importing PFX into CurrentUser\\My..."
-          Import-PfxCertificate -FilePath $pfxPath -Password $securePass -CertStoreLocation "Cert:\CurrentUser\My" -Exportable | Out-Null
-          Write-Host "OK My in $($sw.Elapsed)"
-          Write-Host "Importing PFX into CurrentUser\\TrustedPeople..."
-          Import-PfxCertificate -FilePath $pfxPath -Password $securePass -CertStoreLocation "Cert:\CurrentUser\TrustedPeople" -Exportable | Out-Null
-          Write-Host "OK TrustedPeople in $($sw.Elapsed)"
+
+          # Find signtool.exe (latest x64 from Windows Kits)
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
             Where-Object { $_.FullName -match '\\x64\\' } |
             Sort-Object FullName -Descending |
             Select-Object -First 1
           if (-not $signtool) { throw "signtool.exe not found under Windows Kits" }
+
           function Invoke-Signtool {
-            param([string]$Args, [string]$Label = "signtool", [int]$TimeoutSec = 90)
-            Write-Host "Starting $Label (timeout ${TimeoutSec}s): $Args"
+            param(
+              [string[]]$ArgumentList,
+              [string]$Label = "signtool",
+              [int]$TimeoutSec = 90
+            )
+
+            Write-Host "Starting $Label (timeout ${TimeoutSec}s): $($ArgumentList -join ' ')"
+
             $safeLabel = ($Label -replace '[^A-Za-z0-9_.-]','_')
             $logOut = Join-Path $Env:RUNNER_TEMP "$safeLabel.out.log"
             $logErr = Join-Path $Env:RUNNER_TEMP "$safeLabel.err.log"
-            $p = Start-Process -FilePath $signtool.FullName -ArgumentList $Args -RedirectStandardOutput $logOut -RedirectStandardError $logErr -PassThru -WindowStyle Hidden
+
+            $p = Start-Process -FilePath $signtool.FullName -ArgumentList $ArgumentList `
+              -RedirectStandardOutput $logOut -RedirectStandardError $logErr `
+              -PassThru -WindowStyle Hidden
+
             $sw = [System.Diagnostics.Stopwatch]::StartNew()
             while (-not $p.HasExited) {
               Start-Sleep -Seconds 5
@@ -167,37 +175,56 @@ jobs:
                 if (Test-Path $logOut) { Get-Content $logOut | Write-Host }
                 Write-Host "---- $Label stderr so far ----"
                 if (Test-Path $logErr) { Get-Content $logErr | Write-Host }
-                throw "signtool timed out after $TimeoutSec s: $Args"
+                throw "signtool timed out after $TimeoutSec s: $($ArgumentList -join ' ')"
               }
             }
+
             Write-Host "---- $Label stdout ----"
             if (Test-Path $logOut) { Get-Content $logOut | Write-Host }
             Write-Host "---- $Label stderr ----"
             if (Test-Path $logErr) { Get-Content $logErr | Write-Host }
-            if ($p.ExitCode -ne 0) { throw "signtool failed (exit $($p.ExitCode)): $Args" }
+
+            if ($p.ExitCode -ne 0) {
+              throw "signtool failed (exit $($p.ExitCode)): $($ArgumentList -join ' ')"
+            }
           }
-          $signBase = ('sign /debug /fd sha256 /td sha256 /a /f "{0}" /p "{1}" "TakoWorks.msix"' -f $pfxPath, $env:PFX_PASS)
+
           [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
           $tsServers = @(
             "https://timestamp.digicert.com",
             "https://timestamp.sectigo.com",
             "https://timestamp.globalsign.com/?signature=sha2"
           )
+
+          $signBaseArgs = @(
+            "sign",
+            "/debug",
+            "/fd","sha256",
+            "/td","sha256",
+            "/a",
+            "/f",$pfxPath,
+            "/p",$env:PFX_PASS,
+            $msixPath
+          )
+
           $signed = $false
           foreach ($ts in $tsServers) {
             try {
-              Invoke-Signtool -Args ("$signBase /tr $ts") -Label "sign_ts_$($ts.GetHashCode())" -TimeoutSec 120
+              Invoke-Signtool -ArgumentList ($signBaseArgs + @("/tr",$ts)) -Label "sign_ts_$($ts.GetHashCode())" -TimeoutSec 120
               $signed = $true
               break
             } catch {
               Write-Host "Timestamped signing with $ts failed: $_"
             }
           }
+
           if (-not $signed) {
             Write-Host "Timestamped signing failed on all servers, retrying without timestamp..."
-            Invoke-Signtool -Args $signBase -Label "sign_no_ts" -TimeoutSec 60
+            Invoke-Signtool -ArgumentList $signBaseArgs -Label "sign_no_ts" -TimeoutSec 60
           }
-          Invoke-Signtool -Args "/debug /pa /all `"TakoWorks.msix`"" -Label "verify" -TimeoutSec 90
+
+          # IMPORTANT: include the `verify` command
+          Invoke-Signtool -ArgumentList @("verify","/debug","/pa","/all",$msixPath) -Label "verify" -TimeoutSec 90
 
       - name: Upload MSIX artifact
         uses: actions/upload-artifact@v4
