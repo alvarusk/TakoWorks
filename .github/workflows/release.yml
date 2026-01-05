@@ -154,8 +154,9 @@ jobs:
           function Invoke-Signtool {
             param([string]$Args, [string]$Label = "signtool", [int]$TimeoutSec = 90)
             Write-Host "Starting $Label (timeout ${TimeoutSec}s): $Args"
-            $logOut = Join-Path $Env:RUNNER_TEMP "$Label.out.log"
-            $logErr = Join-Path $Env:RUNNER_TEMP "$Label.err.log"
+            $safeLabel = ($Label -replace '[^A-Za-z0-9_.-]','_')
+            $logOut = Join-Path $Env:RUNNER_TEMP "$safeLabel.out.log"
+            $logErr = Join-Path $Env:RUNNER_TEMP "$safeLabel.err.log"
             $p = Start-Process -FilePath $signtool.FullName -ArgumentList $Args -RedirectStandardOutput $logOut -RedirectStandardError $logErr -PassThru -WindowStyle Hidden
             $sw = [System.Diagnostics.Stopwatch]::StartNew()
             while (-not $p.HasExited) {
@@ -175,7 +176,7 @@ jobs:
             if (Test-Path $logErr) { Get-Content $logErr | Write-Host }
             if ($p.ExitCode -ne 0) { throw "signtool failed (exit $($p.ExitCode)): $Args" }
           }
-          $signBase = "/debug /fd sha256 /td sha256 /a /f `"$pfxPath`" /p $env:PFX_PASS `"TakoWorks.msix`""
+          $signBase = "sign /debug /fd sha256 /td sha256 /a /f `"$pfxPath`" /p $env:PFX_PASS `"TakoWorks.msix`""
           [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
           $tsServers = @(
             "https://timestamp.digicert.com",
@@ -185,7 +186,7 @@ jobs:
           $signed = $false
           foreach ($ts in $tsServers) {
             try {
-              Invoke-Signtool -Args ("$signBase /tr $ts") -Label "sign(ts:$ts)" -TimeoutSec 120
+              Invoke-Signtool -Args ("$signBase /tr $ts") -Label "sign_ts_$($ts.GetHashCode())" -TimeoutSec 120
               $signed = $true
               break
             } catch {
