@@ -89,7 +89,7 @@ if (-not $exeName) { $exeName = "app.exe" }
 $exePath = Join-Path $tmpDir $exeName
 $exeDir = Split-Path $exePath
 if (-not (Test-Path $exeDir)) { New-Item -ItemType Directory -Path $exeDir | Out-Null }
-if (-not (Test-Path $exePath)) { Set-Content -Path $exePath -Value "" -Encoding Byte }
+if (-not (Test-Path $exePath)) { [IO.File]::WriteAllBytes($exePath, [byte[]]@()) }
 
 $tmpOut = Join-Path ([IO.Path]::GetTempPath()) "manifest_validate.msix"
 if (Test-Path $tmpOut) { Remove-Item $tmpOut -Force }

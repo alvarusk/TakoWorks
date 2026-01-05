@@ -176,7 +176,7 @@ jobs:
             if (Test-Path $logErr) { Get-Content $logErr | Write-Host }
             if ($p.ExitCode -ne 0) { throw "signtool failed (exit $($p.ExitCode)): $Args" }
           }
-          $signBase = "sign /debug /fd sha256 /td sha256 /a /f `"$pfxPath`" /p $env:PFX_PASS `"TakoWorks.msix`""
+          $signBase = ('sign /debug /fd sha256 /td sha256 /a /f "{0}" /p "{1}" "TakoWorks.msix"' -f $pfxPath, $env:PFX_PASS)
           [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
           $tsServers = @(
             "https://timestamp.digicert.com",
@@ -195,7 +195,7 @@ jobs:
           }
           if (-not $signed) {
             Write-Host "Timestamped signing failed on all servers, retrying without timestamp..."
-            Invoke-Signtool -Args "/debug /fd sha256 /a /f `"$pfxPath`" /p $env:PFX_PASS `"TakoWorks.msix`"" -Label "sign(no-ts)" -TimeoutSec 60
+            Invoke-Signtool -Args $signBase -Label "sign_no_ts" -TimeoutSec 60
           }
           Invoke-Signtool -Args "/debug /pa /all `"TakoWorks.msix`"" -Label "verify" -TimeoutSec 90
 
