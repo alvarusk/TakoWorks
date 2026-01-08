@@ -84,12 +84,6 @@ jobs:
           if (-not (Test-Path "${{ env.BUILD_DIR }}")) { throw "Build dir not found at ${{ env.BUILD_DIR }}." }
           Compress-Archive -Path "${{ env.BUILD_DIR }}\\*" -DestinationPath "${{ env.ARTIFACT_NAME }}" -Force
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: takoworks-windows
-          path: ${{ env.ARTIFACT_NAME }}
-
       - name: Set MSIX version from __version__
         shell: pwsh
         run: |
@@ -232,11 +226,6 @@ jobs:
           } catch {
             Write-Warning "signtool verify failed (often due to untrusted root in CI). Signed MSIX is still produced. Details: $_"
           }
-      - name: Upload MSIX artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: takoworks-msix
-          path: TakoWorks.msix
 
       - name: Attach artifact to release
         if: github.event_name == 'release' && github.event.action == 'published'

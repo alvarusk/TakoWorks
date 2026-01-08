@@ -22,6 +22,10 @@
     "service_key": "",
     "anon_key": ""
   },
+  "updates": {
+    "pending_version": "",
+    "installed_run_id": 0
+  },
   "cost_per_1k": {
     "gpt": {
       "input": 0.00125,
@@ -44,9 +48,9 @@
     "ass_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/3 - Scripts esES/s5e05/DailyLifeOfImmo_S5E5_TDISIM0056_364565_subtitle_zh-cn.ass",
     "video_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/1 - Vídeos/CR_DailyLifeOfImmo_S5.0E5_TDISIM0056_364565_video_cmn-cn_J5837143.mp4",
     "word_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/0 - Ref/XW5#06_台词本_净版_250418.docx",
-    "pdf_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/141 - MF Ghost S3/0 - Ref/ep02/#26_MF GHOST_Final script.pdf",
-    "out_dir": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/3 - Scripts esES/s5e05",
-    "splitter_pos": 473,
+    "pdf_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/142 - Dead Account/0 - Ref/ep02/#02_Dead Account_Final script.pdf",
+    "out_dir": "C:\\Users\\ajime\\OneDrive\\Documentos\\PENDING\\142 - Dead Account\\0 - Ref\\ep02",
+    "splitter_pos": 585,
     "scanner_batch": false,
     "yomitoku_exe": "C:/TakoWorks/bin/yomitoku/yomitoku.exe",
     "cut_upper_ratio": 0.462,

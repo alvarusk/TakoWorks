@@ -1,11 +1,11 @@
 @echo off
 setlocal
 if "%~1"=="" (
-  echo [ERROR] No se recibio ningun archivo.
+  echo [ERROR] No se ha recibido ningún archivo.
   exit /b 2
 )
 pushd "%~dp0"
-py -3 "%~dp0unworder_context.py" %*
+python "%~dp0unworder_context.py" %*
 set "EC=%ERRORLEVEL%"
 popd
 if not "%EC%"=="0" (

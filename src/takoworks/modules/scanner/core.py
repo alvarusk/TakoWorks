@@ -1110,8 +1110,8 @@ def _process_one_pdf(
             df = finalize_df(pd.DataFrame(rows)) if rows else pd.DataFrame(columns=["pagina", "seccion", "actor", "texto"])
             return _write_outputs(pdf_path, out_dir, df, make_excel, make_ass, make_txt, log, cancel_event)
 
-    if not rects_by_page and (upper_ratio is None or lower_ratio is None):
-        raise RuntimeError("Faltan cortes upper/lower. Usa la vista previa o activa reuse.")
+    if not rects_by_page:
+        raise RuntimeError("No hay rectangulos. Abre la vista previa y marca rectangulos.")
 
     doc = fitz.open(str(pdf_path))
     try:
@@ -1156,7 +1156,7 @@ def _process_one_pdf(
 
                         rows.extend(_ocr_one_column_to_rows(yomitoku_exe, col_img_path, page_num, idx, md_dir, log, actor_override=actor_override))
                 else:
-                    rows.extend(_process_legacy_page(doc, pi, page_num, stem, images_dir, md_dir, upper_ratio, lower_ratio, yomitoku_exe, log, cancel_event, angle_deg=angle, skip_rects=skip_rects_by_page.get(page_num)))
+                    log(f"[SKIP] Pagina {page_num}: sin rectangulos.")
         else:
             for pi in range(len(doc)):
                 _check_cancel(cancel_event)

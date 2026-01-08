@@ -15,6 +15,20 @@ import numpy as np
 from ...config import save_config
 
 
+ICON_PREV = "\u2190"
+ICON_NEXT = "\u2192"
+ICON_ROT_LEFT = "\u27F2"
+ICON_ROT_RIGHT = "\u27F3"
+ICON_ACTOR = "\U0001F464"
+ICON_DIALOG = "\U0001F4AC"
+ICON_SUBTRACT = "\U0001F9F9"
+ICON_UNDO = "X"
+ICON_CUT_UP = "\u2702\u2191"
+ICON_CUT_DOWN = "\u2702\u2193"
+ICON_SAVE = "\U0001F4BE"
+ICON_LOAD = "\u2912"
+
+
 def _pixmap_to_bgr(pix: fitz.Pixmap) -> np.ndarray:
     """
     Conversión robusta de fitz.Pixmap -> BGR.
@@ -105,6 +119,17 @@ class _PreviewWindow(tk.Toplevel):
         self._render_page()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.bind("<Key>", self._on_key)
+        self.bind("<Control-Alt-Right>", lambda _e: self._next_page())
+        self.bind("<Control-Alt-Left>", lambda _e: self._prev_page())
+        self.bind("<Control-Alt-e>", lambda _e: self._bump_rot(0.5))
+        self.bind("<Control-Alt-E>", lambda _e: self._bump_rot(0.5))
+        self.bind("<Control-Alt-q>", lambda _e: self._bump_rot(-0.5))
+        self.bind("<Control-Alt-Q>", lambda _e: self._bump_rot(-0.5))
+        self.bind("<Control-z>", lambda _e: self._undo_last())
+        self.bind("<Control-Z>", lambda _e: self._undo_last())
+        self.bind("<Alt-Shift-F1>", lambda _e: self._set_actor_mode())
+        self.bind("<Alt-Shift-F2>", lambda _e: self._set_dialog_mode())
+        self.bind("<Alt-Shift-F3>", lambda _e: self._set_skip_mode())
 
     def _build_ui(self):
         top = ttk.Frame(self, padding=8)
@@ -112,24 +137,25 @@ class _PreviewWindow(tk.Toplevel):
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
 
-        ttk.Button(top, text="«‹ Page", command=self._prev_page).grid(row=0, column=0, padx=(0, 6))
-        ttk.Button(top, text="Page »", command=self._next_page).grid(row=0, column=1, padx=(0, 10))
+        ttk.Button(top, text=ICON_PREV, command=self._prev_page).grid(row=0, column=0, padx=(0, 6))
+        ttk.Button(top, text=ICON_NEXT, command=self._next_page).grid(row=0, column=1, padx=(0, 10))
 
         self.lbl = ttk.Label(top, text="")
         self.lbl.grid(row=0, column=2, sticky="w")
 
         actions = ttk.Frame(top)
         actions.grid(row=0, column=3, padx=(10, 0))
-        ttk.Button(actions, text="Rot -", command=lambda: self._bump_rot(-0.5)).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text="Rot +", command=lambda: self._bump_rot(0.5)).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text="Banda Actor", command=self._set_actor_mode).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text="Diálogo", command=self._set_dialog_mode).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text="Deshacer", command=self._undo_last).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text="Corte sup", command=self._set_cut_upper_mode).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text="Corte inf", command=self._set_cut_lower_mode).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text="Guardar sel.", command=self._save_selection).pack(side="left", padx=(8, 4))
-        ttk.Button(actions, text="Cargar sel.", command=self._load_selection).pack(side="left", padx=(0, 4))
-        ttk.Button(top, text="Reset página", command=self._reset_page).grid(row=0, column=4, padx=(10, 0))
+        ttk.Button(actions, text=ICON_ROT_LEFT, command=lambda: self._bump_rot(-0.5)).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text=ICON_ROT_RIGHT, command=lambda: self._bump_rot(0.5)).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text=ICON_ACTOR, command=self._set_actor_mode).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text=ICON_DIALOG, command=self._set_dialog_mode).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text=ICON_SUBTRACT, command=self._set_skip_mode).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text=ICON_UNDO, command=self._undo_last).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text=ICON_CUT_UP, command=self._set_cut_upper_mode).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text=ICON_CUT_DOWN, command=self._set_cut_lower_mode).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text=ICON_SAVE, command=self._save_selection).pack(side="left", padx=(8, 4))
+        ttk.Button(actions, text=ICON_LOAD, command=self._load_selection).pack(side="left", padx=(0, 4))
+        ttk.Button(top, text="Restablecer", command=self._reset_page).grid(row=0, column=4, padx=(10, 0))
         ttk.Button(top, text="Cerrar", command=self._accept_and_close).grid(row=0, column=5, padx=(10, 0))
 
         frame = ttk.Frame(self)
@@ -156,7 +182,7 @@ class _PreviewWindow(tk.Toplevel):
 
         ttk.Label(
             self,
-            text="Arrastra para diálogos (verde). Click derecho: restar zona (rojo). Banda Actor: botón o X. Teclas: A/D páginas · Q/E rotar · R reset rot · Z deshacer."
+            text="Arrastra para dialogos (verde). Click derecho: restar zona (rojo). Banda Actor: boton o Alt+Shift+F1. Dialogo: Alt+Shift+F2. Restar zona: Alt+Shift+F3. Teclas: Ctrl+Alt+Flecha izq/der paginas, Ctrl+Alt+Q/E rotar, R restablecer rotacion, Ctrl+Z deshacer."
         ).grid(row=2, column=0, sticky="w", padx=8, pady=(6, 8))
 
     def _current_page(self) -> int:
@@ -230,12 +256,18 @@ class _PreviewWindow(tk.Toplevel):
             self.canvas.tag_raise(self.temp_rect)
 
     def _on_press(self, evt):
+        if self.drag_mode == "skip_rect":
+            self._on_press_skip(evt)
+            return
         self.drag_start = (int(self.canvas.canvasx(evt.x)), int(self.canvas.canvasy(evt.y)))
         if self.temp_rect:
             self.canvas.delete(self.temp_rect)
             self.temp_rect = None
 
     def _on_drag(self, evt):
+        if self.drag_mode == "skip_rect":
+            self._on_drag_skip(evt)
+            return
         if not self.drag_start:
             return
         x1 = int(self.canvas.canvasx(evt.x))
@@ -247,6 +279,10 @@ class _PreviewWindow(tk.Toplevel):
             self.temp_rect = self.canvas.create_rectangle(x0, y0, x1, y1, outline="#33b5e5", dash=(4, 2), tags="overlay")
 
     def _on_release(self, evt):
+        if self.drag_mode == "skip_rect":
+            self._on_release_skip(evt)
+            self.drag_mode = "rect"
+            return
         if not self.drag_start:
             return
         x0, y0 = self.drag_start
@@ -361,6 +397,9 @@ class _PreviewWindow(tk.Toplevel):
 
     def _set_dialog_mode(self):
         self.drag_mode = "rect"
+
+    def _set_skip_mode(self):
+        self.drag_mode = "skip_rect"
 
     def _undo_last(self):
         rects = self.selection.rects_by_page.get(self._current_page(), [])
@@ -661,11 +700,9 @@ class ScannerPanel(ttk.Frame):
             messagebox.showwarning("Aviso", "Selecciona al menos una salida (Excel/ASS/TXT).")
             return
 
-        # cortes obligatorios si no reusamos y tampoco hay rects
-        if not self.selection.rects_by_page and (not self.reuse_images_var.get() and not self.reuse_md_var.get()):
-            if self.selection.upper_ratio is None or self.selection.lower_ratio is None:
-                messagebox.showwarning("Faltan cortes", "Abre la vista previa y selecciona upper/lower cut.")
-                return
+        if not self.selection.rects_by_page:
+            messagebox.showwarning("Faltan rectangulos", "Abre la vista previa y marca rectangulos.")
+            return
 
         # persist config
         self.cfg["last"]["pdf_in"] = inp
