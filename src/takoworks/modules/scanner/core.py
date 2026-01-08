@@ -173,19 +173,23 @@ def rotate_bgr(img: np.ndarray, deg: float) -> np.ndarray:
     return cv2.warpAffine(img, m, (new_w, new_h), flags=cv2.INTER_LINEAR, borderValue=(255, 255, 255))
 
 
-def apply_skip_rects(bgr: np.ndarray, skips: List[Tuple[float, float, float, float]]) -> np.ndarray:
-    if not skips or bgr is None or bgr.size == 0:
+def apply_skip_polys(bgr: np.ndarray, polys: List[List[Tuple[float, float]]]) -> np.ndarray:
+    if not polys or bgr is None or bgr.size == 0:
         return bgr
     h, w = bgr.shape[:2]
-    out = bgr.copy()
-    for (x0r, y0r, x1r, y1r) in skips:
-        x0 = max(0, min(w, int(x0r * w)))
-        x1 = max(0, min(w, int(x1r * w)))
-        y0 = max(0, min(h, int(y0r * h)))
-        y1 = max(0, min(h, int(y1r * h)))
-        if x1 <= x0 or y1 <= y0:
+    mask = np.zeros((h, w), dtype=np.uint8)
+    for poly in polys:
+        if len(poly) < 3:
             continue
-        out[y0:y1, x0:x1] = 255
+        pts = []
+        for xr, yr in poly:
+            x = max(0, min(w - 1, int(xr * w)))
+            y = max(0, min(h - 1, int(yr * h)))
+            pts.append([x, y])
+        if len(pts) >= 3:
+            cv2.fillPoly(mask, [np.array(pts, dtype=np.int32)], 255)
+    out = bgr.copy()
+    out[mask == 255] = 255
     return out
 
 
@@ -800,8 +804,9 @@ def _process_legacy_page(
     log: LogFn,
     cancel_event=None,
     angle_deg: float = 0.0,
-    skip_rects: Optional[List[Tuple[float, float, float, float]]] = None,
-) -> List[dict]:
+    skip_polys: Optional[List[List[Tuple[float, float]]]] = None,
+    drop_empty: bool = False,
+) -> Tuple[List[dict], bool]:
     """
     Procesa una página con el flujo legacy (upper/lower + detección de columnas).
     """
@@ -810,7 +815,7 @@ def _process_legacy_page(
     zoom = OCR_DPI / 72.0
     pix_full = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=True)
     bgr_full = rotate_bgr(pixmap_to_bgr(pix_full), angle_deg)
-    bgr_full = apply_skip_rects(bgr_full, skip_rects or [])
+    bgr_full = apply_skip_polys(bgr_full, skip_polys or [])
 
     h, w = bgr_full.shape[:2]
     if upper_ratio is None or lower_ratio is None:
@@ -823,20 +828,24 @@ def _process_legacy_page(
 
     bgr = bgr_full[y0:y1, :].copy()
 
-    crop_img_path = images_dir / f"{stem}_p{page_num:03d}_crop.png"
-    cv_imwrite_u(crop_img_path, bgr)
-
     lines_x = detect_vertical_separators_long_global(bgr, dpi=OCR_DPI)
     cols = slice_columns_from_image(bgr, lines_x)
+    if not cols and not has_visible_ink_image(bgr):
+        if drop_empty:
+            log(f"[SKIP] Pagina {page_num}: vacia.")
+        return [], False
     if not cols and has_visible_ink_image(bgr):
         cols = [(1, bgr)]
+
+    crop_img_path = images_dir / f"{stem}_p{page_num:03d}_crop.png"
+    cv_imwrite_u(crop_img_path, bgr)
 
     rows: List[dict] = []
     for sec, col_img in cols:
         col_img_path = images_dir / f"{stem}_p{page_num:03d}s{sec:03d}.png"
         cv_imwrite_u(col_img_path, col_img)
         rows.extend(_ocr_one_column_to_rows(yomitoku_exe, col_img_path, page_num, sec, md_dir, log))
-    return rows
+    return rows, True
 
 
 # =========================
@@ -987,10 +996,8 @@ def run_scanner(
     make_txt: bool = False,
     cleanup: bool = False,
     yomitoku_exe: Optional[str] = None,
-    rects_by_page: Optional[Dict[int, List[Tuple[float, float, float, float]]]] = None,
-    rot_deg_by_page: Optional[Dict[int, float]] = None,
-    actor_band_by_page: Optional[Dict[int, Tuple[float, float]]] = None,
-    skip_rects_by_page: Optional[Dict[int, List[Tuple[float, float, float, float]]]] = None,
+    skip_polys_by_page: Optional[Dict[int, List[List[Tuple[float, float]]]]] = None,
+    drop_empty_pages: bool = False,
     log: LogFn = lambda s: None,
     cancel_event=None,
 ) -> Dict[str, ScanOutputs]:
@@ -1030,10 +1037,8 @@ def run_scanner(
             make_txt=make_txt,
             cleanup=cleanup,
             yomitoku_exe=exe,
-            rects_by_page=rects_by_page or {},
-            rot_deg_by_page=rot_deg_by_page or {},
-            actor_band_by_page=actor_band_by_page or {},
-            skip_rects_by_page=skip_rects_by_page or {},
+            skip_polys_by_page=skip_polys_by_page or {},
+            drop_empty_pages=drop_empty_pages,
             log=log,
             cancel_event=cancel_event,
         )
@@ -1054,10 +1059,8 @@ def _process_one_pdf(
     make_txt: bool,
     cleanup: bool,
     yomitoku_exe: str,
-    rects_by_page: Dict[int, List[Tuple[float, float, float, float]]],
-    rot_deg_by_page: Dict[int, float],
-    actor_band_by_page: Dict[int, Tuple[float, float]],
-    skip_rects_by_page: Dict[int, List[Tuple[float, float, float, float]]],
+    skip_polys_by_page: Dict[int, List[List[Tuple[float, float]]]],
+    drop_empty_pages: bool,
     log: LogFn,
     cancel_event=None,
 ) -> ScanOutputs:
@@ -1118,63 +1121,36 @@ def _process_one_pdf(
             df = finalize_df(pd.DataFrame(rows)) if rows else pd.DataFrame(columns=["pagina", "seccion", "actor", "texto"])
             return _write_outputs(pdf_path, out_dir, df, make_excel, make_ass, make_txt, log, cancel_event)
 
-    if not rects_by_page:
-        raise RuntimeError("No hay rectangulos. Abre la vista previa y marca rectangulos.")
+    if upper_ratio is None or lower_ratio is None:
+        raise RuntimeError("Faltan cortes upper/lower. Abre la vista previa y marca corte superior/inferior.")
 
     doc = fitz.open(str(pdf_path))
     try:
         rows: List[dict] = []
         total_pages = len(doc)
         _log_progress(0, total_pages)
-        if rects_by_page:
-            for pi in range(len(doc)):
-                _check_cancel(cancel_event)
-                page_num = pi + 1
-                _log_progress(page_num, total_pages)
-                angle = float(rot_deg_by_page.get(page_num, 0.0) or 0.0)
-                rects = rects_by_page.get(page_num, [])
-
-                if rects:
-                    zoom = OCR_DPI / 72.0
-                    pix = doc.load_page(pi).get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=True)
-                    bgr_full = rotate_bgr(pixmap_to_bgr(pix), angle)
-                    bgr_full = apply_skip_rects(bgr_full, skip_rects_by_page.get(page_num, []))
-                    h, w = bgr_full.shape[:2]
-
-                    for idx, (x0r, y0r, x1r, y1r) in enumerate(rects, start=1):
-                        x0 = max(0, min(w - 1, int(x0r * w)))
-                        x1 = max(0, min(w, int(x1r * w)))
-                        y0 = max(0, min(h - 1, int(y0r * h)))
-                        y1 = max(0, min(h, int(y1r * h)))
-                        if x1 <= x0 + 2 or y1 <= y0 + 2:
-                            continue
-                        col_img = bgr_full[y0:y1, x0:x1].copy()
-                        if not has_visible_ink_image(col_img):
-                            continue
-                        col_img_path = images_dir / f"{stem}_p{page_num:03d}s{idx:03d}.png"
-                        cv_imwrite_u(col_img_path, col_img)
-
-                        actor_override = None
-                        band = actor_band_by_page.get(page_num)
-                        if band:
-                            band_y0 = max(y0, int(band[0] * h))
-                            band_y1 = min(y1, int(band[1] * h))
-                            if band_y1 - band_y0 > 4:
-                                actor_img = bgr_full[band_y0:band_y1, x0:x1].copy()
-                                actor_path = images_dir / f"{stem}_p{page_num:03d}s{idx:03d}_actor.png"
-                                cv_imwrite_u(actor_path, actor_img)
-                                actor_override = _ocr_actor_strip(yomitoku_exe, actor_path, page_num, idx, md_dir, log)
-
-                        rows.extend(_ocr_one_column_to_rows(yomitoku_exe, col_img_path, page_num, idx, md_dir, log, actor_override=actor_override))
-                else:
-                    log(f"[SKIP] Pagina {page_num}: sin rectangulos.")
-        else:
-            for pi in range(len(doc)):
-                _check_cancel(cancel_event)
-                page_num = pi + 1
-                _log_progress(page_num, total_pages)
-                angle = float(rot_deg_by_page.get(page_num, 0.0) or 0.0)
-                rows.extend(_process_legacy_page(doc, pi, page_num, stem, images_dir, md_dir, upper_ratio, lower_ratio, yomitoku_exe, log, cancel_event, angle_deg=angle, skip_rects=skip_rects_by_page.get(page_num)))
+        for pi in range(len(doc)):
+            _check_cancel(cancel_event)
+            page_num = pi + 1
+            _log_progress(page_num, total_pages)
+            rows_page, has_content = _process_legacy_page(
+                doc,
+                pi,
+                page_num,
+                stem,
+                images_dir,
+                md_dir,
+                upper_ratio,
+                lower_ratio,
+                yomitoku_exe,
+                log,
+                cancel_event,
+                skip_polys=skip_polys_by_page.get(page_num, []),
+                drop_empty=drop_empty_pages,
+            )
+            if drop_empty_pages and not has_content:
+                continue
+            rows.extend(rows_page)
 
         df = finalize_df(pd.DataFrame(rows)) if rows else pd.DataFrame(columns=["pagina", "seccion", "actor", "texto"])
         outputs = _write_outputs(pdf_path, out_dir, df, make_excel, make_ass, make_txt, log, cancel_event)

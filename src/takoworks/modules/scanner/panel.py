@@ -17,16 +17,6 @@ from ...config import save_config
 
 ICON_PREV = "\u2190"
 ICON_NEXT = "\u2192"
-ICON_ROT_LEFT = "\u27F2"
-ICON_ROT_RIGHT = "\u27F3"
-ICON_ACTOR = "\U0001F464"
-ICON_DIALOG = "\U0001F4AC"
-ICON_SUBTRACT = "\U0001F9F9"
-ICON_UNDO = "X"
-ICON_CUT_UP = "\u2702\u2191"
-ICON_CUT_DOWN = "\u2702\u2193"
-ICON_SAVE = "\U0001F4BE"
-ICON_LOAD = "\u2912"
 
 
 def _pixmap_to_bgr(pix: fitz.Pixmap) -> np.ndarray:
@@ -62,36 +52,16 @@ def _pixmap_to_bgr(pix: fitz.Pixmap) -> np.ndarray:
     return bgr
 
 
-def _rotate_bgr(img: np.ndarray, deg: float) -> np.ndarray:
-    if img is None or img.size == 0:
-        return img
-    if abs(deg) < 1e-3:
-        return img
-    h, w = img.shape[:2]
-    center = (w / 2.0, h / 2.0)
-    m = cv2.getRotationMatrix2D(center, deg, 1.0)
-    cos = abs(m[0, 0])
-    sin = abs(m[0, 1])
-    new_w = int((h * sin) + (w * cos))
-    new_h = int((h * cos) + (w * sin))
-    m[0, 2] += (new_w / 2) - center[0]
-    m[1, 2] += (new_h / 2) - center[1]
-    return cv2.warpAffine(img, m, (new_w, new_h), flags=cv2.INTER_LINEAR, borderValue=(255, 255, 255))
-
-
 class _SelectionState:
     def __init__(self):
-        self.rects_by_page: Dict[int, List[Tuple[float, float, float, float]]] = {}
-        self.rot_deg_by_page: Dict[int, float] = {}
-        self.actor_band_by_page: Dict[int, Tuple[float, float]] = {}
-        self.skip_rects_by_page: Dict[int, List[Tuple[float, float, float, float]]] = {}
+        self.skip_polys_by_page: Dict[int, List[List[Tuple[float, float]]]] = {}
         self.upper_ratio: Optional[float] = None
         self.lower_ratio: Optional[float] = None
 
 
 class _PreviewWindow(tk.Toplevel):
     """
-    Vista previa del PDF con selección rectangular libre, rotación por página y banda Actor (tecla X).
+    Vista previa del PDF para borrar zonas y marcar cortes upper/lower.
     """
     def __init__(self, master, pdf_path: Path, selection: _SelectionState):
         super().__init__(master)
@@ -108,12 +78,9 @@ class _PreviewWindow(tk.Toplevel):
         self.preview_png = None
         self.bgr = None
 
-        self.drag_start = None
-        self.temp_rect = None
-        self.drag_mode = "rect"  # rect | actor_band
-
-        self.drag_start_skip = None
-        self.temp_rect_skip = None
+        self.drag_mode = "erase_poly"  # erase_poly | set_upper | set_lower
+        self.draw_points: List[Tuple[int, int]] = []
+        self.temp_poly = None
 
         self._build_ui()
         self._render_page()
@@ -121,15 +88,8 @@ class _PreviewWindow(tk.Toplevel):
         self.bind("<Key>", self._on_key)
         self.bind("<Control-Alt-Right>", lambda _e: self._next_page())
         self.bind("<Control-Alt-Left>", lambda _e: self._prev_page())
-        self.bind("<Control-Alt-e>", lambda _e: self._bump_rot(0.5))
-        self.bind("<Control-Alt-E>", lambda _e: self._bump_rot(0.5))
-        self.bind("<Control-Alt-q>", lambda _e: self._bump_rot(-0.5))
-        self.bind("<Control-Alt-Q>", lambda _e: self._bump_rot(-0.5))
         self.bind("<Control-z>", lambda _e: self._undo_last())
         self.bind("<Control-Z>", lambda _e: self._undo_last())
-        self.bind("<Alt-Shift-F1>", lambda _e: self._set_actor_mode())
-        self.bind("<Alt-Shift-F2>", lambda _e: self._set_dialog_mode())
-        self.bind("<Alt-Shift-F3>", lambda _e: self._set_skip_mode())
 
     def _build_ui(self):
         top = ttk.Frame(self, padding=8)
@@ -145,16 +105,10 @@ class _PreviewWindow(tk.Toplevel):
 
         actions = ttk.Frame(top)
         actions.grid(row=0, column=3, padx=(10, 0))
-        ttk.Button(actions, text=ICON_ROT_LEFT, command=lambda: self._bump_rot(-0.5)).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text=ICON_ROT_RIGHT, command=lambda: self._bump_rot(0.5)).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text=ICON_ACTOR, command=self._set_actor_mode).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text=ICON_DIALOG, command=self._set_dialog_mode).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text=ICON_SUBTRACT, command=self._set_skip_mode).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text=ICON_UNDO, command=self._undo_last).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text=ICON_CUT_UP, command=self._set_cut_upper_mode).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text=ICON_CUT_DOWN, command=self._set_cut_lower_mode).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text=ICON_SAVE, command=self._save_selection).pack(side="left", padx=(8, 4))
-        ttk.Button(actions, text=ICON_LOAD, command=self._load_selection).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text="Borrar zona", command=self._set_erase_mode).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text="Corte sup", command=self._set_cut_upper_mode).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text="Corte inf", command=self._set_cut_lower_mode).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text="Deshacer", command=self._undo_last).pack(side="left", padx=(0, 4))
         ttk.Button(top, text="Restablecer", command=self._reset_page).grid(row=0, column=4, padx=(10, 0))
         ttk.Button(top, text="Cerrar", command=self._accept_and_close).grid(row=0, column=5, padx=(10, 0))
 
@@ -175,14 +129,15 @@ class _PreviewWindow(tk.Toplevel):
         self.canvas.bind("<ButtonPress-1>", self._on_press)
         self.canvas.bind("<B1-Motion>", self._on_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_release)
-        self.canvas.bind("<ButtonPress-3>", self._on_press_skip)
-        self.canvas.bind("<B3-Motion>", self._on_drag_skip)
-        self.canvas.bind("<ButtonRelease-3>", self._on_release_skip)
         self.canvas.focus_set()
 
         ttk.Label(
             self,
-            text="Arrastra para dialogos (verde). Click derecho: restar zona (rojo). Banda Actor: boton o Alt+Shift+F1. Dialogo: Alt+Shift+F2. Restar zona: Alt+Shift+F3. Teclas: Ctrl+Alt+Flecha izq/der paginas, Ctrl+Alt+Q/E rotar, R restablecer rotacion, Ctrl+Z deshacer."
+            text=(
+                "Arrastra para marcar zonas a borrar (rojo). "
+                "Corte sup/inf: pulsa el boton y haz clic en la altura. "
+                "Teclas: Ctrl+Alt+Flecha izq/der paginas, Ctrl+Z deshacer."
+            )
         ).grid(row=2, column=0, sticky="w", padx=8, pady=(6, 8))
 
     def _current_page(self) -> int:
@@ -197,8 +152,6 @@ class _PreviewWindow(tk.Toplevel):
         pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=True)
 
         bgr = _pixmap_to_bgr(pix)
-        deg = float(self.selection.rot_deg_by_page.get(self._current_page(), 0.0) or 0.0)
-        bgr = _rotate_bgr(bgr, deg)
         self.bgr = bgr
 
         tmp_dir = Path(tempfile.gettempdir()) / "takoworks_scanner_preview"
@@ -218,32 +171,28 @@ class _PreviewWindow(tk.Toplevel):
         self.canvas.create_image(0, 0, anchor="nw", image=self.photo)
         self.canvas.config(scrollregion=(0, 0, self.img_w, self.img_h))
 
-        self.lbl.config(text=f"Página {self.page_index+1}/{len(self.doc)}  · rot={deg:.1f}°  · rects={len(self.selection.rects_by_page.get(self._current_page(), []))}")
         self._draw_overlays()
+        self._update_label()
 
     def _draw_overlays(self):
         self.canvas.delete("overlay")
-        rects = self.selection.rects_by_page.get(self._current_page(), [])
-        for (x0r, y0r, x1r, y1r) in rects:
-            x0 = int(x0r * self.img_w)
-            x1 = int(x1r * self.img_w)
-            y0 = int(y0r * self.img_h)
-            y1 = int(y1r * self.img_h)
-            self.canvas.create_rectangle(x0, y0, x1, y1, outline="#3ad35c", width=2, fill="#3ad35c", stipple="gray50", tags="overlay")
-
-        band = self.selection.actor_band_by_page.get(self._current_page())
-        if band:
-            y0 = int(band[0] * self.img_h)
-            y1 = int(band[1] * self.img_h)
-            self.canvas.create_rectangle(0, y0, self.img_w, y1, outline="#a455ff", width=2, fill="#a455ff", stipple="gray50", tags="overlay")
-
-        skips = self.selection.skip_rects_by_page.get(self._current_page(), [])
-        for (x0r, y0r, x1r, y1r) in skips:
-            x0 = int(x0r * self.img_w)
-            x1 = int(x1r * self.img_w)
-            y0 = int(y0r * self.img_h)
-            y1 = int(y1r * self.img_h)
-            self.canvas.create_rectangle(x0, y0, x1, y1, outline="#ff4d4d", width=2, fill="#ff4d4d", stipple="gray50", tags="overlay")
+        polys = self.selection.skip_polys_by_page.get(self._current_page(), [])
+        for poly in polys:
+            if len(poly) < 3:
+                continue
+            coords: List[int] = []
+            for xr, yr in poly:
+                x = int(xr * self.img_w)
+                y = int(yr * self.img_h)
+                coords.extend([x, y])
+            self.canvas.create_polygon(
+                coords,
+                outline="#ff4d4d",
+                width=2,
+                fill="#ff4d4d",
+                stipple="gray50",
+                tags="overlay",
+            )
 
         if self.selection.upper_ratio is not None:
             y = int(self.selection.upper_ratio * self.img_h)
@@ -252,122 +201,70 @@ class _PreviewWindow(tk.Toplevel):
             y = int(self.selection.lower_ratio * self.img_h)
             self.canvas.create_line(0, y, self.img_w, y, fill="#00bcd4", width=2, tags="overlay")
 
-        if self.temp_rect:
-            self.canvas.tag_raise(self.temp_rect)
+        if self.temp_poly:
+            self.canvas.tag_raise(self.temp_poly)
+        self._update_label()
+
+    def _update_label(self):
+        poly_count = len(self.selection.skip_polys_by_page.get(self._current_page(), []))
+        self.lbl.config(text=f"Página {self.page_index+1}/{len(self.doc)}  · borrados={poly_count}")
 
     def _on_press(self, evt):
-        if self.drag_mode == "skip_rect":
-            self._on_press_skip(evt)
+        x = int(self.canvas.canvasx(evt.x))
+        y = int(self.canvas.canvasy(evt.y))
+        if self.drag_mode == "set_upper":
+            self.selection.upper_ratio = y / float(self.img_h)
+            self.drag_mode = "erase_poly"
+            self._draw_overlays()
             return
-        self.drag_start = (int(self.canvas.canvasx(evt.x)), int(self.canvas.canvasy(evt.y)))
-        if self.temp_rect:
-            self.canvas.delete(self.temp_rect)
-            self.temp_rect = None
+        if self.drag_mode == "set_lower":
+            self.selection.lower_ratio = y / float(self.img_h)
+            self.drag_mode = "erase_poly"
+            self._draw_overlays()
+            return
+
+        self.draw_points = [(x, y)]
+        if self.temp_poly:
+            self.canvas.delete(self.temp_poly)
+            self.temp_poly = None
+        self.temp_poly = self.canvas.create_line(x, y, x, y, outline="#ff4d4d", width=2, tags="overlay")
 
     def _on_drag(self, evt):
-        if self.drag_mode == "skip_rect":
-            self._on_drag_skip(evt)
+        if not self.draw_points:
             return
-        if not self.drag_start:
-            return
-        x1 = int(self.canvas.canvasx(evt.x))
-        y1 = int(self.canvas.canvasy(evt.y))
-        x0, y0 = self.drag_start
-        if self.temp_rect:
-            self.canvas.coords(self.temp_rect, x0, y0, x1, y1)
-        else:
-            self.temp_rect = self.canvas.create_rectangle(x0, y0, x1, y1, outline="#33b5e5", dash=(4, 2), tags="overlay")
+        x = int(self.canvas.canvasx(evt.x))
+        y = int(self.canvas.canvasy(evt.y))
+        self.draw_points.append((x, y))
+        if self.temp_poly:
+            coords: List[int] = []
+            for px, py in self.draw_points:
+                coords.extend([px, py])
+            self.canvas.coords(self.temp_poly, *coords)
 
     def _on_release(self, evt):
-        if self.drag_mode == "skip_rect":
-            self._on_release_skip(evt)
-            self.drag_mode = "rect"
+        if not self.draw_points:
             return
-        if not self.drag_start:
+        if len(self.draw_points) < 3:
+            if self.temp_poly:
+                self.canvas.delete(self.temp_poly)
+                self.temp_poly = None
+            self.draw_points = []
             return
-        x0, y0 = self.drag_start
-        x1 = int(self.canvas.canvasx(evt.x))
-        y1 = int(self.canvas.canvasy(evt.y))
-        self.drag_start = None
 
-        x0, x1 = sorted((max(0, min(self.img_w, x0)), max(0, min(self.img_w, x1))))
-        y0, y1 = sorted((max(0, min(self.img_h, y0)), max(0, min(self.img_h, y1))))
-        if self.drag_mode == "set_upper":
-            self.selection.upper_ratio = y1 / float(self.img_h)
-            self.drag_mode = "rect"
-        elif self.drag_mode == "set_lower":
-            self.selection.lower_ratio = y1 / float(self.img_h)
-            self.drag_mode = "rect"
-        else:
-            if (x1 - x0) < 5 or (y1 - y0) < 5:
-                if self.temp_rect:
-                    self.canvas.delete(self.temp_rect)
-                    self.temp_rect = None
-                return
+        poly: List[Tuple[float, float]] = []
+        for x, y in self.draw_points:
+            xr = max(0.0, min(1.0, x / float(self.img_w)))
+            yr = max(0.0, min(1.0, y / float(self.img_h)))
+            poly.append((xr, yr))
 
-            if self.drag_mode == "actor_band":
-                y0r = y0 / float(self.img_h)
-                y1r = y1 / float(self.img_h)
-                self.selection.actor_band_by_page[self._current_page()] = (y0r, y1r)
-                self.drag_mode = "rect"
-            else:
-                x0r = x0 / float(self.img_w)
-                x1r = x1 / float(self.img_w)
-                y0r = y0 / float(self.img_h)
-                y1r = y1 / float(self.img_h)
-                rects = self.selection.rects_by_page.setdefault(self._current_page(), [])
-                rects.append((x0r, y0r, x1r, y1r))
+        polys = self.selection.skip_polys_by_page.setdefault(self._current_page(), [])
+        polys.append(poly)
 
-        if self.temp_rect:
-            self.canvas.delete(self.temp_rect)
-            self.temp_rect = None
+        if self.temp_poly:
+            self.canvas.delete(self.temp_poly)
+            self.temp_poly = None
+        self.draw_points = []
         self._draw_overlays()
-        self._render_page()
-
-    def _on_press_skip(self, evt):
-        self.drag_start_skip = (int(self.canvas.canvasx(evt.x)), int(self.canvas.canvasy(evt.y)))
-        if self.temp_rect_skip:
-            self.canvas.delete(self.temp_rect_skip)
-            self.temp_rect_skip = None
-
-    def _on_drag_skip(self, evt):
-        if not self.drag_start_skip:
-            return
-        x1 = int(self.canvas.canvasx(evt.x))
-        y1 = int(self.canvas.canvasy(evt.y))
-        x0, y0 = self.drag_start_skip
-        if self.temp_rect_skip:
-            self.canvas.coords(self.temp_rect_skip, x0, y0, x1, y1)
-        else:
-            self.temp_rect_skip = self.canvas.create_rectangle(x0, y0, x1, y1, outline="#ff4d4d", dash=(4, 2), tags="overlay")
-
-    def _on_release_skip(self, evt):
-        if not self.drag_start_skip:
-            return
-        x0, y0 = self.drag_start_skip
-        x1 = int(self.canvas.canvasx(evt.x))
-        y1 = int(self.canvas.canvasy(evt.y))
-        self.drag_start_skip = None
-
-        x0, x1 = sorted((max(0, min(self.img_w, x0)), max(0, min(self.img_w, x1))))
-        y0, y1 = sorted((max(0, min(self.img_h, y0)), max(0, min(self.img_h, y1))))
-        if (x1 - x0) < 5 or (y1 - y0) < 5:
-            if self.temp_rect_skip:
-                self.canvas.delete(self.temp_rect_skip)
-                self.temp_rect_skip = None
-            return
-
-        x0r = x0 / float(self.img_w)
-        x1r = x1 / float(self.img_w)
-        y0r = y0 / float(self.img_h)
-        y1r = y1 / float(self.img_h)
-        skips = self.selection.skip_rects_by_page.setdefault(self._current_page(), [])
-        skips.append((x0r, y0r, x1r, y1r))
-
-        if self.temp_rect_skip:
-            self.canvas.delete(self.temp_rect_skip)
-            self.temp_rect_skip = None
-        self._render_page()
 
     def _on_key(self, evt):
         key = (evt.keysym or "").lower()
@@ -375,46 +272,21 @@ class _PreviewWindow(tk.Toplevel):
             self._prev_page()
         elif key == "d":
             self._next_page()
-        elif key == "q":
-            self._bump_rot(-0.5)
-        elif key == "e":
-            self._bump_rot(0.5)
         elif key == "r":
-            self.selection.rot_deg_by_page.pop(self._current_page(), None)
-            self._render_page()
-        elif key == "x":
-            self.drag_mode = "actor_band"
+            self._reset_page()
         elif key == "z":
             self._undo_last()
 
-    def _bump_rot(self, delta: float):
-        cur = float(self.selection.rot_deg_by_page.get(self._current_page(), 0.0) or 0.0)
-        self.selection.rot_deg_by_page[self._current_page()] = cur + delta
-        self._render_page()
-
-    def _set_actor_mode(self):
-        self.drag_mode = "actor_band"
-
-    def _set_dialog_mode(self):
-        self.drag_mode = "rect"
-
-    def _set_skip_mode(self):
-        self.drag_mode = "skip_rect"
+    def _set_erase_mode(self):
+        self.drag_mode = "erase_poly"
 
     def _undo_last(self):
-        rects = self.selection.rects_by_page.get(self._current_page(), [])
-        if rects:
-            rects.pop()
-            if not rects:
-                self.selection.rects_by_page.pop(self._current_page(), None)
-            self._render_page()
-            return
-        skips = self.selection.skip_rects_by_page.get(self._current_page(), [])
-        if skips:
-            skips.pop()
-            if not skips:
-                self.selection.skip_rects_by_page.pop(self._current_page(), None)
-            self._render_page()
+        polys = self.selection.skip_polys_by_page.get(self._current_page(), [])
+        if polys:
+            polys.pop()
+            if not polys:
+                self.selection.skip_polys_by_page.pop(self._current_page(), None)
+            self._draw_overlays()
 
     def _set_cut_upper_mode(self):
         self.drag_mode = "set_upper"
@@ -427,10 +299,7 @@ class _PreviewWindow(tk.Toplevel):
         if not p:
             return
         data = {
-            "rects_by_page": self.selection.rects_by_page,
-            "actor_band_by_page": self.selection.actor_band_by_page,
-            "rot_deg_by_page": self.selection.rot_deg_by_page,
-            "skip_rects_by_page": self.selection.skip_rects_by_page,
+            "skip_polys_by_page": self.selection.skip_polys_by_page,
             "upper_ratio": self.selection.upper_ratio,
             "lower_ratio": self.selection.lower_ratio,
         }
@@ -447,20 +316,14 @@ class _PreviewWindow(tk.Toplevel):
             return
         def _norm_dict(d):
             return {int(k): v for k, v in d.items()}
-        self.selection.rects_by_page = _norm_dict(data.get("rects_by_page", {}))
-        self.selection.actor_band_by_page = _norm_dict(data.get("actor_band_by_page", {}))
-        self.selection.rot_deg_by_page = {int(k): float(v) for k, v in data.get("rot_deg_by_page", {}).items()}
-        self.selection.skip_rects_by_page = _norm_dict(data.get("skip_rects_by_page", {}))
+        self.selection.skip_polys_by_page = _norm_dict(data.get("skip_polys_by_page", {}))
         self.selection.upper_ratio = data.get("upper_ratio", None)
         self.selection.lower_ratio = data.get("lower_ratio", None)
         self._render_page()
 
     def _reset_page(self):
-        self.selection.rects_by_page.pop(self._current_page(), None)
-        self.selection.actor_band_by_page.pop(self._current_page(), None)
-        self.selection.skip_rects_by_page.pop(self._current_page(), None)
-        self.selection.rot_deg_by_page.pop(self._current_page(), None)
-        self._render_page()
+        self.selection.skip_polys_by_page.pop(self._current_page(), None)
+        self._draw_overlays()
 
     def _prev_page(self):
         if self.page_index > 0:
@@ -505,6 +368,8 @@ class ScannerPanel(ttk.Frame):
         self.reuse_md_var = tk.BooleanVar(value=bool(cfg["last"].get("reuse_md", True)))
         self.cleanup_var = tk.BooleanVar(value=bool(cfg["last"].get("scanner_cleanup", False)))
 
+        self.drop_empty_var = tk.BooleanVar(value=bool(cfg["last"].get("scanner_drop_empty", False)))
+
         self.out_excel_var = tk.BooleanVar(value=bool(cfg["last"].get("scanner_out_excel", True)))
         self.out_ass_var = tk.BooleanVar(value=bool(cfg["last"].get("scanner_out_ass", True)))
         self.out_txt_var = tk.BooleanVar(value=bool(cfg["last"].get("scanner_out_txt", False)))
@@ -538,15 +403,15 @@ class ScannerPanel(ttk.Frame):
         ttk.Button(r2, text="Browse", command=self._pick_yomitoku).pack(side="left")
 
         # Manual selection
-        sel_frame = ttk.LabelFrame(frm, text="Selección manual (rectángulos + actor band + rotación)")
+        sel_frame = ttk.LabelFrame(frm, text="Seleccion manual (borrado de zonas + cortes)")
         sel_frame.pack(fill="x", pady=8)
         rr = ttk.Frame(sel_frame); rr.pack(fill="x", padx=8, pady=6)
-        ttk.Button(rr, text="Vista previa / marcar rects…", command=self._open_preview).pack(side="left")
+        ttk.Button(rr, text="Vista previa / borrar zonas", command=self._open_preview).pack(side="left")
         self.sel_label = ttk.Label(rr, text=self._selection_label_text())
         self.sel_label.pack(side="left", padx=(10, 0))
 
-        # Legacy cuts
-        cuts = ttk.LabelFrame(frm, text="Cortes legacy (upper/lower) — usado solo si no hay rectángulos")
+        # Cuts
+        cuts = ttk.LabelFrame(frm, text="Cortes (upper/lower)")
         cuts.pack(fill="x", pady=6)
         rr2 = ttk.Frame(cuts); rr2.pack(fill="x", padx=8, pady=(0, 6))
         ttk.Label(rr2, text="Upper ratio").pack(side="left")
@@ -557,6 +422,9 @@ class ScannerPanel(ttk.Frame):
         self.lower_entry.pack(side="left", padx=6)
         self.upper_entry.insert(0, "" if self.selection.upper_ratio is None else f"{float(self.selection.upper_ratio):.3f}")
         self.lower_entry.insert(0, "" if self.selection.lower_ratio is None else f"{float(self.selection.lower_ratio):.3f}")
+
+        rr2b = ttk.Frame(cuts); rr2b.pack(fill="x", padx=8, pady=(0, 6))
+        ttk.Checkbutton(rr2b, text="Omitir paginas vacias", variable=self.drop_empty_var).pack(side="left")
 
         # Reuse / cleanup
         reuse = ttk.LabelFrame(frm, text="Reusar / limpieza")
@@ -593,10 +461,8 @@ class ScannerPanel(ttk.Frame):
         ttk.Button(r3, text="Browse", command=self._pick_xlsx).pack(side="left")
 
     def _selection_label_text(self) -> str:
-        pages = len(self.selection.rects_by_page)
-        band_pages = len(self.selection.actor_band_by_page)
-        skip_pages = len(self.selection.skip_rects_by_page)
-        return f"Rects: {pages} págs · Banda Actor: {band_pages} · Restas: {skip_pages}"
+        skip_pages = len(self.selection.skip_polys_by_page)
+        return f"Zonas borradas: {skip_pages} pags"
 
     def _sync_ratio_entries(self):
         u = self.upper_entry.get().strip()
@@ -700,9 +566,10 @@ class ScannerPanel(ttk.Frame):
             messagebox.showwarning("Aviso", "Selecciona al menos una salida (Excel/ASS/TXT).")
             return
 
-        if not self.selection.rects_by_page:
-            messagebox.showwarning("Faltan rectangulos", "Abre la vista previa y marca rectangulos.")
-            return
+        if (not self.reuse_images_var.get() and not self.reuse_md_var.get()):
+            if self.selection.upper_ratio is None or self.selection.lower_ratio is None:
+                messagebox.showwarning("Faltan cortes", "Abre la vista previa y marca corte superior/inferior.")
+                return
 
         # persist config
         self.cfg["last"]["pdf_in"] = inp
@@ -713,12 +580,13 @@ class ScannerPanel(ttk.Frame):
         self.cfg["last"]["cut_upper_ratio"] = self.selection.upper_ratio
         self.cfg["last"]["cut_lower_ratio"] = self.selection.lower_ratio
 
-        manual_selection = bool(self.selection.rects_by_page or self.selection.skip_rects_by_page)
+        manual_selection = bool(self.selection.skip_polys_by_page)
         use_reuse_images = bool(self.reuse_images_var.get()) if not manual_selection else False
         use_reuse_md = bool(self.reuse_md_var.get()) if not manual_selection else False
         self.cfg["last"]["reuse_images"] = bool(self.reuse_images_var.get())
         self.cfg["last"]["reuse_md"] = bool(self.reuse_md_var.get())
         self.cfg["last"]["scanner_cleanup"] = bool(self.cleanup_var.get())
+        self.cfg["last"]["scanner_drop_empty"] = bool(self.drop_empty_var.get())
 
         self.cfg["last"]["scanner_out_excel"] = bool(self.out_excel_var.get())
         self.cfg["last"]["scanner_out_ass"] = bool(self.out_ass_var.get())
@@ -742,10 +610,8 @@ class ScannerPanel(ttk.Frame):
                 make_txt=bool(self.out_txt_var.get()),
                 cleanup=bool(self.cleanup_var.get()),
                 yomitoku_exe=self.yomitoku_var.get().strip() or None,
-                rects_by_page=self.selection.rects_by_page,
-                rot_deg_by_page=self.selection.rot_deg_by_page,
-                skip_rects_by_page=self.selection.skip_rects_by_page,
-                actor_band_by_page=self.selection.actor_band_by_page,
+                skip_polys_by_page=self.selection.skip_polys_by_page,
+                drop_empty_pages=bool(self.drop_empty_var.get()),
                 log=log,
                 cancel_event=cancel_event,
             )
