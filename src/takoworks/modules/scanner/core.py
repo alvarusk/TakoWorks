@@ -173,8 +173,12 @@ def rotate_bgr(img: np.ndarray, deg: float) -> np.ndarray:
     return cv2.warpAffine(img, m, (new_w, new_h), flags=cv2.INTER_LINEAR, borderValue=(255, 255, 255))
 
 
-def apply_skip_polys(bgr: np.ndarray, polys: List[List[Tuple[float, float]]]) -> np.ndarray:
-    if not polys or bgr is None or bgr.size == 0:
+def apply_skip_marks(
+    bgr: np.ndarray,
+    polys: List[List[Tuple[float, float]]],
+    circles: List[Tuple[float, float, float]],
+) -> np.ndarray:
+    if (not polys and not circles) or bgr is None or bgr.size == 0:
         return bgr
     h, w = bgr.shape[:2]
     mask = np.zeros((h, w), dtype=np.uint8)
@@ -188,6 +192,11 @@ def apply_skip_polys(bgr: np.ndarray, polys: List[List[Tuple[float, float]]]) ->
             pts.append([x, y])
         if len(pts) >= 3:
             cv2.fillPoly(mask, [np.array(pts, dtype=np.int32)], 255)
+    for (xr, yr, rr) in circles:
+        x = max(0, min(w - 1, int(xr * w)))
+        y = max(0, min(h - 1, int(yr * h)))
+        r = max(1, int(rr * min(w, h)))
+        cv2.circle(mask, (x, y), r, 255, thickness=-1)
     out = bgr.copy()
     out[mask == 255] = 255
     return out
@@ -805,6 +814,7 @@ def _process_legacy_page(
     cancel_event=None,
     angle_deg: float = 0.0,
     skip_polys: Optional[List[List[Tuple[float, float]]]] = None,
+    skip_circles: Optional[List[Tuple[float, float, float]]] = None,
     drop_empty: bool = False,
 ) -> Tuple[List[dict], bool]:
     """
@@ -815,7 +825,7 @@ def _process_legacy_page(
     zoom = OCR_DPI / 72.0
     pix_full = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=True)
     bgr_full = rotate_bgr(pixmap_to_bgr(pix_full), angle_deg)
-    bgr_full = apply_skip_polys(bgr_full, skip_polys or [])
+    bgr_full = apply_skip_marks(bgr_full, skip_polys or [], skip_circles or [])
 
     h, w = bgr_full.shape[:2]
     if upper_ratio is None or lower_ratio is None:
@@ -997,6 +1007,8 @@ def run_scanner(
     cleanup: bool = False,
     yomitoku_exe: Optional[str] = None,
     skip_polys_by_page: Optional[Dict[int, List[List[Tuple[float, float]]]]] = None,
+    skip_circles_by_page: Optional[Dict[int, List[Tuple[float, float, float]]]] = None,
+    suppress_pages: Optional[List[int]] = None,
     drop_empty_pages: bool = False,
     log: LogFn = lambda s: None,
     cancel_event=None,
@@ -1038,6 +1050,8 @@ def run_scanner(
             cleanup=cleanup,
             yomitoku_exe=exe,
             skip_polys_by_page=skip_polys_by_page or {},
+            skip_circles_by_page=skip_circles_by_page or {},
+            suppress_pages=set(suppress_pages or []),
             drop_empty_pages=drop_empty_pages,
             log=log,
             cancel_event=cancel_event,
@@ -1060,6 +1074,8 @@ def _process_one_pdf(
     cleanup: bool,
     yomitoku_exe: str,
     skip_polys_by_page: Dict[int, List[List[Tuple[float, float]]]],
+    skip_circles_by_page: Dict[int, List[Tuple[float, float, float]]],
+    suppress_pages: set[int],
     drop_empty_pages: bool,
     log: LogFn,
     cancel_event=None,
@@ -1133,6 +1149,9 @@ def _process_one_pdf(
             _check_cancel(cancel_event)
             page_num = pi + 1
             _log_progress(page_num, total_pages)
+            if page_num in suppress_pages:
+                log(f"[SKIP] Pagina {page_num}: suprimida.")
+                continue
             rows_page, has_content = _process_legacy_page(
                 doc,
                 pi,
@@ -1146,6 +1165,7 @@ def _process_one_pdf(
                 log,
                 cancel_event,
                 skip_polys=skip_polys_by_page.get(page_num, []),
+                skip_circles=skip_circles_by_page.get(page_num, []),
                 drop_empty=drop_empty_pages,
             )
             if drop_empty_pages and not has_content:

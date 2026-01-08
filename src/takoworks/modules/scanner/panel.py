@@ -55,6 +55,8 @@ def _pixmap_to_bgr(pix: fitz.Pixmap) -> np.ndarray:
 class _SelectionState:
     def __init__(self):
         self.skip_polys_by_page: Dict[int, List[List[Tuple[float, float]]]] = {}
+        self.skip_circles_by_page: Dict[int, List[Tuple[float, float, float]]] = {}
+        self.suppress_pages: set[int] = set()
         self.upper_ratio: Optional[float] = None
         self.lower_ratio: Optional[float] = None
 
@@ -81,6 +83,10 @@ class _PreviewWindow(tk.Toplevel):
         self.drag_mode = "erase_poly"  # erase_poly | set_upper | set_lower
         self.draw_points: List[Tuple[int, int]] = []
         self.temp_poly = None
+        self.brush_points: List[Tuple[int, int]] = []
+        self.brush_dots: List[int] = []
+        self.brush_radius = 20
+        self.brush_var = tk.IntVar(value=self.brush_radius)
 
         self._build_ui()
         self._render_page()
@@ -106,9 +112,12 @@ class _PreviewWindow(tk.Toplevel):
         actions = ttk.Frame(top)
         actions.grid(row=0, column=3, padx=(10, 0))
         ttk.Button(actions, text="Borrar zona", command=self._set_erase_mode).pack(side="left", padx=(0, 4))
+        ttk.Label(actions, text="Pincel").pack(side="left", padx=(6, 2))
+        ttk.Scale(actions, from_=5, to=80, orient="horizontal", variable=self.brush_var, command=self._on_brush_change).pack(side="left")
         ttk.Button(actions, text="Corte sup", command=self._set_cut_upper_mode).pack(side="left", padx=(0, 4))
         ttk.Button(actions, text="Corte inf", command=self._set_cut_lower_mode).pack(side="left", padx=(0, 4))
         ttk.Button(actions, text="Deshacer", command=self._undo_last).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text="Suprimir pagina", command=self._toggle_suppress_page).pack(side="left", padx=(6, 0))
         ttk.Button(top, text="Restablecer", command=self._reset_page).grid(row=0, column=4, padx=(10, 0))
         ttk.Button(top, text="Cerrar", command=self._accept_and_close).grid(row=0, column=5, padx=(10, 0))
 
@@ -134,7 +143,7 @@ class _PreviewWindow(tk.Toplevel):
         ttk.Label(
             self,
             text=(
-                "Arrastra para marcar zonas a borrar (rojo). "
+                "Arrastra para borrar con pincel (rojo). "
                 "Corte sup/inf: pulsa el boton y haz clic en la altura. "
                 "Teclas: Ctrl+Alt+Flecha izq/der paginas, Ctrl+Z deshacer."
             )
@@ -193,6 +202,22 @@ class _PreviewWindow(tk.Toplevel):
                 stipple="gray50",
                 tags="overlay",
             )
+        circles = self.selection.skip_circles_by_page.get(self._current_page(), [])
+        for (xr, yr, rr) in circles:
+            x = int(xr * self.img_w)
+            y = int(yr * self.img_h)
+            r = int(rr * min(self.img_w, self.img_h))
+            self.canvas.create_oval(
+                x - r,
+                y - r,
+                x + r,
+                y + r,
+                outline="#ff4d4d",
+                width=2,
+                fill="#ff4d4d",
+                stipple="gray50",
+                tags="overlay",
+            )
 
         if self.selection.upper_ratio is not None:
             y = int(self.selection.upper_ratio * self.img_h)
@@ -207,7 +232,14 @@ class _PreviewWindow(tk.Toplevel):
 
     def _update_label(self):
         poly_count = len(self.selection.skip_polys_by_page.get(self._current_page(), []))
-        self.lbl.config(text=f"Página {self.page_index+1}/{len(self.doc)}  · borrados={poly_count}")
+        circle_count = len(self.selection.skip_circles_by_page.get(self._current_page(), []))
+        suppressed = " · SUPRIMIDA" if self._current_page() in self.selection.suppress_pages else ""
+        self.lbl.config(
+            text=(
+                f"Página {self.page_index+1}/{len(self.doc)}  · "
+                f"borrados={poly_count + circle_count}{suppressed}"
+            )
+        )
 
     def _on_press(self, evt):
         x = int(self.canvas.canvasx(evt.x))
@@ -223,47 +255,38 @@ class _PreviewWindow(tk.Toplevel):
             self._draw_overlays()
             return
 
-        self.draw_points = [(x, y)]
+        self.brush_points = [(x, y)]
         if self.temp_poly:
             self.canvas.delete(self.temp_poly)
             self.temp_poly = None
-        self.temp_poly = self.canvas.create_line(x, y, x, y, outline="#ff4d4d", width=2, tags="overlay")
+        r = self.brush_radius
+        dot = self.canvas.create_oval(x - r, y - r, x + r, y + r, outline="#ff4d4d", fill="#ff4d4d", stipple="gray50", tags="overlay")
+        self.brush_dots = [dot]
 
     def _on_drag(self, evt):
-        if not self.draw_points:
+        if not self.brush_points:
             return
         x = int(self.canvas.canvasx(evt.x))
         y = int(self.canvas.canvasy(evt.y))
-        self.draw_points.append((x, y))
-        if self.temp_poly:
-            coords: List[int] = []
-            for px, py in self.draw_points:
-                coords.extend([px, py])
-            self.canvas.coords(self.temp_poly, *coords)
+        self.brush_points.append((x, y))
+        r = self.brush_radius
+        dot = self.canvas.create_oval(x - r, y - r, x + r, y + r, outline="#ff4d4d", fill="#ff4d4d", stipple="gray50", tags="overlay")
+        self.brush_dots.append(dot)
 
     def _on_release(self, evt):
-        if not self.draw_points:
+        if not self.brush_points:
             return
-        if len(self.draw_points) < 3:
-            if self.temp_poly:
-                self.canvas.delete(self.temp_poly)
-                self.temp_poly = None
-            self.draw_points = []
-            return
-
-        poly: List[Tuple[float, float]] = []
-        for x, y in self.draw_points:
+        circles = self.selection.skip_circles_by_page.setdefault(self._current_page(), [])
+        rr = self.brush_radius / float(min(self.img_w, self.img_h))
+        for x, y in self.brush_points:
             xr = max(0.0, min(1.0, x / float(self.img_w)))
             yr = max(0.0, min(1.0, y / float(self.img_h)))
-            poly.append((xr, yr))
+            circles.append((xr, yr, rr))
 
-        polys = self.selection.skip_polys_by_page.setdefault(self._current_page(), [])
-        polys.append(poly)
-
-        if self.temp_poly:
-            self.canvas.delete(self.temp_poly)
-            self.temp_poly = None
-        self.draw_points = []
+        self.brush_points = []
+        for dot in self.brush_dots:
+            self.canvas.delete(dot)
+        self.brush_dots = []
         self._draw_overlays()
 
     def _on_key(self, evt):
@@ -279,8 +302,22 @@ class _PreviewWindow(tk.Toplevel):
 
     def _set_erase_mode(self):
         self.drag_mode = "erase_poly"
+        self._on_brush_change()
+
+    def _on_brush_change(self, *_args):
+        try:
+            self.brush_radius = max(2, int(self.brush_var.get()))
+        except Exception:
+            self.brush_radius = 20
 
     def _undo_last(self):
+        circles = self.selection.skip_circles_by_page.get(self._current_page(), [])
+        if circles:
+            circles.pop()
+            if not circles:
+                self.selection.skip_circles_by_page.pop(self._current_page(), None)
+            self._draw_overlays()
+            return
         polys = self.selection.skip_polys_by_page.get(self._current_page(), [])
         if polys:
             polys.pop()
@@ -300,6 +337,8 @@ class _PreviewWindow(tk.Toplevel):
             return
         data = {
             "skip_polys_by_page": self.selection.skip_polys_by_page,
+            "skip_circles_by_page": self.selection.skip_circles_by_page,
+            "suppress_pages": sorted(self.selection.suppress_pages),
             "upper_ratio": self.selection.upper_ratio,
             "lower_ratio": self.selection.lower_ratio,
         }
@@ -317,12 +356,24 @@ class _PreviewWindow(tk.Toplevel):
         def _norm_dict(d):
             return {int(k): v for k, v in d.items()}
         self.selection.skip_polys_by_page = _norm_dict(data.get("skip_polys_by_page", {}))
+        self.selection.skip_circles_by_page = _norm_dict(data.get("skip_circles_by_page", {}))
+        self.selection.suppress_pages = set(int(x) for x in data.get("suppress_pages", []))
         self.selection.upper_ratio = data.get("upper_ratio", None)
         self.selection.lower_ratio = data.get("lower_ratio", None)
         self._render_page()
 
     def _reset_page(self):
         self.selection.skip_polys_by_page.pop(self._current_page(), None)
+        self.selection.skip_circles_by_page.pop(self._current_page(), None)
+        self.selection.suppress_pages.discard(self._current_page())
+        self._draw_overlays()
+    
+    def _toggle_suppress_page(self):
+        page = self._current_page()
+        if page in self.selection.suppress_pages:
+            self.selection.suppress_pages.discard(page)
+        else:
+            self.selection.suppress_pages.add(page)
         self._draw_overlays()
 
     def _prev_page(self):
@@ -461,8 +512,9 @@ class ScannerPanel(ttk.Frame):
         ttk.Button(r3, text="Browse", command=self._pick_xlsx).pack(side="left")
 
     def _selection_label_text(self) -> str:
-        skip_pages = len(self.selection.skip_polys_by_page)
-        return f"Zonas borradas: {skip_pages} pags"
+        skip_pages = len(self.selection.skip_polys_by_page) + len(self.selection.skip_circles_by_page)
+        sup_pages = len(self.selection.suppress_pages)
+        return f"Zonas borradas: {skip_pages} pags · Suprimidas: {sup_pages}"
 
     def _sync_ratio_entries(self):
         u = self.upper_entry.get().strip()
@@ -580,7 +632,7 @@ class ScannerPanel(ttk.Frame):
         self.cfg["last"]["cut_upper_ratio"] = self.selection.upper_ratio
         self.cfg["last"]["cut_lower_ratio"] = self.selection.lower_ratio
 
-        manual_selection = bool(self.selection.skip_polys_by_page)
+        manual_selection = bool(self.selection.skip_polys_by_page or self.selection.skip_circles_by_page or self.selection.suppress_pages)
         use_reuse_images = bool(self.reuse_images_var.get()) if not manual_selection else False
         use_reuse_md = bool(self.reuse_md_var.get()) if not manual_selection else False
         self.cfg["last"]["reuse_images"] = bool(self.reuse_images_var.get())
@@ -611,6 +663,8 @@ class ScannerPanel(ttk.Frame):
                 cleanup=bool(self.cleanup_var.get()),
                 yomitoku_exe=self.yomitoku_var.get().strip() or None,
                 skip_polys_by_page=self.selection.skip_polys_by_page,
+                skip_circles_by_page=self.selection.skip_circles_by_page,
+                suppress_pages=sorted(self.selection.suppress_pages),
                 drop_empty_pages=bool(self.drop_empty_var.get()),
                 log=log,
                 cancel_event=cancel_event,
