@@ -1063,6 +1063,12 @@ def _process_one_pdf(
 ) -> ScanOutputs:
     stem = pdf_path.stem
 
+    def _log_progress(page_idx: int, total_pages: int) -> None:
+        if total_pages <= 0:
+            return
+        pct = int(round((page_idx / float(total_pages)) * 100.0))
+        log(f"[{pct:3d}%] Pagina {page_idx}/{total_pages}")
+
     # Intermedios se guardan junto al PDF por compatibilidad con tus carpetas existentes
     base_dir = pdf_path.parent
 
@@ -1076,6 +1082,7 @@ def _process_one_pdf(
         md_files = [p for p in md_dir.rglob("*.md") if re.search(r"_p\d{3}s\d{3}", p.name)]
         if md_files:
             log(f"Reuse MD: {len(md_files)} MD encontrados -> reconstruyendo sin OCR.")
+            _log_progress(100, 100)
             df = _df_from_md_files(md_files, log=log)
             return _write_outputs(pdf_path, out_dir, df, make_excel, make_ass, make_txt, log, cancel_event)
 
@@ -1084,6 +1091,7 @@ def _process_one_pdf(
         col_images = sorted(images_dir.glob(f"{stem}_p???s???.png"))
         if col_images:
             log(f"Reuse imágenes: {len(col_images)} columnas encontradas.")
+            _log_progress(100, 100)
             md_index = _index_md_by_page_section(md_dir)
             rows: List[dict] = []
             for img_path in col_images:
@@ -1116,10 +1124,13 @@ def _process_one_pdf(
     doc = fitz.open(str(pdf_path))
     try:
         rows: List[dict] = []
+        total_pages = len(doc)
+        _log_progress(0, total_pages)
         if rects_by_page:
             for pi in range(len(doc)):
                 _check_cancel(cancel_event)
                 page_num = pi + 1
+                _log_progress(page_num, total_pages)
                 angle = float(rot_deg_by_page.get(page_num, 0.0) or 0.0)
                 rects = rects_by_page.get(page_num, [])
 
@@ -1161,6 +1172,7 @@ def _process_one_pdf(
             for pi in range(len(doc)):
                 _check_cancel(cancel_event)
                 page_num = pi + 1
+                _log_progress(page_num, total_pages)
                 angle = float(rot_deg_by_page.get(page_num, 0.0) or 0.0)
                 rows.extend(_process_legacy_page(doc, pi, page_num, stem, images_dir, md_dir, upper_ratio, lower_ratio, yomitoku_exe, log, cancel_event, angle_deg=angle, skip_rects=skip_rects_by_page.get(page_num)))
 
