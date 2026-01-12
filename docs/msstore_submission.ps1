@@ -77,7 +77,10 @@ if (-not $fileUploadUrl) {
 
 # Upload MSIX to the provided SAS URL
 Write-Host "Uploading MSIX to SAS URL..."
-Invoke-RestMethod -Method Put -Uri $fileUploadUrl -InFile $msix.FullName -ContentType "application/octet-stream"
+$uploadHeaders = @{
+  "x-ms-blob-type" = "BlockBlob"
+}
+Invoke-RestMethod -Method Put -Uri $fileUploadUrl -InFile $msix.FullName -ContentType "application/octet-stream" -Headers $uploadHeaders
 
 # Update submission with package file name
 $packages = @(
