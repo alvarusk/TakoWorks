@@ -96,12 +96,22 @@ $uploadHeaders = @{
 Invoke-RestMethod -Method Put -Uri $fileUploadUrl -InFile $msix.FullName -ContentType "application/octet-stream" -Headers $uploadHeaders
 
 # Update submission with package file name
-$packages = @(
-  @{
-    fileName = $msix.Name
-    fileStatus = "Uploaded"
+$packages = @()
+$matched = $false
+if ($submission.applicationPackages) {
+  foreach ($p in $submission.applicationPackages) {
+    if ($p.fileName -eq $msix.Name) {
+      $p.fileStatus = "Uploaded"
+      $matched = $true
+    }
+    $packages += $p
   }
-)
+}
+if (-not $packages) {
+  $packages = @(@{ fileName = $msix.Name; fileStatus = "Uploaded" })
+} elseif (-not $matched) {
+  $packages += @{ fileName = $msix.Name; fileStatus = "Uploaded" }
+}
 
 $submission.packageDeliveryOptions = @{
   packageRollout = @{
