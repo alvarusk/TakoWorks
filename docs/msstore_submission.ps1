@@ -59,11 +59,24 @@ function Invoke-PartnerApi([string]$method, [string]$path, $body = $null) {
   return Invoke-RestMethod -Method $method -Uri $uri -Headers $headers
 }
 
-# Create a new submission
-$submission = Invoke-PartnerApi -method "POST" -path "submissions"
-$submissionId = $submission.id
+# Create or reuse a submission
+$submissionId = $null
+try {
+  $submission = Invoke-PartnerApi -method "POST" -path "submissions"
+  $submissionId = $submission.id
+} catch {
+  Write-Host "Create submission failed; trying to reuse an in-progress submission..."
+  $subs = Invoke-PartnerApi -method "GET" -path "submissions"
+  if ($subs -and $subs.value) {
+    $existing = $subs.value | Where-Object { $_.status -in @("InProgress","PendingCommit") } | Sort-Object lastModifiedDate -Descending | Select-Object -First 1
+    if ($existing) {
+      $submissionId = $existing.id
+      Write-Host "Reusing submission $submissionId (status $($existing.status))"
+    }
+  }
+}
 if (-not $submissionId) {
-  Write-Error "Failed to create submission."
+  Write-Error "Failed to create or reuse a submission."
   exit 1
 }
 
