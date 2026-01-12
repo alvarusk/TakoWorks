@@ -227,6 +227,21 @@ jobs:
             Write-Warning "signtool verify failed (often due to untrusted root in CI). Signed MSIX is still produced. Details: $_"
           }
 
+      - name: Upload MSIX to MS Store (Partner Center API)
+        shell: pwsh
+        env:
+          MSSTORE_TENANT_ID: ${{ secrets.MSSTORE_TENANT_ID }}
+          MSSTORE_CLIENT_ID: ${{ secrets.MSSTORE_CLIENT_ID }}
+          MSSTORE_CLIENT_SECRET: ${{ secrets.MSSTORE_CLIENT_SECRET }}
+          MSSTORE_APP_ID: ${{ secrets.MSSTORE_APP_ID }}
+        run: |
+          if (-not $env:MSSTORE_TENANT_ID -or -not $env:MSSTORE_CLIENT_ID -or -not $env:MSSTORE_CLIENT_SECRET -or -not $env:MSSTORE_APP_ID) {
+            Write-Host "Partner Center secrets not set; skipping upload."
+            exit 0
+          }
+
+          powershell -ExecutionPolicy Bypass -File docs/msstore_submission.ps1 -MsixPath "TakoWorks.msix"
+
       - name: Attach artifact to release
         if: github.event_name == 'release' && github.event.action == 'published'
         uses: softprops/action-gh-release@v1

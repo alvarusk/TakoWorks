@@ -45,22 +45,26 @@
     }
   },
   "last": {
-    "ass_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/3 - Scripts esES/s5e05/DailyLifeOfImmo_S5E5_TDISIM0056_364565_subtitle_zh-cn.ass",
+    "ass_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/3 - Scripts esES/s5e07/DailyLifeOfImmo_S5E7_TDISIM0058_364569_subtitle_zh-cn.ass",
     "video_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/1 - Vídeos/CR_DailyLifeOfImmo_S5.0E5_TDISIM0056_364565_video_cmn-cn_J5837143.mp4",
     "word_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/0 - Ref/XW5#06_台词本_净版_250418.docx",
-    "pdf_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/142 - Dead Account/0 - Ref/#02_Dead Account_Final script.pdf",
-    "out_dir": "C:\\Users\\ajime\\OneDrive\\Documentos\\PENDING\\142 - Dead Account\\0 - Ref\\ep02",
-    "splitter_pos": 544,
+    "pdf_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/142 - Dead Account/0 - Ref/ep02/#02_Dead Account_Final script.pdf",
+    "out_dir": "C:/Users/ajime/OneDrive/Documentos/PENDING/142 - Dead Account/0 - Ref/ep02/",
+    "splitter_pos": 491,
     "scanner_batch": false,
     "yomitoku_exe": "C:/TakoWorks/bin/yomitoku/yomitoku.exe",
-    "cut_upper_ratio": 0.411,
-    "cut_lower_ratio": 0.919,
+    "cut_upper_ratio": 0.5386297376093294,
+    "cut_lower_ratio": 0.923469387755102,
     "reuse_images": false,
     "reuse_md": false,
     "scanner_cleanup": false,
     "scanner_out_excel": true,
     "scanner_out_ass": true,
     "scanner_out_txt": false,
-    "scanner_drop_empty": true
+    "scanner_drop_empty": false,
+    "cut_left_ratio": 0.106,
+    "cut_right_ratio": 0.878,
+    "cut_top_ratio": 0.5386297376093294,
+    "cut_bottom_ratio": 0.923469387755102
   }
 }

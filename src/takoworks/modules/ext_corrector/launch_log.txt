@@ -40,3 +40,7 @@
 [06/01/2026 18:16:46,61] "C:\Users\ajime\OneDrive\Documentos\PENDING\124 - Dragon Raja S2\3 - Scripts esES\Japanese\DragonRaja_S2E13_DRJJPS0029_365499_subtitle_edited_es-es.ass" --serve 
 [06/01/2026 18:17:32,74] "C:\Users\ajime\OneDrive\Documentos\PENDING\124 - Dragon Raja S2\3 - Scripts esES\Japanese\DragonRaja_S2E13_DRJJPS0029_365499_subtitle_edited_es-la.ass" --serve 
 [07/01/2026 10:15:02,48] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimi_S001_E0005_FP_subtitle_edited_es-la.ass" --serve 
+[09/01/2026 12:26:14,82] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S1.0E1_TBVSIM0001_367616_subtitle_edited_es-la.ass" --serve 
+[09/01/2026 14:40:32,47] "C:\Users\ajime\OneDrive\Documentos\PENDING\136 - Shiboyugi\3 - Scripts ES\LAT\ShiboyugiPlayin_S1E6_PDGSIM0006_367393_subtitle_edited_es-la.ass" --serve 
+[09/01/2026 19:23:44,92] "C:\Users\ajime\OneDrive\Documentos\PENDING\140 - Immortal King S5\3 - Scripts esES\DailyLifeOfImmo_S5E6_TDISIM0057_364566_subtitle_edited_es-es.ass" --serve 
+[10/01/2026 11:07:41,36] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S1.0E3_YBVSIM0003_366526_subtitle_edited_es-es.ass" --serve 

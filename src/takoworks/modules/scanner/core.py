@@ -15,13 +15,14 @@ import pandas as pd
 
 # ============================================================
 # Scanner core (headless) for TakoWorks
-# - Pipeline: crop (upper/lower ratios) -> render to image -> slice columns
+# - Pipeline: crop (left/right/top/bottom ratios) -> render to image -> slice columns
 #           -> YomiToku OCR -> post-edit MD -> parse Actor/Text -> Excel/ASS/TXT
 # - Supports reuse of intermediates: *_images and *_yomi_md
 # - Unicode-safe image writing on Windows
 # ============================================================
 
 LogFn = Callable[[str], None]
+CropRect = Tuple[float, float, float, float]
 
 
 # =========================
@@ -37,13 +38,22 @@ def _default_yomitoku_exe() -> str:
 #  OCR / extracción
 # =========================
 OCR_DPI = 250
+OCR_SCALE = 2.0
 
 # Reduce solape entre columnas (sube si sigues viendo duplicados)
 INNER_MARGIN_PX = 10
 
 # Filtro de "columna vacía"
-INK_NONWHITE_RATIO = 0.0045
-INK_MIN_NONWHITE_PIXELS = 900
+INK_NONWHITE_RATIO = 0.002
+INK_MIN_NONWHITE_PIXELS = 400
+DISABLE_EMPTY_FILTER = True
+
+# Mejora ligera de legibilidad antes de OCR
+CLAHE_CLIP_LIMIT = 2.0
+CLAHE_TILE_GRID = (8, 8)
+UNSHARP_ALPHA = 1.6
+UNSHARP_BETA = -0.6
+UNSHARP_SIGMA = 1.2
 
 # Detección de separadores como líneas verticales largas (global)
 SEP_MIN_HEIGHT_RATIO = 0.65   # sube a 0.70 si detecta caracteres como separadores
@@ -82,6 +92,8 @@ DELETE_TOKENS = [
 PUNCT_ONLY_RE = re.compile(
     r"^[!?！？]+$|^[。、。．\.…]+$|^[」』]+$|^[!?！？]+[」』]+$|^[」』]+[!?！？]+$"
 )
+JP_CHAR_RE = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
+
 
 
 def _check_cancel(cancel_event) -> None:
@@ -173,6 +185,45 @@ def rotate_bgr(img: np.ndarray, deg: float) -> np.ndarray:
     return cv2.warpAffine(img, m, (new_w, new_h), flags=cv2.INTER_LINEAR, borderValue=(255, 255, 255))
 
 
+def enhance_for_ocr(bgr: np.ndarray) -> np.ndarray:
+    """
+    Mejora legibilidad: contraste local (CLAHE) + unsharp leve.
+    """
+    if bgr is None or bgr.size == 0:
+        return bgr
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID)
+    gray = clahe.apply(gray)
+    blur = cv2.GaussianBlur(gray, (0, 0), sigmaX=UNSHARP_SIGMA, sigmaY=UNSHARP_SIGMA)
+    sharp = cv2.addWeighted(gray, UNSHARP_ALPHA, blur, UNSHARP_BETA, 0)
+    return cv2.cvtColor(sharp, cv2.COLOR_GRAY2BGR)
+
+
+def scale_for_ocr(bgr: np.ndarray, scale: float) -> np.ndarray:
+    if bgr is None or bgr.size == 0 or abs(scale - 1.0) < 1e-3:
+        return bgr
+    h, w = bgr.shape[:2]
+    new_w = max(1, int(round(w * scale)))
+    new_h = max(1, int(round(h * scale)))
+    return cv2.resize(bgr, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+
+def _crop_rect_bounds(rect: CropRect, w: int, h: int) -> Tuple[int, int, int, int]:
+    left, right, top, bottom = rect
+    left = max(0.0, min(1.0, float(left)))
+    right = max(0.0, min(1.0, float(right)))
+    top = max(0.0, min(1.0, float(top)))
+    bottom = max(0.0, min(1.0, float(bottom)))
+
+    x0 = max(0, min(w, int(w * left)))
+    x1 = max(0, min(w, int(w * right)))
+    y0 = max(0, min(h, int(h * top)))
+    y1 = max(0, min(h, int(h * bottom)))
+
+    if x1 <= x0 + 1 or y1 <= y0 + 1:
+        return 0, w, 0, h
+    return x0, x1, y0, y1
+
+
 def apply_skip_marks(
     bgr: np.ndarray,
     polys: List[List[Tuple[float, float]]],
@@ -203,6 +254,8 @@ def apply_skip_marks(
 
 
 def has_visible_ink_image(img_bgr: np.ndarray) -> bool:
+    if DISABLE_EMPTY_FILTER:
+        return True
     if img_bgr is None or img_bgr.size == 0:
         return False
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
@@ -318,6 +371,12 @@ def post_edit_yomitoku_md(md_text: str) -> str:
     s = s.replace(".。", "。")
 
     return s
+
+
+def contains_japanese_text(s: str) -> bool:
+    if not s:
+        return False
+    return JP_CHAR_RE.search(s) is not None
 
 
 def merge_jp_lines(raw_text: str) -> List[str]:
@@ -494,6 +553,17 @@ def parse_dialogues_from_text(block: str) -> List[dict]:
     return cleaned
 
 
+def parse_text_only_lines(block: str) -> List[str]:
+    """
+    Convierte un bloque (ya con saltos) en lineas de texto limpio, sin actores.
+    Conserva la post-edicion y el encadenado de comillas japonesas.
+    """
+    block = clean_text(block)
+    lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
+    lines = merge_unbalanced_jp_quotes(lines)
+    return lines
+
+
 # =========================
 #  Postprocesado DF
 # =========================
@@ -667,17 +737,19 @@ def _df_from_md_files(md_files: List[Path], log: LogFn = lambda s: None) -> pd.D
         sec = int(m.group(2))
 
         md = _post_edit_and_persist_md(md_path, log)
+        if not contains_japanese_text(md):
+            continue
         merged = merge_jp_lines(md)
         merged = merge_unbalanced_jp_quotes(merged)
 
         block = "\n".join(merged)
-        dialogues = parse_dialogues_from_text(block)
-        for d in dialogues:
+        lines = parse_text_only_lines(block)
+        for ln in lines:
             rows.append({
                 "pagina": page_num,
                 "seccion": sec,
-                "actor": (d.get("actor") or "").strip(),
-                "texto": (d.get("texto") or "").strip(),
+                "actor": "",
+                "texto": ln.strip(),
             })
     return finalize_df(pd.DataFrame(rows)) if rows else pd.DataFrame(columns=["pagina", "seccion", "actor", "texto"])
 
@@ -698,53 +770,116 @@ def _ocr_one_column_to_rows(
     outdir_col = md_dir / safe_name(col_img_path.stem)
     outdir_col.mkdir(parents=True, exist_ok=True)
 
-    cmd = [
-        yomitoku_exe,
-        str(col_img_path),
-        "-f", "md",
-        "-o", str(outdir_col),
-        "-d", "cpu",
-        "--ignore_line_break",
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode != 0:
-        err = (proc.stderr or "").strip()
-        if err:
-            log(err)
-        log(f"[WARN] YomiToku error ({proc.returncode}) en {col_img_path.name}")
-        return []
+    def _write_deepseek_md(outdir: Path, img_path: Path, text: str) -> Optional[Path]:
+        if not text:
+            return None
+        md_text = post_edit_yomitoku_md(text)
+        if not contains_japanese_text(md_text):
+            return None
+        parent = img_path.parent.name
+        stem = img_path.stem
+        md_path = outdir / f"{parent}_{stem}_p1.md"
+        try:
+            md_path.write_text(md_text, encoding="utf-8", errors="replace")
+        except Exception as e:
+            log(f"[WARN] No pude escribir MD DeepSeek ({md_path.name}): {e}")
+            return None
+        return md_path
 
-    candidates = list(outdir_col.rglob("*.md"))
-    if not candidates:
-        # fallback: buscar por p###s### en todo md_dir
-        candidates = [p for p in md_dir.rglob("*.md") if re.search(rf"_p{page_num:03d}s{sec:03d}", p.name)]
+    def _run_ocr(img_path: Path, outdir: Path) -> List[str]:
+        cmd = [
+            yomitoku_exe,
+            str(img_path),
+            "-f", "md",
+            "-o", str(outdir),
+            "-d", "cpu",
+            "--ignore_line_break",
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            err = (proc.stderr or "").strip()
+            if err:
+                log(err)
+            log(f"[WARN] YomiToku error ({proc.returncode}) en {img_path.name}")
+            return []
 
-    if not candidates:
-        log(f"[WARN] No MD para {col_img_path.stem}")
-        return []
+        candidates = list(outdir.rglob("*.md"))
+        if not candidates:
+            candidates = [p for p in md_dir.rglob("*.md") if re.search(rf"_p{page_num:03d}s{sec:03d}", p.name)]
+        if not candidates:
+            log(f"[WARN] No MD para {img_path.name}")
+            return []
 
-    md_path = max(candidates, key=lambda p: p.stat().st_mtime)
-    md = _post_edit_and_persist_md(md_path, log)
+        md_path = max(candidates, key=lambda p: p.stat().st_mtime)
+        md = _post_edit_and_persist_md(md_path, log)
+        if not contains_japanese_text(md):
+            return []
+        merged = merge_jp_lines(md)
+        merged = merge_unbalanced_jp_quotes(merged)
+        block = "\n".join(merged)
+        return parse_text_only_lines(block)
 
-    merged = merge_jp_lines(md)
-    merged = merge_unbalanced_jp_quotes(merged)
+    ocr_img_path = col_img_path
+    try:
+        bgr = cv2.imread(str(col_img_path), cv2.IMREAD_COLOR)
+        if bgr is not None and bgr.size > 0:
+            scaled = scale_for_ocr(bgr, OCR_SCALE)
+            if scaled is not bgr:
+                ocr_img_path = md_dir / f"{col_img_path.stem}_ocr.png"
+                cv_imwrite_u(ocr_img_path, scaled)
+    except Exception as e:
+        log(f"[WARN] No pude preparar imagen para OCR ({col_img_path.name}): {e}")
 
-    block = "\n".join(merged)
-    dialogues = parse_dialogues_from_text(block)
+    lines = _run_ocr(ocr_img_path, outdir_col)
+    if not lines:
+        log(f"[Claude] Fallback OCR en p{page_num:03d}s{sec:03d} ({col_img_path.name})")
+        try:
+            from ..transcriber import core as trans_core
+            client = trans_core.get_claude_client()
+            model = trans_core.CLAUDE_MODEL
+
+            import base64
+            img_bytes = ocr_img_path.read_bytes()
+            b64 = base64.b64encode(img_bytes).decode("ascii")
+            mime = "image/png"
+            if ocr_img_path.suffix.lower() in {".jpg", ".jpeg"}:
+                mime = "image/jpeg"
+
+            prompt = (
+                "Reconoce el texto en japones de la imagen. "
+                "Devuelve SOLO el texto en Markdown, sin explicaciones."
+            )
+            msg = [
+                {"role": "user", "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}},
+                ]},
+            ]
+            resp = client.messages.create(model=model, max_tokens=2048, messages=msg)
+            content = ""
+            try:
+                content = "".join([c.text for c in resp.content if getattr(c, "text", None)])
+            except Exception:
+                content = ""
+            content = (content or "").strip()
+            md_path = _write_deepseek_md(outdir_col, col_img_path, content)
+            if md_path is not None:
+                log(f"[Claude] MD: {md_path.name}")
+                merged = merge_jp_lines(post_edit_yomitoku_md(content))
+                merged = merge_unbalanced_jp_quotes(merged)
+                block = "\n".join(merged)
+                lines = parse_text_only_lines(block)
+        except Exception as e:
+            log(f"[WARN] Claude fallback fallido ({col_img_path.name}): {e}")
 
     out_rows: List[dict] = []
-    for d in dialogues:
+    for ln in lines:
         out_rows.append({
             "pagina": page_num,
             "seccion": sec,
-            "actor": (d.get("actor") or "").strip(),
-            "texto": (d.get("texto") or "").strip(),
+            "actor": "",
+            "texto": ln.strip(),
         })
-    actor_clean = (actor_override or "").strip()
-    if actor_clean:
-        for r in out_rows:
-            if not r.get("actor"):
-                r["actor"] = actor_clean
     return out_rows
 
 
@@ -807,8 +942,7 @@ def _process_legacy_page(
     stem: str,
     images_dir: Path,
     md_dir: Path,
-    upper_ratio: Optional[float],
-    lower_ratio: Optional[float],
+    crop_rect: CropRect,
     yomitoku_exe: str,
     log: LogFn,
     cancel_event=None,
@@ -818,7 +952,7 @@ def _process_legacy_page(
     drop_empty: bool = False,
 ) -> Tuple[List[dict], bool]:
     """
-    Procesa una página con el flujo legacy (upper/lower + detección de columnas).
+    Procesa una pagina con el flujo legacy (recorte rectangular + deteccion de columnas).
     """
     _check_cancel(cancel_event)
     page = doc.load_page(page_index)
@@ -828,15 +962,9 @@ def _process_legacy_page(
     bgr_full = apply_skip_marks(bgr_full, skip_polys or [], skip_circles or [])
 
     h, w = bgr_full.shape[:2]
-    if upper_ratio is None or lower_ratio is None:
-        y0, y1 = 0, h
-    else:
-        y0 = max(0, min(h, int(h * float(upper_ratio))))
-        y1 = max(0, min(h, int(h * float(lower_ratio))))
-        if y1 <= y0 + 1:
-            y0, y1 = int(h * 0.4), int(h * 0.9)
-
-    bgr = bgr_full[y0:y1, :].copy()
+    x0, x1, y0, y1 = _crop_rect_bounds(crop_rect, w, h)
+    bgr = bgr_full[y0:y1, x0:x1].copy()
+    bgr = enhance_for_ocr(bgr)
 
     lines_x = detect_vertical_separators_long_global(bgr, dpi=OCR_DPI)
     cols = slice_columns_from_image(bgr, lines_x)
@@ -902,7 +1030,9 @@ def df_to_ass_with_styles(
         text = str(getattr(r, "texto", "") or "").strip()
         if not text and not actor:
             continue
-        text = text.replace("\n", r"\N")
+        text = text.replace("。", "。\\N").replace("」", "」\\N")
+        text = text.replace("「", "").replace("」", "")
+        text = text.replace("\n", r"\N").strip()
         lines.append(f"Dialogue: 0,0:00:00.00,0:00:00.00,{style_name},{actor},0,0,0,,{text}")
 
     from ..stylizer import core as styl_core  # local import
@@ -997,8 +1127,8 @@ def run_scanner(
     input_path: str,
     out_dir: str,
     batch: bool,
-    upper_ratio: Optional[float],
-    lower_ratio: Optional[float],
+    crop_rect: Optional[CropRect],
+    crop_rect_by_page: Optional[Dict[int, CropRect]] = None,
     reuse_images: bool = True,
     reuse_md: bool = True,
     make_excel: bool = True,
@@ -1040,8 +1170,8 @@ def run_scanner(
         outputs = _process_one_pdf(
             pdf_path=pdf_path,
             out_dir=out_dir_p,
-            upper_ratio=upper_ratio,
-            lower_ratio=lower_ratio,
+            crop_rect=crop_rect,
+            crop_rect_by_page=crop_rect_by_page or {},
             reuse_images=reuse_images,
             reuse_md=reuse_md,
             make_excel=make_excel,
@@ -1064,8 +1194,8 @@ def run_scanner(
 def _process_one_pdf(
     pdf_path: Path,
     out_dir: Path,
-    upper_ratio: Optional[float],
-    lower_ratio: Optional[float],
+    crop_rect: Optional[CropRect],
+    crop_rect_by_page: Dict[int, CropRect],
     reuse_images: bool,
     reuse_md: bool,
     make_excel: bool,
@@ -1124,21 +1254,23 @@ def _process_one_pdf(
                 md_path = md_index.get((page_num, sec))
                 if md_path:
                     md = _post_edit_and_persist_md(md_path, log)
+                    if not contains_japanese_text(md):
+                        continue
                     merged = merge_jp_lines(md)
                     merged = merge_unbalanced_jp_quotes(merged)
                     block = "\n".join(merged)
-                    dialogues = parse_dialogues_from_text(block)
-                    for d in dialogues:
+                    lines = parse_text_only_lines(block)
+                    for ln in lines:
                         rows.append({"pagina": page_num, "seccion": sec,
-                                     "actor": (d.get("actor") or "").strip(),
-                                     "texto": (d.get("texto") or "").strip()})
+                                     "actor": "",
+                                     "texto": ln.strip()})
                 else:
                     rows.extend(_ocr_one_column_to_rows(yomitoku_exe, img_path, page_num, sec, md_dir, log))
-            df = finalize_df(pd.DataFrame(rows)) if rows else pd.DataFrame(columns=["pagina", "seccion", "actor", "texto"])
-            return _write_outputs(pdf_path, out_dir, df, make_excel, make_ass, make_txt, log, cancel_event)
+        df = finalize_df(pd.DataFrame(rows)) if rows else pd.DataFrame(columns=["pagina", "seccion", "actor", "texto"])
+        return _write_outputs(pdf_path, out_dir, df, make_excel, make_ass, make_txt, log, cancel_event)
 
-    if upper_ratio is None or lower_ratio is None:
-        raise RuntimeError("Faltan cortes upper/lower. Abre la vista previa y marca corte superior/inferior.")
+    if not crop_rect or any(v is None for v in crop_rect):
+        raise RuntimeError("Faltan cortes de recorte. Abre la vista previa y marca el rectangulo.")
 
     doc = fitz.open(str(pdf_path))
     try:
@@ -1152,6 +1284,7 @@ def _process_one_pdf(
             if page_num in suppress_pages:
                 log(f"[SKIP] Pagina {page_num}: suprimida.")
                 continue
+            page_crop = crop_rect_by_page.get(page_num, crop_rect)
             rows_page, has_content = _process_legacy_page(
                 doc,
                 pi,
@@ -1159,8 +1292,7 @@ def _process_one_pdf(
                 stem,
                 images_dir,
                 md_dir,
-                upper_ratio,
-                lower_ratio,
+                page_crop,
                 yomitoku_exe,
                 log,
                 cancel_event,
@@ -1242,8 +1374,12 @@ def main(argv: Optional[List[str]] = None) -> None:
     p.add_argument("input", help="PDF o carpeta con PDFs (si --batch).")
     p.add_argument("--out-dir", default="", help="Directorio de salida (por defecto, junto al PDF).")
     p.add_argument("--batch", action="store_true", help="Procesar todos los PDFs de una carpeta.")
-    p.add_argument("--upper", type=float, default=None, help="Ratio superior (0..1) del recorte.")
-    p.add_argument("--lower", type=float, default=None, help="Ratio inferior (0..1) del recorte.")
+    p.add_argument("--left", type=float, default=None, help="Ratio izquierdo (0..1) del recorte.")
+    p.add_argument("--right", type=float, default=None, help="Ratio derecho (0..1) del recorte.")
+    p.add_argument("--top", type=float, default=None, help="Ratio superior (0..1) del recorte.")
+    p.add_argument("--bottom", type=float, default=None, help="Ratio inferior (0..1) del recorte.")
+    p.add_argument("--upper", type=float, default=None, help="(Legacy) Ratio superior (0..1).")
+    p.add_argument("--lower", type=float, default=None, help="(Legacy) Ratio inferior (0..1).")
     p.add_argument("--no-reuse-images", action="store_true")
     p.add_argument("--no-reuse-md", action="store_true")
     p.add_argument("--no-excel", action="store_true")
@@ -1260,12 +1396,23 @@ def main(argv: Optional[List[str]] = None) -> None:
     def _log(s: str):
         print(s)
 
+    top = args.top if args.top is not None else args.upper
+    bottom = args.bottom if args.bottom is not None else args.lower
+    left = args.left
+    right = args.right
+    crop_rect = None
+    if any(v is not None for v in (left, right, top, bottom)):
+        if left is None:
+            left = 0.0
+        if right is None:
+            right = 1.0
+        crop_rect = (left, right, top, bottom)
+
     run_scanner(
         input_path=input_path,
         out_dir=out_dir,
         batch=bool(args.batch),
-        upper_ratio=args.upper,
-        lower_ratio=args.lower,
+        crop_rect=crop_rect,
         reuse_images=not bool(args.no_reuse_images),
         reuse_md=not bool(args.no_reuse_md),
         make_excel=not bool(args.no_excel),

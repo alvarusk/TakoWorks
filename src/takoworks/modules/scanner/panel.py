@@ -57,13 +57,13 @@ class _SelectionState:
         self.skip_polys_by_page: Dict[int, List[List[Tuple[float, float]]]] = {}
         self.skip_circles_by_page: Dict[int, List[Tuple[float, float, float]]] = {}
         self.suppress_pages: set[int] = set()
-        self.upper_ratio: Optional[float] = None
-        self.lower_ratio: Optional[float] = None
+        self.crop_rect: Optional[Tuple[float, float, float, float]] = None
+        self.crop_rect_by_page: Dict[int, Tuple[float, float, float, float]] = {}
 
 
 class _PreviewWindow(tk.Toplevel):
     """
-    Vista previa del PDF para borrar zonas y marcar cortes upper/lower.
+    Vista previa del PDF para borrar zonas y marcar recortes rectangulares.
     """
     def __init__(self, master, pdf_path: Path, selection: _SelectionState):
         super().__init__(master)
@@ -80,8 +80,12 @@ class _PreviewWindow(tk.Toplevel):
         self.preview_png = None
         self.bgr = None
 
-        self.drag_mode = "erase_poly"  # erase_poly | set_upper | set_lower
-        self.draw_points: List[Tuple[int, int]] = []
+        self.drag_mode = "erase_poly"  # erase_poly | crop_rect
+        self.crop_dragging = False
+        self.crop_resize_edge = None
+        self.crop_start_xy = None
+        self.crop_start_rect = None
+        self.crop_temp_id = None
         self.temp_poly = None
         self.brush_points: List[Tuple[int, int]] = []
         self.brush_dots: List[int] = []
@@ -114,10 +118,11 @@ class _PreviewWindow(tk.Toplevel):
         ttk.Button(actions, text="Borrar zona", command=self._set_erase_mode).pack(side="left", padx=(0, 4))
         ttk.Label(actions, text="Pincel").pack(side="left", padx=(6, 2))
         ttk.Scale(actions, from_=5, to=80, orient="horizontal", variable=self.brush_var, command=self._on_brush_change).pack(side="left")
-        ttk.Button(actions, text="Corte sup", command=self._set_cut_upper_mode).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text="Corte inf", command=self._set_cut_lower_mode).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text="Recorte", command=self._set_crop_mode).pack(side="left", padx=(0, 4))
         ttk.Button(actions, text="Deshacer", command=self._undo_last).pack(side="left", padx=(0, 4))
         ttk.Button(actions, text="Suprimir pagina", command=self._toggle_suppress_page).pack(side="left", padx=(6, 0))
+        ttk.Button(actions, text="Guardar", command=self._save_selection).pack(side="left", padx=(6, 0))
+        ttk.Button(actions, text="Cargar", command=self._load_selection).pack(side="left", padx=(6, 0))
         ttk.Button(top, text="Restablecer", command=self._reset_page).grid(row=0, column=4, padx=(10, 0))
         ttk.Button(top, text="Cerrar", command=self._accept_and_close).grid(row=0, column=5, padx=(10, 0))
 
@@ -138,13 +143,15 @@ class _PreviewWindow(tk.Toplevel):
         self.canvas.bind("<ButtonPress-1>", self._on_press)
         self.canvas.bind("<B1-Motion>", self._on_drag)
         self.canvas.bind("<ButtonRelease-1>", self._on_release)
+        self.canvas.bind("<Motion>", self._on_move)
         self.canvas.focus_set()
 
         ttk.Label(
             self,
             text=(
                 "Arrastra para borrar con pincel (rojo). "
-                "Corte sup/inf: pulsa el boton y haz clic en la altura. "
+                "Recorte: pulsa el boton y arrastra para crear un rectangulo. "
+                "Pasa el raton por los lados para ajustar el recorte. "
                 "Teclas: Ctrl+Alt+Flecha izq/der paginas, Ctrl+Z deshacer."
             )
         ).grid(row=2, column=0, sticky="w", padx=8, pady=(6, 8))
@@ -219,40 +226,52 @@ class _PreviewWindow(tk.Toplevel):
                 tags="overlay",
             )
 
-        if self.selection.upper_ratio is not None:
-            y = int(self.selection.upper_ratio * self.img_h)
-            self.canvas.create_line(0, y, self.img_w, y, fill="#ffc107", width=2, tags="overlay")
-        if self.selection.lower_ratio is not None:
-            y = int(self.selection.lower_ratio * self.img_h)
-            self.canvas.create_line(0, y, self.img_w, y, fill="#00bcd4", width=2, tags="overlay")
+        if self.selection.crop_rect is not None:
+            self._draw_crop_rect(self.selection.crop_rect, color="#00bcd4", width=2)
+        page_crop = self.selection.crop_rect_by_page.get(self._current_page())
+        if page_crop is not None:
+            self._draw_crop_rect(page_crop, color="#ff9800", width=2)
 
         if self.temp_poly:
             self.canvas.tag_raise(self.temp_poly)
         self._update_label()
 
+    def _draw_crop_rect(self, rect: Tuple[float, float, float, float], color: str, width: int = 2) -> None:
+        left, right, top, bottom = rect
+        x0 = int(left * self.img_w)
+        x1 = int(right * self.img_w)
+        y0 = int(top * self.img_h)
+        y1 = int(bottom * self.img_h)
+        self.canvas.create_rectangle(x0, y0, x1, y1, outline=color, width=width, tags="overlay")
+
     def _update_label(self):
         poly_count = len(self.selection.skip_polys_by_page.get(self._current_page(), []))
         circle_count = len(self.selection.skip_circles_by_page.get(self._current_page(), []))
-        suppressed = " · SUPRIMIDA" if self._current_page() in self.selection.suppress_pages else ""
+        suppressed = " | SUPRIMIDA" if self._current_page() in self.selection.suppress_pages else ""
+        crop_note = " | crop=pagina" if self._current_page() in self.selection.crop_rect_by_page else ""
         self.lbl.config(
             text=(
-                f"Página {self.page_index+1}/{len(self.doc)}  · "
-                f"borrados={poly_count + circle_count}{suppressed}"
+                f"Pagina {self.page_index+1}/{len(self.doc)} | "
+                f"borrados={poly_count + circle_count}{suppressed}{crop_note}"
             )
         )
 
     def _on_press(self, evt):
         x = int(self.canvas.canvasx(evt.x))
         y = int(self.canvas.canvasy(evt.y))
-        if self.drag_mode == "set_upper":
-            self.selection.upper_ratio = y / float(self.img_h)
-            self.drag_mode = "erase_poly"
-            self._draw_overlays()
-            return
-        if self.drag_mode == "set_lower":
-            self.selection.lower_ratio = y / float(self.img_h)
-            self.drag_mode = "erase_poly"
-            self._draw_overlays()
+        if self.drag_mode == "crop_rect":
+            edge = self._hit_test_crop_edge(x, y)
+            if edge:
+                self.crop_resize_edge = edge
+                self.crop_start_rect = self._active_crop_rect()
+                self.crop_start_xy = (x, y)
+                if self.crop_start_rect is not None:
+                    x0, x1, y0, y1 = self._rect_to_px(self.crop_start_rect)
+                    self._start_temp_rect(x0, y0, x1, y1)
+                return
+            self.crop_dragging = True
+            self.crop_start_xy = (x, y)
+            self._start_temp_rect(x, y, x, y)
             return
 
         self.brush_points = [(x, y)]
@@ -264,6 +283,27 @@ class _PreviewWindow(tk.Toplevel):
         self.brush_dots = [dot]
 
     def _on_drag(self, evt):
+        if self.drag_mode == "crop_rect":
+            x = int(self.canvas.canvasx(evt.x))
+            y = int(self.canvas.canvasy(evt.y))
+            if self.crop_dragging and self.crop_start_xy:
+                x0, y0 = self.crop_start_xy
+                self._update_temp_rect(x0, y0, x, y)
+                return
+            if self.crop_resize_edge and self.crop_start_rect is not None:
+                x0, x1, y0, y1 = self._rect_to_px(self.crop_start_rect)
+                if self.crop_resize_edge == "left":
+                    x0 = x
+                elif self.crop_resize_edge == "right":
+                    x1 = x
+                elif self.crop_resize_edge == "top":
+                    y0 = y
+                elif self.crop_resize_edge == "bottom":
+                    y1 = y
+                self._update_temp_rect(x0, y0, x1, y1)
+                return
+            return
+
         if not self.brush_points:
             return
         x = int(self.canvas.canvasx(evt.x))
@@ -274,6 +314,37 @@ class _PreviewWindow(tk.Toplevel):
         self.brush_dots.append(dot)
 
     def _on_release(self, evt):
+        if self.drag_mode == "crop_rect":
+            if not (self.crop_dragging or self.crop_resize_edge):
+                return
+            x = int(self.canvas.canvasx(evt.x))
+            y = int(self.canvas.canvasy(evt.y))
+            rect = None
+            if self.crop_dragging and self.crop_start_xy:
+                x0, y0 = self.crop_start_xy
+                rect = self._px_to_rect(x0, x, y0, y)
+            elif self.crop_resize_edge and self.crop_start_rect is not None:
+                x0, x1, y0, y1 = self._rect_to_px(self.crop_start_rect)
+                if self.crop_resize_edge == "left":
+                    x0 = x
+                elif self.crop_resize_edge == "right":
+                    x1 = x
+                elif self.crop_resize_edge == "top":
+                    y0 = y
+                elif self.crop_resize_edge == "bottom":
+                    y1 = y
+                rect = self._px_to_rect(x0, x1, y0, y1)
+
+            if rect is not None:
+                self._store_crop_rect(rect)
+            self.crop_dragging = False
+            self.crop_resize_edge = None
+            self.crop_start_xy = None
+            self.crop_start_rect = None
+            self._clear_temp_rect()
+            self._draw_overlays()
+            return
+
         if not self.brush_points:
             return
         circles = self.selection.skip_circles_by_page.setdefault(self._current_page(), [])
@@ -300,9 +371,104 @@ class _PreviewWindow(tk.Toplevel):
         elif key == "z":
             self._undo_last()
 
+    def _on_move(self, evt):
+        if self.drag_mode != "crop_rect":
+            return
+        x = int(self.canvas.canvasx(evt.x))
+        y = int(self.canvas.canvasy(evt.y))
+        edge = self._hit_test_crop_edge(x, y)
+        if edge in ("left", "right"):
+            self.canvas.config(cursor="sb_h_double_arrow")
+        elif edge in ("top", "bottom"):
+            self.canvas.config(cursor="sb_v_double_arrow")
+        else:
+            self.canvas.config(cursor="crosshair")
+
     def _set_erase_mode(self):
         self.drag_mode = "erase_poly"
+        if self.crop_temp_id is not None:
+            self.canvas.delete(self.crop_temp_id)
+            self.crop_temp_id = None
+        self.canvas.config(cursor="")
         self._on_brush_change()
+
+    def _set_crop_mode(self):
+        self.drag_mode = "crop_rect"
+        self.canvas.config(cursor="crosshair")
+
+    def _active_crop_rect(self) -> Optional[Tuple[float, float, float, float]]:
+        page = self._current_page()
+        return self.selection.crop_rect_by_page.get(page) or self.selection.crop_rect
+
+    def _store_crop_rect(self, rect: Tuple[float, float, float, float]) -> None:
+        page = self._current_page()
+        if page in self.selection.crop_rect_by_page:
+            self.selection.crop_rect_by_page[page] = rect
+        elif self.selection.crop_rect is None or page == 1:
+            self.selection.crop_rect = rect
+        else:
+            self.selection.crop_rect_by_page[page] = rect
+
+    def _rect_to_px(self, rect: Tuple[float, float, float, float]) -> Tuple[int, int, int, int]:
+        left, right, top, bottom = rect
+        x0 = int(left * self.img_w)
+        x1 = int(right * self.img_w)
+        y0 = int(top * self.img_h)
+        y1 = int(bottom * self.img_h)
+        return x0, x1, y0, y1
+
+    def _px_to_rect(self, x0: int, x1: int, y0: int, y1: int) -> Optional[Tuple[float, float, float, float]]:
+        x0 = max(0, min(self.img_w, x0))
+        x1 = max(0, min(self.img_w, x1))
+        y0 = max(0, min(self.img_h, y0))
+        y1 = max(0, min(self.img_h, y1))
+        if abs(x1 - x0) < 4 or abs(y1 - y0) < 4:
+            return None
+        left = min(x0, x1) / float(self.img_w)
+        right = max(x0, x1) / float(self.img_w)
+        top = min(y0, y1) / float(self.img_h)
+        bottom = max(y0, y1) / float(self.img_h)
+        return (left, right, top, bottom)
+
+    def _hit_test_crop_edge(self, x: int, y: int) -> Optional[str]:
+        rect = self._active_crop_rect()
+        if rect is None:
+            return None
+        x0, x1, y0, y1 = self._rect_to_px(rect)
+        pad = 6
+        if (y0 - pad) <= y <= (y1 + pad):
+            if abs(x - x0) <= pad:
+                return "left"
+            if abs(x - x1) <= pad:
+                return "right"
+        if (x0 - pad) <= x <= (x1 + pad):
+            if abs(y - y0) <= pad:
+                return "top"
+            if abs(y - y1) <= pad:
+                return "bottom"
+        return None
+
+    def _start_temp_rect(self, x0: int, y0: int, x1: int, y1: int) -> None:
+        if self.crop_temp_id is not None:
+            self.canvas.delete(self.crop_temp_id)
+        self.crop_temp_id = self.canvas.create_rectangle(
+            x0, y0, x1, y1,
+            outline="#66ffcc",
+            width=2,
+            dash=(4, 2),
+            tags="overlay",
+        )
+
+    def _update_temp_rect(self, x0: int, y0: int, x1: int, y1: int) -> None:
+        if self.crop_temp_id is None:
+            self._start_temp_rect(x0, y0, x1, y1)
+            return
+        self.canvas.coords(self.crop_temp_id, x0, y0, x1, y1)
+
+    def _clear_temp_rect(self) -> None:
+        if self.crop_temp_id is not None:
+            self.canvas.delete(self.crop_temp_id)
+            self.crop_temp_id = None
 
     def _on_brush_change(self, *_args):
         try:
@@ -325,12 +491,6 @@ class _PreviewWindow(tk.Toplevel):
                 self.selection.skip_polys_by_page.pop(self._current_page(), None)
             self._draw_overlays()
 
-    def _set_cut_upper_mode(self):
-        self.drag_mode = "set_upper"
-
-    def _set_cut_lower_mode(self):
-        self.drag_mode = "set_lower"
-
     def _save_selection(self):
         p = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON", "*.json")])
         if not p:
@@ -339,8 +499,8 @@ class _PreviewWindow(tk.Toplevel):
             "skip_polys_by_page": self.selection.skip_polys_by_page,
             "skip_circles_by_page": self.selection.skip_circles_by_page,
             "suppress_pages": sorted(self.selection.suppress_pages),
-            "upper_ratio": self.selection.upper_ratio,
-            "lower_ratio": self.selection.lower_ratio,
+            "crop_rect": self.selection.crop_rect,
+            "crop_rect_by_page": self.selection.crop_rect_by_page,
         }
         Path(p).write_text(json.dumps(data, indent=2), encoding="utf-8")
 
@@ -351,21 +511,33 @@ class _PreviewWindow(tk.Toplevel):
         try:
             data = json.loads(Path(p).read_text(encoding="utf-8"))
         except Exception:
-            messagebox.showerror("Error", "No se pudo leer el archivo de selección.")
+            messagebox.showerror("Error", "No se pudo leer el archivo de seleccion.")
             return
+
         def _norm_dict(d):
             return {int(k): v for k, v in d.items()}
+
         self.selection.skip_polys_by_page = _norm_dict(data.get("skip_polys_by_page", {}))
         self.selection.skip_circles_by_page = _norm_dict(data.get("skip_circles_by_page", {}))
         self.selection.suppress_pages = set(int(x) for x in data.get("suppress_pages", []))
-        self.selection.upper_ratio = data.get("upper_ratio", None)
-        self.selection.lower_ratio = data.get("lower_ratio", None)
+
+        crop_rect = data.get("crop_rect")
+        if crop_rect is None:
+            upper = data.get("upper_ratio")
+            lower = data.get("lower_ratio")
+            if upper is not None and lower is not None:
+                crop_rect = (0.0, 1.0, float(upper), float(lower))
+        self.selection.crop_rect = tuple(crop_rect) if crop_rect is not None else None
+
+        crop_by_page = data.get("crop_rect_by_page", {})
+        self.selection.crop_rect_by_page = {int(k): tuple(v) for k, v in crop_by_page.items()}
         self._render_page()
 
     def _reset_page(self):
         self.selection.skip_polys_by_page.pop(self._current_page(), None)
         self.selection.skip_circles_by_page.pop(self._current_page(), None)
         self.selection.suppress_pages.discard(self._current_page())
+        self.selection.crop_rect_by_page.pop(self._current_page(), None)
         self._draw_overlays()
     
     def _toggle_suppress_page(self):
@@ -412,8 +584,20 @@ class ScannerPanel(ttk.Frame):
         self.yomitoku_var = tk.StringVar(value=cfg["last"].get("yomitoku_exe", ""))
 
         self.selection = _SelectionState()
-        self.selection.upper_ratio = cfg["last"].get("cut_upper_ratio", None)
-        self.selection.lower_ratio = cfg["last"].get("cut_lower_ratio", None)
+        crop_left = cfg["last"].get("cut_left_ratio", None)
+        crop_right = cfg["last"].get("cut_right_ratio", None)
+        crop_top = cfg["last"].get("cut_top_ratio", None)
+        crop_bottom = cfg["last"].get("cut_bottom_ratio", None)
+        if crop_top is None and crop_bottom is None:
+            legacy_top = cfg["last"].get("cut_upper_ratio", None)
+            legacy_bottom = cfg["last"].get("cut_lower_ratio", None)
+            if legacy_top is not None and legacy_bottom is not None:
+                crop_top = legacy_top
+                crop_bottom = legacy_bottom
+        if crop_left is None and crop_right is None and crop_top is not None and crop_bottom is not None:
+            crop_left, crop_right = 0.0, 1.0
+        if None not in (crop_left, crop_right, crop_top, crop_bottom):
+            self.selection.crop_rect = (float(crop_left), float(crop_right), float(crop_top), float(crop_bottom))
 
         self.reuse_images_var = tk.BooleanVar(value=bool(cfg["last"].get("reuse_images", True)))
         self.reuse_md_var = tk.BooleanVar(value=bool(cfg["last"].get("reuse_md", True)))
@@ -461,31 +645,6 @@ class ScannerPanel(ttk.Frame):
         self.sel_label = ttk.Label(rr, text=self._selection_label_text())
         self.sel_label.pack(side="left", padx=(10, 0))
 
-        # Cuts
-        cuts = ttk.LabelFrame(frm, text="Cortes (upper/lower)")
-        cuts.pack(fill="x", pady=6)
-        rr2 = ttk.Frame(cuts); rr2.pack(fill="x", padx=8, pady=(0, 6))
-        ttk.Label(rr2, text="Upper ratio").pack(side="left")
-        self.upper_entry = ttk.Entry(rr2, width=8)
-        self.upper_entry.pack(side="left", padx=(6, 14))
-        ttk.Label(rr2, text="Lower ratio").pack(side="left")
-        self.lower_entry = ttk.Entry(rr2, width=8)
-        self.lower_entry.pack(side="left", padx=6)
-        self.upper_entry.insert(0, "" if self.selection.upper_ratio is None else f"{float(self.selection.upper_ratio):.3f}")
-        self.lower_entry.insert(0, "" if self.selection.lower_ratio is None else f"{float(self.selection.lower_ratio):.3f}")
-
-        rr2b = ttk.Frame(cuts); rr2b.pack(fill="x", padx=8, pady=(0, 6))
-        ttk.Checkbutton(rr2b, text="Omitir paginas vacias", variable=self.drop_empty_var).pack(side="left")
-
-        # Reuse / cleanup
-        reuse = ttk.LabelFrame(frm, text="Reusar / limpieza")
-        reuse.pack(fill="x", pady=6)
-        rru = ttk.Frame(reuse); rru.pack(fill="x", padx=8, pady=6)
-        ttk.Checkbutton(rru, text="Reusar imágenes ya cortadas (_images)", variable=self.reuse_images_var).pack(side="left", padx=(0, 10))
-        ttk.Checkbutton(rru, text="Reusar MD ya extraídos (_yomi_md)", variable=self.reuse_md_var).pack(side="left")
-        rru2 = ttk.Frame(reuse); rru2.pack(fill="x", padx=8, pady=(0, 6))
-        ttk.Checkbutton(rru2, text="Eliminar cropped PDF al terminar (mantiene _images/_yomi_md como caché)", variable=self.cleanup_var).pack(side="left")
-
         # Outputs
         outs = ttk.LabelFrame(frm, text="Salidas")
         outs.pack(fill="x", pady=6)
@@ -514,13 +673,11 @@ class ScannerPanel(ttk.Frame):
     def _selection_label_text(self) -> str:
         skip_pages = len(self.selection.skip_polys_by_page) + len(self.selection.skip_circles_by_page)
         sup_pages = len(self.selection.suppress_pages)
-        return f"Zonas borradas: {skip_pages} pags · Suprimidas: {sup_pages}"
+        crop_pages = len(self.selection.crop_rect_by_page)
+        return f"Zonas borradas: {skip_pages} pags | Suprimidas: {sup_pages} | Crop paginas: {crop_pages}"
 
     def _sync_ratio_entries(self):
-        u = self.upper_entry.get().strip()
-        l = self.lower_entry.get().strip()
-        self.selection.upper_ratio = float(u) if u else self.selection.upper_ratio
-        self.selection.lower_ratio = float(l) if l else self.selection.lower_ratio
+        return
 
     def _open_preview(self):
         path = Path(self.input_var.get().strip())
@@ -544,15 +701,11 @@ class ScannerPanel(ttk.Frame):
         try:
             if not self.winfo_exists():
                 return
-            if self.upper_entry.winfo_exists():
-                self.upper_entry.delete(0, "end")
-                self.upper_entry.insert(0, "" if self.selection.upper_ratio is None else f"{float(self.selection.upper_ratio):.3f}")
-            if self.lower_entry.winfo_exists():
-                self.lower_entry.delete(0, "end")
-                self.lower_entry.insert(0, "" if self.selection.lower_ratio is None else f"{float(self.selection.lower_ratio):.3f}")
             if self.sel_label.winfo_exists():
                 self.sel_label.config(text=self._selection_label_text())
         except TclError:
+
+
             # si la UI se cerró mientras estaba abierta la vista previa, ignoramos
             return
 
@@ -619,8 +772,8 @@ class ScannerPanel(ttk.Frame):
             return
 
         if (not self.reuse_images_var.get() and not self.reuse_md_var.get()):
-            if self.selection.upper_ratio is None or self.selection.lower_ratio is None:
-                messagebox.showwarning("Faltan cortes", "Abre la vista previa y marca corte superior/inferior.")
+            if self.selection.crop_rect is None or any(v is None for v in self.selection.crop_rect):
+                messagebox.showwarning("Faltan cortes", "Abre la vista previa y marca el rectangulo.")
                 return
 
         # persist config
@@ -629,8 +782,16 @@ class ScannerPanel(ttk.Frame):
         self.cfg["last"]["scanner_batch"] = bool(self.batch_var.get())
         self.cfg["last"]["yomitoku_exe"] = self.yomitoku_var.get().strip()
 
-        self.cfg["last"]["cut_upper_ratio"] = self.selection.upper_ratio
-        self.cfg["last"]["cut_lower_ratio"] = self.selection.lower_ratio
+        if self.selection.crop_rect is None:
+            l = r = t = b = None
+        else:
+            l, r, t, b = self.selection.crop_rect
+        self.cfg["last"]["cut_left_ratio"] = l
+        self.cfg["last"]["cut_right_ratio"] = r
+        self.cfg["last"]["cut_top_ratio"] = t
+        self.cfg["last"]["cut_bottom_ratio"] = b
+        self.cfg["last"]["cut_upper_ratio"] = t
+        self.cfg["last"]["cut_lower_ratio"] = b
 
         manual_selection = bool(self.selection.skip_polys_by_page or self.selection.skip_circles_by_page or self.selection.suppress_pages)
         use_reuse_images = bool(self.reuse_images_var.get()) if not manual_selection else False
@@ -653,8 +814,8 @@ class ScannerPanel(ttk.Frame):
                 input_path=inp,
                 out_dir=out_dir,
                 batch=bool(self.batch_var.get()),
-                upper_ratio=self.selection.upper_ratio,
-                lower_ratio=self.selection.lower_ratio,
+                crop_rect=self.selection.crop_rect,
+                crop_rect_by_page=self.selection.crop_rect_by_page,
                 reuse_images=use_reuse_images,
                 reuse_md=use_reuse_md,
                 make_excel=bool(self.out_excel_var.get()),
@@ -678,6 +839,8 @@ class ScannerPanel(ttk.Frame):
         def done(ok, err):
             self._lock_ui(False)
             if not ok:
+                if err and "Cancelado" in str(err):
+                    return
                 messagebox.showerror("Scanner", str(err) if err else "Error")
                 return
             if result["last_xlsx"]:

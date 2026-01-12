@@ -1,0 +1,38 @@
+name: windows-msstore-submit
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "windows-v*"
+
+jobs:
+  build-and-submit:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.24.0"
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build Windows Release
+        run: flutter build windows --release
+
+      - name: Build MSIX
+        run: dart run msix:create
+
+      - name: Submit to MS Store (Partner Center API)
+        shell: powershell
+        run: |
+          powershell -ExecutionPolicy Bypass -File docs/msstore_submission.ps1
+        env:
+          STORE_TENANT_ID: ${{ secrets.STORE_TENANT_ID }}
+          STORE_CLIENT_ID: ${{ secrets.STORE_CLIENT_ID }}
+          STORE_CLIENT_SECRET: ${{ secrets.STORE_CLIENT_SECRET }}
+          STORE_APP_ID: ${{ secrets.STORE_APP_ID }}

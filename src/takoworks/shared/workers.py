@@ -56,7 +56,10 @@ class TaskRunner:
             try:
                 fn(self._cancel_event, log)
                 self._q.put(("done", ""))
-            except Exception:
+            except Exception as exc:
+                if self._cancel_event.is_set() and "Cancelado" in str(exc):
+                    self._q.put(("done", ""))
+                    return
                 self._q.put(("error", traceback.format_exc()))
 
         threading.Thread(target=run, daemon=True).start()
