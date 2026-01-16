@@ -123,6 +123,7 @@ class _PreviewWindow(tk.Toplevel):
         ttk.Button(actions, text="Suprimir pagina", command=self._toggle_suppress_page).pack(side="left", padx=(6, 0))
         ttk.Button(actions, text="Guardar", command=self._save_selection).pack(side="left", padx=(6, 0))
         ttk.Button(actions, text="Cargar", command=self._load_selection).pack(side="left", padx=(6, 0))
+        ttk.Button(actions, text="Exportar PDF", command=self._export_pdf).pack(side="left", padx=(6, 0))
         ttk.Button(top, text="Restablecer", command=self._reset_page).grid(row=0, column=4, padx=(10, 0))
         ttk.Button(top, text="Cerrar", command=self._accept_and_close).grid(row=0, column=5, padx=(10, 0))
 
@@ -532,6 +533,94 @@ class _PreviewWindow(tk.Toplevel):
         crop_by_page = data.get("crop_rect_by_page", {})
         self.selection.crop_rect_by_page = {int(k): tuple(v) for k, v in crop_by_page.items()}
         self._render_page()
+
+    def _export_pdf(self):
+        default_name = f"{self.pdf_path.stem}_recortado.pdf"
+        p = filedialog.asksaveasfilename(
+            defaultextension=".pdf",
+            filetypes=[("PDF", "*.pdf")],
+            initialdir=str(self.pdf_path.parent),
+            initialfile=default_name,
+        )
+        if not p:
+            return
+        out_path = Path(p)
+        if out_path.resolve() == self.pdf_path.resolve():
+            messagebox.showerror("Exportar PDF", "Elige otro nombre para no sobrescribir el original.")
+            return
+        try:
+            self._export_pdf_with_selection(out_path)
+        except Exception as exc:
+            messagebox.showerror("Exportar PDF", str(exc))
+            return
+        messagebox.showinfo("Exportar PDF", f"PDF exportado: {p}")
+
+    def _export_pdf_with_selection(self, out_path: Path) -> None:
+        from . import core as scan_core
+
+        dpi = int(getattr(scan_core, "OCR_DPI", 250))
+        zoom = dpi / 72.0
+
+        out_doc = fitz.open()
+        try:
+            for page_index in range(len(self.doc)):
+                page_num = page_index + 1
+                if page_num in self.selection.suppress_pages:
+                    continue
+
+                page = self.doc.load_page(page_index)
+                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=True)
+                bgr = _pixmap_to_bgr(pix)
+
+                polys = self.selection.skip_polys_by_page.get(page_num, [])
+                circles = self.selection.skip_circles_by_page.get(page_num, [])
+                bgr = scan_core.apply_skip_marks(bgr, polys, circles)
+
+                crop_rect = self.selection.crop_rect_by_page.get(page_num) or self.selection.crop_rect
+                if crop_rect is not None:
+                    x0, x1, y0, y1 = self._crop_rect_bounds(crop_rect, bgr.shape[1], bgr.shape[0])
+                    bgr = bgr[y0:y1, x0:x1].copy()
+
+                if bgr is None or bgr.size == 0:
+                    continue
+
+                ok, buf = cv2.imencode(".png", bgr)
+                if not ok:
+                    raise RuntimeError(f"No pude codificar pagina {page_num}.")
+
+                h, w = bgr.shape[:2]
+                page_w = w * 72.0 / dpi
+                page_h = h * 72.0 / dpi
+                new_page = out_doc.new_page(width=page_w, height=page_h)
+                new_page.insert_image(fitz.Rect(0, 0, page_w, page_h), stream=buf.tobytes())
+
+            if out_doc.page_count == 0:
+                raise RuntimeError("No hay paginas para exportar.")
+
+            out_doc.save(str(out_path), deflate=True, garbage=4)
+        finally:
+            out_doc.close()
+
+    def _crop_rect_bounds(
+        self,
+        rect: Tuple[float, float, float, float],
+        w: int,
+        h: int,
+    ) -> Tuple[int, int, int, int]:
+        left, right, top, bottom = rect
+        left = max(0.0, min(1.0, float(left)))
+        right = max(0.0, min(1.0, float(right)))
+        top = max(0.0, min(1.0, float(top)))
+        bottom = max(0.0, min(1.0, float(bottom)))
+
+        x0 = max(0, min(w, int(w * left)))
+        x1 = max(0, min(w, int(w * right)))
+        y0 = max(0, min(h, int(h * top)))
+        y1 = max(0, min(h, int(h * bottom)))
+
+        if x1 <= x0 + 1 or y1 <= y0 + 1:
+            return 0, w, 0, h
+        return x0, x1, y0, y1
 
     def _reset_page(self):
         self.selection.skip_polys_by_page.pop(self._current_page(), None)

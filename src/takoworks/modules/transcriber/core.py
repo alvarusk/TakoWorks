@@ -211,6 +211,8 @@ def _load_price_table() -> Dict[str, Dict[str, float]]:
 _PRICE_TABLE = _load_price_table()
 _WARNED_PRICING: Set[str] = set()
 _WARNED_MISSING_USAGE: Set[str] = set()
+_WARNED_JA_TAGGER: bool = False
+_JA_TAGGER_FAILED: bool = False
 
 
 def estimate_cost(model_key: str, prompt_tokens: int, completion_tokens: int) -> float:
@@ -341,6 +343,27 @@ def persist_costs_to_supabase(
 _ja_tagger: Optional[Tagger]          = None
 _ja_dict_en: Optional[Dict[str, List[str]]] = None  # japonés → glosas EN
 _zh_dict_en: Optional[Dict[str, List[str]]] = None  # chino   → glosas EN
+
+
+def _ensure_ja_tagger() -> Optional[Tagger]:
+    global _ja_tagger, _WARNED_JA_TAGGER, _JA_TAGGER_FAILED
+    if _ja_tagger is not None:
+        return _ja_tagger
+    if _JA_TAGGER_FAILED:
+        return None
+    try:
+        _ja_tagger = Tagger()
+    except Exception as e:
+        _JA_TAGGER_FAILED = True
+        if not _WARNED_JA_TAGGER:
+            print(
+                "[JA] No se pudo iniciar Tagger (fugashi/UniDic). "
+                "Se usa kakasi simple y se omite analisis diccionario. "
+                f"Detalle: {e}"
+            )
+            _WARNED_JA_TAGGER = True
+        _ja_tagger = None
+    return _ja_tagger
 
 
 # ============================================================
@@ -713,8 +736,9 @@ def analyze_japanese_morph(text: str) -> str:
         print(f"[JA dict] Directorio no encontrado: {YOMI_JA_DIR}")
         return ""
 
-    if _ja_tagger is None:
-        _ja_tagger = Tagger()
+    tagger = _ensure_ja_tagger()
+    if tagger is None:
+        return ""
     if _ja_dict_en is None:
         _ja_dict_en = load_yomitan_dict(YOMI_JA_DIR)
     if _ja_dict_en is not None:
@@ -723,7 +747,7 @@ def analyze_japanese_morph(text: str) -> str:
     tokens_desc: List[str] = []
     interesting_pos = {"名詞", "動詞", "形容詞", "副詞", "助詞"}
 
-    for word in _ja_tagger(text):
+    for word in tagger(text):
         surface = word.surface
         lemma = getattr(word.feature, "lemma", surface) or surface
         main_pos = word.pos.split("-")[0]  # p.ej. 名詞-普通名詞-一般 → 名詞
@@ -1145,8 +1169,7 @@ def transcribe_ass(
         refined_lines = refine_punctuation_free(raw_lines, lang)
 
         romaji_converter = build_romaji_converter() if (lang == "ja" and do_roman_morph) else None
-        if do_roman_morph and lang == "ja" and _ja_tagger is None:
-            _ja_tagger = Tagger()
+        ja_tagger = _ensure_ja_tagger() if (lang == "ja" and do_roman_morph) else None
 
         for i, (ev, text) in enumerate(zip(events, refined_lines), start=1):
             base_text = (text or "").strip()
@@ -1159,15 +1182,17 @@ def transcribe_ass(
                 if lang == "ja":
                     romaji = ""
                     if romaji_converter is not None:
-                        if _ja_tagger is None:
-                            _ja_tagger = Tagger()
-                        romaji = japanese_to_romaji_pretty(base_text, romaji_converter, _ja_tagger)
+                        if ja_tagger is not None:
+                            romaji = japanese_to_romaji_pretty(base_text, romaji_converter, ja_tagger)
+                        else:
+                            romaji = japanese_to_romaji_line(base_text, romaji_converter)
                     if romaji:
                         lines.append("{" + _ass_sanitize_braces(romaji) + "}")
 
-                    morph_line = analyze_japanese_morph(base_text)
-                    if morph_line:
-                        lines.append(_ass_hide(morph_line))
+                    if ja_tagger is not None:
+                        morph_line = analyze_japanese_morph(base_text)
+                        if morph_line:
+                            lines.append(_ass_hide(morph_line))
 
                 elif lang == "zh":
                     pinyin = text_to_pinyin(base_text)
@@ -1194,8 +1219,6 @@ def add_roman_morph_to_subs(subs: pysubs2.SSAFile, lang: str) -> pysubs2.SSAFile
     - Respeta líneas adicionales ya existentes (por ejemplo, traducciones).
     """
 
-    global _ja_tagger
-
     # Seleccionamos TODAS las líneas de diálogo con texto no vacío,
     # sin importar tiempos ni estilos.
     events = [
@@ -1213,10 +1236,10 @@ def add_roman_morph_to_subs(subs: pysubs2.SSAFile, lang: str) -> pysubs2.SSAFile
 
     # Preparar recursos según el idioma
     romaji_converter = None
+    ja_tagger = None
     if lang == "ja":
         romaji_converter = build_romaji_converter()
-        if _ja_tagger is None:
-            _ja_tagger = Tagger()
+        ja_tagger = _ensure_ja_tagger()
 
     for i, ev in enumerate(events, start=1):
         raw_text = (ev.text or "")
@@ -1236,15 +1259,19 @@ def add_roman_morph_to_subs(subs: pysubs2.SSAFile, lang: str) -> pysubs2.SSAFile
         if lang == "ja":
             # Romaji "bonito"
             romaji = ""
-            if romaji_converter is not None and _ja_tagger is not None:
-                romaji = japanese_to_romaji_pretty(base_text, romaji_converter, _ja_tagger)
+            if romaji_converter is not None:
+                if ja_tagger is not None:
+                    romaji = japanese_to_romaji_pretty(base_text, romaji_converter, ja_tagger)
+                else:
+                    romaji = japanese_to_romaji_line(base_text, romaji_converter)
             if romaji:
                 lines.append("{" + _ass_sanitize_braces(romaji) + "}")
 
             # Análisis diccionario JA→EN (si tienes jpdict configurado)
-            morph_line = analyze_japanese_morph(base_text)
-            if morph_line:
-                lines.append(_ass_hide(morph_line))
+            if ja_tagger is not None:
+                morph_line = analyze_japanese_morph(base_text)
+                if morph_line:
+                    lines.append(_ass_hide(morph_line))
 
         elif lang == "zh":
             # Pinyin
