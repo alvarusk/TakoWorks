@@ -59,6 +59,8 @@ class _SelectionState:
         self.suppress_pages: set[int] = set()
         self.crop_rect: Optional[Tuple[float, float, float, float]] = None
         self.crop_rect_by_page: Dict[int, Tuple[float, float, float, float]] = {}
+        self.vertical_cuts: List[float] = []
+        self.vertical_cuts_by_page: Dict[int, List[float]] = {}
 
 
 class _PreviewWindow(tk.Toplevel):
@@ -80,7 +82,7 @@ class _PreviewWindow(tk.Toplevel):
         self.preview_png = None
         self.bgr = None
 
-        self.drag_mode = "erase_poly"  # erase_poly | crop_rect
+        self.drag_mode = "erase_poly"  # erase_poly | crop_rect | vertical_cut
         self.crop_dragging = False
         self.crop_resize_edge = None
         self.crop_start_xy = None
@@ -119,6 +121,7 @@ class _PreviewWindow(tk.Toplevel):
         ttk.Label(actions, text="Pincel").pack(side="left", padx=(6, 2))
         ttk.Scale(actions, from_=5, to=80, orient="horizontal", variable=self.brush_var, command=self._on_brush_change).pack(side="left")
         ttk.Button(actions, text="Recorte", command=self._set_crop_mode).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text="Corte vertical", command=self._set_vcut_mode).pack(side="left", padx=(0, 4))
         ttk.Button(actions, text="Deshacer", command=self._undo_last).pack(side="left", padx=(0, 4))
         ttk.Button(actions, text="Suprimir pagina", command=self._toggle_suppress_page).pack(side="left", padx=(6, 0))
         ttk.Button(actions, text="Guardar", command=self._save_selection).pack(side="left", padx=(6, 0))
@@ -152,6 +155,7 @@ class _PreviewWindow(tk.Toplevel):
             text=(
                 "Arrastra para borrar con pincel (rojo). "
                 "Recorte: pulsa el boton y arrastra para crear un rectangulo. "
+                "Corte vertical: haz clic para crear una linea. "
                 "Pasa el raton por los lados para ajustar el recorte. "
                 "Teclas: Ctrl+Alt+Flecha izq/der paginas, Ctrl+Z deshacer."
             )
@@ -233,6 +237,12 @@ class _PreviewWindow(tk.Toplevel):
         if page_crop is not None:
             self._draw_crop_rect(page_crop, color="#ff9800", width=2)
 
+        cuts = self._active_vertical_cuts()
+        if cuts:
+            for xr in cuts:
+                x = int(xr * self.img_w)
+                self.canvas.create_line(x, 0, x, self.img_h, fill="#ff9800", width=2, dash=(4, 2), tags="overlay")
+
         if self.temp_poly:
             self.canvas.tag_raise(self.temp_poly)
         self._update_label()
@@ -250,16 +260,25 @@ class _PreviewWindow(tk.Toplevel):
         circle_count = len(self.selection.skip_circles_by_page.get(self._current_page(), []))
         suppressed = " | SUPRIMIDA" if self._current_page() in self.selection.suppress_pages else ""
         crop_note = " | crop=pagina" if self._current_page() in self.selection.crop_rect_by_page else ""
+        cut_count = len(self._active_vertical_cuts())
+        cut_note = f" | cortes={cut_count}" if cut_count else ""
         self.lbl.config(
             text=(
                 f"Pagina {self.page_index+1}/{len(self.doc)} | "
-                f"borrados={poly_count + circle_count}{suppressed}{crop_note}"
+                f"borrados={poly_count + circle_count}{suppressed}{crop_note}{cut_note}"
             )
         )
 
     def _on_press(self, evt):
         x = int(self.canvas.canvasx(evt.x))
         y = int(self.canvas.canvasy(evt.y))
+        if self.drag_mode == "vertical_cut":
+            if not self.img_w:
+                return
+            xr = max(0.0, min(1.0, x / float(self.img_w)))
+            self._store_vertical_cut(xr)
+            self._draw_overlays()
+            return
         if self.drag_mode == "crop_rect":
             edge = self._hit_test_crop_edge(x, y)
             if edge:
@@ -284,6 +303,8 @@ class _PreviewWindow(tk.Toplevel):
         self.brush_dots = [dot]
 
     def _on_drag(self, evt):
+        if self.drag_mode == "vertical_cut":
+            return
         if self.drag_mode == "crop_rect":
             x = int(self.canvas.canvasx(evt.x))
             y = int(self.canvas.canvasy(evt.y))
@@ -315,6 +336,8 @@ class _PreviewWindow(tk.Toplevel):
         self.brush_dots.append(dot)
 
     def _on_release(self, evt):
+        if self.drag_mode == "vertical_cut":
+            return
         if self.drag_mode == "crop_rect":
             if not (self.crop_dragging or self.crop_resize_edge):
                 return
@@ -373,6 +396,9 @@ class _PreviewWindow(tk.Toplevel):
             self._undo_last()
 
     def _on_move(self, evt):
+        if self.drag_mode == "vertical_cut":
+            self.canvas.config(cursor="sb_h_double_arrow")
+            return
         if self.drag_mode != "crop_rect":
             return
         x = int(self.canvas.canvasx(evt.x))
@@ -397,9 +423,20 @@ class _PreviewWindow(tk.Toplevel):
         self.drag_mode = "crop_rect"
         self.canvas.config(cursor="crosshair")
 
+    def _set_vcut_mode(self):
+        self.drag_mode = "vertical_cut"
+        if self.crop_temp_id is not None:
+            self.canvas.delete(self.crop_temp_id)
+            self.crop_temp_id = None
+        self.canvas.config(cursor="sb_h_double_arrow")
+
     def _active_crop_rect(self) -> Optional[Tuple[float, float, float, float]]:
         page = self._current_page()
         return self.selection.crop_rect_by_page.get(page) or self.selection.crop_rect
+
+    def _active_vertical_cuts(self) -> List[float]:
+        page = self._current_page()
+        return self.selection.vertical_cuts_by_page.get(page, [])
 
     def _store_crop_rect(self, rect: Tuple[float, float, float, float]) -> None:
         page = self._current_page()
@@ -409,6 +446,12 @@ class _PreviewWindow(tk.Toplevel):
             self.selection.crop_rect = rect
         else:
             self.selection.crop_rect_by_page[page] = rect
+
+    def _store_vertical_cut(self, xr: float) -> None:
+        page = self._current_page()
+        cuts = self.selection.vertical_cuts_by_page.setdefault(page, [])
+        cuts.append(float(xr))
+        cuts.sort()
 
     def _rect_to_px(self, rect: Tuple[float, float, float, float]) -> Tuple[int, int, int, int]:
         left, right, top, bottom = rect
@@ -478,6 +521,14 @@ class _PreviewWindow(tk.Toplevel):
             self.brush_radius = 20
 
     def _undo_last(self):
+        page = self._current_page()
+        cuts = self.selection.vertical_cuts_by_page.get(page)
+        if cuts:
+            cuts.pop()
+            if not cuts:
+                self.selection.vertical_cuts_by_page.pop(page, None)
+            self._draw_overlays()
+            return
         circles = self.selection.skip_circles_by_page.get(self._current_page(), [])
         if circles:
             circles.pop()
@@ -502,6 +553,8 @@ class _PreviewWindow(tk.Toplevel):
             "suppress_pages": sorted(self.selection.suppress_pages),
             "crop_rect": self.selection.crop_rect,
             "crop_rect_by_page": self.selection.crop_rect_by_page,
+            "vertical_cuts": [],
+            "vertical_cuts_by_page": self.selection.vertical_cuts_by_page,
         }
         Path(p).write_text(json.dumps(data, indent=2), encoding="utf-8")
 
@@ -532,6 +585,12 @@ class _PreviewWindow(tk.Toplevel):
 
         crop_by_page = data.get("crop_rect_by_page", {})
         self.selection.crop_rect_by_page = {int(k): tuple(v) for k, v in crop_by_page.items()}
+        self.selection.vertical_cuts = []
+        cuts_by_page = data.get("vertical_cuts_by_page", {})
+        self.selection.vertical_cuts_by_page = {int(k): [float(x) for x in v] for k, v in cuts_by_page.items()}
+        legacy_cuts = [float(x) for x in data.get("vertical_cuts", [])]
+        if legacy_cuts and 1 not in self.selection.vertical_cuts_by_page:
+            self.selection.vertical_cuts_by_page[1] = legacy_cuts
         self._render_page()
 
     def _export_pdf(self):
@@ -627,6 +686,7 @@ class _PreviewWindow(tk.Toplevel):
         self.selection.skip_circles_by_page.pop(self._current_page(), None)
         self.selection.suppress_pages.discard(self._current_page())
         self.selection.crop_rect_by_page.pop(self._current_page(), None)
+        self.selection.vertical_cuts_by_page.pop(self._current_page(), None)
         self._draw_overlays()
     
     def _toggle_suppress_page(self):
@@ -664,13 +724,10 @@ class ScannerPanel(ttk.Frame):
         self.runner = runner
         self.cfg = cfg
 
-        self.input_var = tk.StringVar(value=cfg["last"].get("pdf_in", ""))
-        self.batch_var = tk.BooleanVar(value=bool(cfg["last"].get("scanner_batch", False)))
-        self.out_var = tk.StringVar(value=cfg["last"].get("out_dir", ""))
-
-        self.xlsx_var = tk.StringVar(value="")  # se llena tras correr
-
-        self.yomitoku_var = tk.StringVar(value=cfg["last"].get("yomitoku_exe", ""))
+        last_pdf = cfg["last"].get("pdf_in", "")
+        self.input_var = tk.StringVar(value=last_pdf)
+        out_default = os.path.dirname(last_pdf) if last_pdf else cfg["last"].get("out_dir", "")
+        self.out_var = tk.StringVar(value=out_default)
 
         self.selection = _SelectionState()
         crop_left = cfg["last"].get("cut_left_ratio", None)
@@ -688,15 +745,8 @@ class ScannerPanel(ttk.Frame):
         if None not in (crop_left, crop_right, crop_top, crop_bottom):
             self.selection.crop_rect = (float(crop_left), float(crop_right), float(crop_top), float(crop_bottom))
 
-        self.reuse_images_var = tk.BooleanVar(value=bool(cfg["last"].get("reuse_images", True)))
-        self.reuse_md_var = tk.BooleanVar(value=bool(cfg["last"].get("reuse_md", True)))
-        self.cleanup_var = tk.BooleanVar(value=bool(cfg["last"].get("scanner_cleanup", False)))
-
-        self.drop_empty_var = tk.BooleanVar(value=bool(cfg["last"].get("scanner_drop_empty", False)))
-
         self.out_excel_var = tk.BooleanVar(value=bool(cfg["last"].get("scanner_out_excel", True)))
-        self.out_ass_var = tk.BooleanVar(value=bool(cfg["last"].get("scanner_out_ass", True)))
-        self.out_txt_var = tk.BooleanVar(value=bool(cfg["last"].get("scanner_out_txt", False)))
+        self.out_txt_var = tk.BooleanVar(value=bool(cfg["last"].get("scanner_out_txt", True)))
 
         self._build()
 
@@ -704,42 +754,30 @@ class ScannerPanel(ttk.Frame):
         frm = ttk.Frame(self)
         frm.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Input (PDF or folder)
+        # Input (PDF)
         r0 = ttk.Frame(frm); r0.pack(fill="x", pady=3)
-        ttk.Label(r0, text="Input (PDF o carpeta)").pack(side="left")
+        ttk.Label(r0, text="Input (PDF)").pack(side="left")
         ttk.Entry(r0, textvariable=self.input_var).pack(side="left", fill="x", expand=True, padx=6)
-        ttk.Button(r0, text="PDF…", command=self._pick_pdf).pack(side="left")
-        ttk.Button(r0, text="Carpeta…", command=self._pick_folder).pack(side="left", padx=(6, 0))
+        ttk.Button(r0, text="PDF...", command=self._pick_pdf).pack(side="left")
 
-        r0b = ttk.Frame(frm); r0b.pack(fill="x", pady=(0, 6))
-        ttk.Checkbutton(r0b, text="Batch (procesar carpeta)", variable=self.batch_var).pack(side="left")
-
-        # Output folder
+        # Output folder (same as input)
         r1 = ttk.Frame(frm); r1.pack(fill="x", pady=3)
-        ttk.Label(r1, text="Output Folder").pack(side="left")
-        ttk.Entry(r1, textvariable=self.out_var).pack(side="left", fill="x", expand=True, padx=6)
-        ttk.Button(r1, text="Browse", command=self._pick_out).pack(side="left")
+        ttk.Label(r1, text="Output (misma carpeta)").pack(side="left")
+        ttk.Entry(r1, textvariable=self.out_var, state="readonly").pack(side="left", fill="x", expand=True, padx=6)
 
-        # YomiToku exe (optional)
-        r2 = ttk.Frame(frm); r2.pack(fill="x", pady=3)
-        ttk.Label(r2, text="YomiToku exe (opcional)").pack(side="left")
-        ttk.Entry(r2, textvariable=self.yomitoku_var).pack(side="left", fill="x", expand=True, padx=6)
-        ttk.Button(r2, text="Browse", command=self._pick_yomitoku).pack(side="left")
-
-        # Manual selection
-        sel_frame = ttk.LabelFrame(frm, text="Seleccion manual (borrado de zonas + cortes)")
+        # Cropping / viewer
+        sel_frame = ttk.LabelFrame(frm, text="Cropping (visor PDF)")
         sel_frame.pack(fill="x", pady=8)
         rr = ttk.Frame(sel_frame); rr.pack(fill="x", padx=8, pady=6)
-        ttk.Button(rr, text="Vista previa / borrar zonas", command=self._open_preview).pack(side="left")
+        ttk.Button(rr, text="Abrir visor", command=self._open_preview).pack(side="left")
         self.sel_label = ttk.Label(rr, text=self._selection_label_text())
         self.sel_label.pack(side="left", padx=(10, 0))
 
         # Outputs
-        outs = ttk.LabelFrame(frm, text="Salidas")
+        outs = ttk.LabelFrame(frm, text="Output")
         outs.pack(fill="x", pady=6)
         roo = ttk.Frame(outs); roo.pack(fill="x", padx=8, pady=6)
         ttk.Checkbutton(roo, text="Excel", variable=self.out_excel_var).pack(side="left", padx=(0, 10))
-        ttk.Checkbutton(roo, text="ASS (Gen_Main)", variable=self.out_ass_var).pack(side="left", padx=(0, 10))
         ttk.Checkbutton(roo, text="TXT", variable=self.out_txt_var).pack(side="left", padx=(0, 10))
 
         # Buttons
@@ -747,23 +785,18 @@ class ScannerPanel(ttk.Frame):
         self.btn_run = ttk.Button(btns, text="Ejecutar Scanner", command=self._run_scanner)
         self.btn_run.pack(side="left")
 
-        self.btn_excel_ass = ttk.Button(btns, text="Excel → ASS (Gen_Main)", command=self._run_excel_to_ass)
-        self.btn_excel_ass.pack(side="left", padx=6)
-
         self.btn_cancel = ttk.Button(btns, text="Cancel", command=self.runner.cancel, state="disabled")
         self.btn_cancel.pack(side="left", padx=6)
-
-        # Excel field (shows last xlsx)
-        r3 = ttk.Frame(frm); r3.pack(fill="x", pady=3)
-        ttk.Label(r3, text="Excel (último)").pack(side="left")
-        ttk.Entry(r3, textvariable=self.xlsx_var).pack(side="left", fill="x", expand=True, padx=6)
-        ttk.Button(r3, text="Browse", command=self._pick_xlsx).pack(side="left")
 
     def _selection_label_text(self) -> str:
         skip_pages = len(self.selection.skip_polys_by_page) + len(self.selection.skip_circles_by_page)
         sup_pages = len(self.selection.suppress_pages)
         crop_pages = len(self.selection.crop_rect_by_page)
-        return f"Zonas borradas: {skip_pages} pags | Suprimidas: {sup_pages} | Crop paginas: {crop_pages}"
+        cut_pages = len(self.selection.vertical_cuts_by_page)
+        return (
+            f"Zonas borradas: {skip_pages} pags | Suprimidas: {sup_pages} | "
+            f"Crop paginas: {crop_pages} | Cortes: {cut_pages}"
+        )
 
     def _sync_ratio_entries(self):
         return
@@ -771,15 +804,12 @@ class ScannerPanel(ttk.Frame):
     def _open_preview(self):
         path = Path(self.input_var.get().strip())
         if not path.exists():
-            messagebox.showwarning("Aviso", "Selecciona un PDF o una carpeta primero.")
+            messagebox.showwarning("Aviso", "Selecciona un PDF primero.")
             return
 
         if path.is_dir():
-            pdfs = sorted([p for p in path.glob("*.pdf") if p.is_file()])
-            if not pdfs:
-                messagebox.showwarning("Aviso", "No encontré PDFs en esa carpeta.")
-                return
-            pdf_path = pdfs[0]
+            messagebox.showwarning("Aviso", "Selecciona un PDF, no una carpeta.")
+            return
         else:
             pdf_path = path
 
@@ -802,39 +832,11 @@ class ScannerPanel(ttk.Frame):
         p = filedialog.askopenfilename(filetypes=[("PDF", "*.pdf")])
         if p:
             self.input_var.set(p)
-            self.batch_var.set(False)
-            if not self.out_var.get().strip():
-                self.out_var.set(os.path.dirname(p))
-
-    def _pick_folder(self):
-        p = filedialog.askdirectory()
-        if p:
-            self.input_var.set(p)
-            self.batch_var.set(True)
-            if not self.out_var.get().strip():
-                self.out_var.set(p)
-
-    def _pick_xlsx(self):
-        p = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx")])
-        if p:
-            self.xlsx_var.set(p)
-            if not self.out_var.get().strip():
-                self.out_var.set(os.path.dirname(p))
-
-    def _pick_out(self):
-        p = filedialog.askdirectory()
-        if p:
-            self.out_var.set(p)
-
-    def _pick_yomitoku(self):
-        p = filedialog.askopenfilename(filetypes=[("Executable", "*.exe"), ("All", "*.*")])
-        if p:
-            self.yomitoku_var.set(p)
+            self.out_var.set(os.path.dirname(p))
 
     def _lock_ui(self, running: bool):
         state = "disabled" if running else "normal"
         self.btn_run.configure(state=state)
-        self.btn_excel_ass.configure(state=state)
         self.btn_cancel.configure(state="normal" if running else "disabled")
 
     def _run_scanner(self):
@@ -844,32 +846,23 @@ class ScannerPanel(ttk.Frame):
         self._sync_ratio_entries()
 
         inp = self.input_var.get().strip()
-        out_dir = self.out_var.get().strip() or (os.path.dirname(inp) if inp else "")
-
         if not inp:
-            messagebox.showerror("Error", "Selecciona un PDF o una carpeta.")
+            messagebox.showerror("Error", "Selecciona un PDF.")
             return
-        if not os.path.exists(inp):
-            messagebox.showerror("Error", "Ruta de entrada no válida.")
-            return
-        if not out_dir or not os.path.isdir(out_dir):
-            messagebox.showerror("Error", "Selecciona un output folder válido.")
+        if not os.path.isfile(inp):
+            messagebox.showerror("Error", "Ruta de entrada no valida.")
             return
 
-        if not (self.out_excel_var.get() or self.out_ass_var.get() or self.out_txt_var.get()):
-            messagebox.showwarning("Aviso", "Selecciona al menos una salida (Excel/ASS/TXT).")
-            return
+        out_dir = os.path.dirname(inp)
+        self.out_var.set(out_dir)
 
-        if (not self.reuse_images_var.get() and not self.reuse_md_var.get()):
-            if self.selection.crop_rect is None or any(v is None for v in self.selection.crop_rect):
-                messagebox.showwarning("Faltan cortes", "Abre la vista previa y marca el rectangulo.")
-                return
+        if not (self.out_excel_var.get() or self.out_txt_var.get()):
+            messagebox.showwarning("Aviso", "Selecciona al menos una salida (Excel/TXT).")
+            return
 
         # persist config
         self.cfg["last"]["pdf_in"] = inp
         self.cfg["last"]["out_dir"] = out_dir
-        self.cfg["last"]["scanner_batch"] = bool(self.batch_var.get())
-        self.cfg["last"]["yomitoku_exe"] = self.yomitoku_var.get().strip()
 
         if self.selection.crop_rect is None:
             l = r = t = b = None
@@ -882,48 +875,27 @@ class ScannerPanel(ttk.Frame):
         self.cfg["last"]["cut_upper_ratio"] = t
         self.cfg["last"]["cut_lower_ratio"] = b
 
-        manual_selection = bool(self.selection.skip_polys_by_page or self.selection.skip_circles_by_page or self.selection.suppress_pages)
-        use_reuse_images = bool(self.reuse_images_var.get()) if not manual_selection else False
-        use_reuse_md = bool(self.reuse_md_var.get()) if not manual_selection else False
-        self.cfg["last"]["reuse_images"] = bool(self.reuse_images_var.get())
-        self.cfg["last"]["reuse_md"] = bool(self.reuse_md_var.get())
-        self.cfg["last"]["scanner_cleanup"] = bool(self.cleanup_var.get())
-        self.cfg["last"]["scanner_drop_empty"] = bool(self.drop_empty_var.get())
-
         self.cfg["last"]["scanner_out_excel"] = bool(self.out_excel_var.get())
-        self.cfg["last"]["scanner_out_ass"] = bool(self.out_ass_var.get())
         self.cfg["last"]["scanner_out_txt"] = bool(self.out_txt_var.get())
         save_config(self.cfg)
 
-        result = {"last_xlsx": ""}
-
         def job(cancel_event, log):
             from . import core
-            res = core.run_scanner(
+            core.run_gcloud_scanner(
                 input_path=inp,
                 out_dir=out_dir,
-                batch=bool(self.batch_var.get()),
+                make_excel=bool(self.out_excel_var.get()),
+                make_txt=bool(self.out_txt_var.get()),
                 crop_rect=self.selection.crop_rect,
                 crop_rect_by_page=self.selection.crop_rect_by_page,
-                reuse_images=use_reuse_images,
-                reuse_md=use_reuse_md,
-                make_excel=bool(self.out_excel_var.get()),
-                make_ass=bool(self.out_ass_var.get()),
-                make_txt=bool(self.out_txt_var.get()),
-                cleanup=bool(self.cleanup_var.get()),
-                yomitoku_exe=self.yomitoku_var.get().strip() or None,
                 skip_polys_by_page=self.selection.skip_polys_by_page,
                 skip_circles_by_page=self.selection.skip_circles_by_page,
                 suppress_pages=sorted(self.selection.suppress_pages),
-                drop_empty_pages=bool(self.drop_empty_var.get()),
+                vertical_cuts=self.selection.vertical_cuts,
+                vertical_cuts_by_page=self.selection.vertical_cuts_by_page,
                 log=log,
                 cancel_event=cancel_event,
             )
-
-            if (not bool(self.batch_var.get())) and res:
-                only = next(iter(res.values()))
-                if only and getattr(only, "xlsx", None):
-                    result["last_xlsx"] = only.xlsx
 
         def done(ok, err):
             self._lock_ui(False)
@@ -932,44 +904,6 @@ class ScannerPanel(ttk.Frame):
                     return
                 messagebox.showerror("Scanner", str(err) if err else "Error")
                 return
-            if result["last_xlsx"]:
-                self.xlsx_var.set(result["last_xlsx"])
 
         self._lock_ui(True)
-        self.runner.start("Scanner: OCR → Excel/ASS/TXT", job, on_done=done)
-
-    def _run_excel_to_ass(self):
-        if self.runner.is_busy():
-            return
-
-        xlsx = self.xlsx_var.get().strip()
-        out_dir = self.out_var.get().strip() or (os.path.dirname(xlsx) if xlsx else "")
-
-        if not xlsx or not os.path.isfile(xlsx):
-            messagebox.showerror("Error", "Select a valid Excel file.")
-            return
-        if not out_dir or not os.path.isdir(out_dir):
-            messagebox.showerror("Error", "Select a valid output folder.")
-            return
-
-        self.cfg["last"]["out_dir"] = out_dir
-        save_config(self.cfg)
-
-        def job(cancel_event, log):
-            from . import core
-            ass_path = core.excel_to_ass_with_styles(
-                xlsx_path=xlsx,
-                out_dir=out_dir,
-                style_name="Gen_Main",
-                log=log,
-                cancel_event=cancel_event,
-            )
-            log(f"[OK] ASS: {ass_path}")
-
-        def done(ok, err):
-            self._lock_ui(False)
-            if not ok:
-                messagebox.showerror("Scanner", str(err) if err else "Error")
-
-        self._lock_ui(True)
-        self.runner.start("Scanner: Excel → ASS", job, on_done=done)
+        self.runner.start("Scanner: GCV -> Excel/TXT", job, on_done=done)

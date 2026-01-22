@@ -10,6 +10,7 @@ from ..modules.transcriber.panel import TranscriberPanel
 from ..modules.stylizer.panel import StylizerPanel
 from ..modules.unworder.panel import UnworderPanel
 from ..modules.scanner.panel import ScannerPanel
+from ..modules.transferer.panel import TransfererPanel
 from ..modules.corrector.panel import CorrectorPanel
 
 class MainWindow(ttk.Frame):
@@ -44,6 +45,7 @@ class MainWindow(ttk.Frame):
         self.notebook.add(StylizerPanel(self.notebook, self.runner, self.cfg), text="Stylizer")
         self.notebook.add(UnworderPanel(self.notebook, self.runner, self.cfg), text="Unworder")
         self.notebook.add(ScannerPanel(self.notebook, self.runner, self.cfg), text="Scanner")
+        self.notebook.add(TransfererPanel(self.notebook, self.runner, self.cfg), text="Transferer")
         self.notebook.add(CorrectorPanel(self.notebook, self.runner, self.cfg), text="Corrector")
 
     def _restore_splitter(self):

@@ -4,6 +4,11 @@ import os
 import re
 import sys
 import subprocess
+import json
+import time
+import uuid
+import tempfile
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -104,6 +109,509 @@ def _check_cancel(cancel_event) -> None:
 def safe_name(name: str) -> str:
     """Nombre seguro para carpeta/archivo (evita #, espacios, etc.)."""
     return re.sub(r"[^0-9A-Za-z._-]+", "_", name).strip("_")
+
+
+# =========================
+#  Google Cloud Vision (PDF OCR)
+# =========================
+GCV_BUCKET_ENV = "TAKOWORKS_GCLOUD_BUCKET"
+GCV_DEFAULT_BUCKET = "scanner-bucket1"
+GCV_BATCH_SIZE = 20
+GCV_POLL_SECONDS = 10
+GCV_STABLE_POLLS = 2
+GCV_TIMEOUT_SECONDS = 900
+
+
+def _gcloud_exe() -> str:
+    env = os.environ.get("TAKOWORKS_GCLOUD_EXE", "").strip()
+    if env and Path(env).is_file():
+        return env
+
+    exe = shutil.which("gcloud")
+    if exe:
+        return exe
+
+    candidates = [
+        Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"))
+        / "Google"
+        / "Cloud SDK"
+        / "google-cloud-sdk"
+        / "bin"
+        / "gcloud.cmd",
+        Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
+        / "Google"
+        / "Cloud SDK"
+        / "google-cloud-sdk"
+        / "bin"
+        / "gcloud.cmd",
+        Path(os.environ.get("LOCALAPPDATA", ""))
+        / "Google"
+        / "Cloud SDK"
+        / "google-cloud-sdk"
+        / "bin"
+        / "gcloud.cmd",
+    ]
+    for cand in candidates:
+        if cand.is_file():
+            return str(cand)
+    return ""
+
+
+def _gcloud_cmd(args: List[str]) -> Tuple[object, bool]:
+    exe = _gcloud_exe()
+    if not exe:
+        raise RuntimeError(
+            "No se encontro gcloud. Agrega gcloud al PATH o define TAKOWORKS_GCLOUD_EXE."
+        )
+    if exe.lower().endswith((".cmd", ".bat")):
+        cmdline = subprocess.list2cmdline([exe, *args])
+        return cmdline, True
+    return [exe, *args], False
+
+
+def _run_cmd(cmd: List[str], log: LogFn, cancel_event=None) -> str:
+    _check_cancel(cancel_event)
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as exc:
+        stdout = exc.stdout.strip() if exc.stdout else ""
+        stderr = exc.stderr.strip() if exc.stderr else ""
+        raise RuntimeError(f"Command failed: {' '.join(cmd)}\n{stdout}\n{stderr}")
+    return res.stdout.strip()
+
+
+def _run_gcloud(args: List[str], log: LogFn, cancel_event=None) -> str:
+    cmd, use_shell = _gcloud_cmd(args)
+    if use_shell:
+        return _run_shell_cmd(cmd, log, cancel_event)
+    return _run_cmd(cmd, log, cancel_event)
+
+
+def _run_shell_cmd(cmdline: str, log: LogFn, cancel_event=None) -> str:
+    _check_cancel(cancel_event)
+    try:
+        res = subprocess.run(cmdline, capture_output=True, text=True, check=True, shell=True)
+    except subprocess.CalledProcessError as exc:
+        stdout = exc.stdout.strip() if exc.stdout else ""
+        stderr = exc.stderr.strip() if exc.stderr else ""
+        raise RuntimeError(f"Command failed: {cmdline}\n{stdout}\n{stderr}")
+    return res.stdout.strip()
+
+
+def _gcv_bucket() -> str:
+    bucket = os.environ.get(GCV_BUCKET_ENV, "").strip()
+    return bucket or GCV_DEFAULT_BUCKET
+
+
+def _gcv_run_id() -> str:
+    return f"{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+
+
+def _gcv_upload_pdf(pdf_path: Path, bucket: str, run_id: str, log: LogFn, cancel_event=None) -> str:
+    safe = safe_name(pdf_path.stem)
+    suffix = pdf_path.suffix.lower() or ".pdf"
+    gcs_path = f"gs://{bucket}/input/{safe}_{run_id}{suffix}"
+    log(f"[GCV] Upload: {pdf_path.name} -> {gcs_path}")
+    _run_gcloud(["storage", "cp", str(pdf_path), gcs_path], log, cancel_event)
+    return gcs_path
+
+
+def _gcv_start_ocr(input_gcs: str, output_prefix: str, log: LogFn, cancel_event=None) -> None:
+    log(f"[GCV] OCR request: {input_gcs} -> {output_prefix}")
+    _run_gcloud(
+        ["ml", "vision", "detect-text-pdf", input_gcs, output_prefix, f"--batch-size={GCV_BATCH_SIZE}"],
+        log,
+        cancel_event,
+    )
+
+
+def _gcv_list_json(output_prefix: str, log: LogFn, cancel_event=None) -> List[str]:
+    try:
+        stdout = _run_gcloud(["storage", "ls", output_prefix], log, cancel_event)
+    except RuntimeError as exc:
+        msg = str(exc)
+        if "matched no objects" in msg:
+            return []
+        raise
+    if not stdout:
+        return []
+    files = []
+    for line in stdout.splitlines():
+        item = line.strip()
+        if item.startswith("gs://") and item.endswith(".json"):
+            files.append(item)
+    return files
+
+
+def _gcv_wait_for_output(output_prefix: str, log: LogFn, cancel_event=None) -> List[str]:
+    start = time.time()
+    last_count = -1
+    stable = 0
+    while (time.time() - start) < GCV_TIMEOUT_SECONDS:
+        _check_cancel(cancel_event)
+        files = _gcv_list_json(output_prefix, log, cancel_event)
+        if files:
+            count = len(files)
+            if count == last_count:
+                stable += 1
+            else:
+                stable = 0
+                last_count = count
+            if stable >= GCV_STABLE_POLLS:
+                return sorted(files)
+        time.sleep(GCV_POLL_SECONDS)
+    raise RuntimeError("Timeout esperando salida de Google Cloud Vision.")
+
+
+def _gcv_download_json(output_prefix: str, local_dir: Path, log: LogFn, cancel_event=None) -> List[Path]:
+    local_dir.mkdir(parents=True, exist_ok=True)
+    src = f"{output_prefix}*.json"
+    log(f"[GCV] Download: {src} -> {local_dir}")
+    _run_gcloud(["storage", "cp", src, str(local_dir)], log, cancel_event)
+    return sorted(local_dir.glob("*.json"))
+
+
+def _gcv_parse_text(payload) -> str:
+    if payload is None:
+        return ""
+    if isinstance(payload, dict):
+        if "fullTextAnnotation" in payload:
+            return payload.get("fullTextAnnotation", {}).get("text", "") or ""
+        if "responses" in payload:
+            for resp in payload.get("responses", []):
+                text = resp.get("fullTextAnnotation", {}).get("text", "") or ""
+                if text:
+                    return text
+        return ""
+    if isinstance(payload, list):
+        for item in payload:
+            text = _gcv_parse_text(item)
+            if text:
+                return text
+    return ""
+
+
+def _gcv_detect_document_text(img_path: Path, log: LogFn, cancel_event=None) -> str:
+    stdout = _run_gcloud(
+        ["ml", "vision", "detect-document", str(img_path), "--language-hints=ja", "--format=json"],
+        log,
+        cancel_event,
+    )
+    if not stdout:
+        return ""
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError:
+        return ""
+    return _gcv_parse_text(payload)
+
+
+def _render_page_bgr(doc: fitz.Document, page_index: int, dpi: int) -> np.ndarray:
+    zoom = dpi / 72.0
+    page = doc.load_page(page_index)
+    pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+    return pixmap_to_bgr(pix)
+
+
+def _apply_skip_masks(
+    bgr: np.ndarray,
+    skip_polys: List[List[Tuple[float, float]]],
+    skip_circles: List[Tuple[float, float, float]],
+) -> np.ndarray:
+    if not skip_polys and not skip_circles:
+        return bgr
+    h, w = bgr.shape[:2]
+    for poly in skip_polys:
+        if len(poly) < 3:
+            continue
+        pts = np.array(
+            [[int(x * w), int(y * h)] for x, y in poly],
+            dtype=np.int32,
+        )
+        cv2.fillPoly(bgr, [pts], (255, 255, 255))
+    for (xr, yr, rr) in skip_circles:
+        cx = int(xr * w)
+        cy = int(yr * h)
+        r = int(rr * min(w, h))
+        if r <= 0:
+            continue
+        cv2.circle(bgr, (cx, cy), r, (255, 255, 255), thickness=-1)
+    return bgr
+
+
+def _crop_bgr(
+    bgr: np.ndarray,
+    crop_rect: Optional[CropRect],
+) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
+    if crop_rect is None or any(v is None for v in crop_rect):
+        h, w = bgr.shape[:2]
+        return bgr, (0, w, 0, h)
+    left, right, top, bottom = crop_rect
+    h, w = bgr.shape[:2]
+    left = max(0.0, min(1.0, float(left)))
+    right = max(0.0, min(1.0, float(right)))
+    top = max(0.0, min(1.0, float(top)))
+    bottom = max(0.0, min(1.0, float(bottom)))
+    x0 = max(0, min(w, int(w * min(left, right))))
+    x1 = max(0, min(w, int(w * max(left, right))))
+    y0 = max(0, min(h, int(h * min(top, bottom))))
+    y1 = max(0, min(h, int(h * max(top, bottom))))
+    if x1 <= x0 + 1 or y1 <= y0 + 1:
+        return bgr, (0, w, 0, h)
+    return bgr[y0:y1, x0:x1].copy(), (x0, x1, y0, y1)
+
+
+def _split_by_vertical_cuts(bgr: np.ndarray, cuts_px: List[int]) -> List[np.ndarray]:
+    h, w = bgr.shape[:2]
+    cuts = sorted({x for x in cuts_px if 1 < x < (w - 1)})
+    if not cuts:
+        return [bgr]
+    edges = [0] + cuts + [w]
+    pairs = list(zip(edges[:-1], edges[1:]))
+    pairs = list(reversed(pairs))
+    cols: List[np.ndarray] = []
+    for xl, xr in pairs:
+        x0 = xl + INNER_MARGIN_PX
+        x1 = xr - INNER_MARGIN_PX
+        if x1 <= x0:
+            continue
+        if (x1 - x0) < 35:
+            continue
+        col = bgr[:, x0:x1].copy()
+        if not has_visible_ink_image(col):
+            continue
+        cols.append(col)
+    return cols or [bgr]
+
+
+def _gcv_ocr_images(
+    pdf_path: Path,
+    crop_rect: Optional[CropRect],
+    crop_rect_by_page: Dict[int, CropRect],
+    skip_polys_by_page: Dict[int, List[List[Tuple[float, float]]]],
+    skip_circles_by_page: Dict[int, List[Tuple[float, float, float]]],
+    suppress_pages: set[int],
+    vertical_cuts: List[float],
+    vertical_cuts_by_page: Dict[int, List[float]],
+    log: LogFn,
+    cancel_event=None,
+) -> List[str]:
+    doc = fitz.open(str(pdf_path))
+    lines: List[str] = []
+    run_id = _gcv_run_id()
+    tmp_dir = Path(tempfile.gettempdir()) / f"takoworks_gcv_img_{run_id}"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        total_pages = len(doc)
+        for pi in range(total_pages):
+            _check_cancel(cancel_event)
+            page_num = pi + 1
+            log(f"[GCV] Pagina {page_num}/{total_pages}")
+            if page_num in suppress_pages:
+                log(f"[GCV] Pagina {page_num} suprimida.")
+                continue
+
+            bgr_full = _render_page_bgr(doc, pi, OCR_DPI)
+            bgr_full = _apply_skip_masks(
+                bgr_full,
+                skip_polys_by_page.get(page_num, []),
+                skip_circles_by_page.get(page_num, []),
+            )
+
+            page_crop = crop_rect_by_page.get(page_num) or crop_rect
+            bgr_crop, (x0, _x1, _y0, _y1) = _crop_bgr(bgr_full, page_crop)
+
+            cuts = vertical_cuts_by_page.get(page_num, [])
+            cuts_px = []
+            if cuts:
+                full_w = bgr_full.shape[1]
+                for xr in cuts:
+                    x_full = int(xr * full_w)
+                    x_crop = x_full - x0
+                    cuts_px.append(x_crop)
+
+            columns = _split_by_vertical_cuts(bgr_crop, cuts_px)
+            for ci, col in enumerate(columns, start=1):
+                _check_cancel(cancel_event)
+                img_path = tmp_dir / f"{pdf_path.stem}_p{page_num:03d}_c{ci:02d}.png"
+                cv_imwrite_u(img_path, col)
+                text = _gcv_detect_document_text(img_path, log, cancel_event)
+                if not text:
+                    continue
+                for line in text.splitlines():
+                    stripped = line.strip()
+                    if stripped:
+                        lines.append(stripped)
+    finally:
+        try:
+            doc.close()
+        except Exception:
+            pass
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    return lines
+
+
+def _gcv_collect_lines(json_paths: List[Path]) -> List[str]:
+    pages: List[Tuple[int, int, str]] = []
+    order = 0
+    for path in json_paths:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for resp in data.get("responses", []):
+            text = resp.get("fullTextAnnotation", {}).get("text", "") or ""
+            page_num = resp.get("context", {}).get("pageNumber", order + 1)
+            pages.append((page_num, order, text))
+            order += 1
+    pages.sort(key=lambda x: (x[0], x[1]))
+    lines: List[str] = []
+    for _page_num, _idx, text in pages:
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped:
+                lines.append(stripped)
+    return lines
+
+
+def _merge_lines_until_quote(lines: List[str]) -> List[str]:
+    merged: List[str] = []
+    buf = ""
+    for line in lines:
+        if not buf:
+            buf = line
+        else:
+            buf += line
+        if buf.endswith("」"):
+            merged.append(buf)
+            buf = ""
+    if buf:
+        merged.append(buf)
+    return merged
+
+
+def _extract_dialogue_text(line: str) -> str:
+    start = line.find("「")
+    end = line.rfind("」")
+    if start == -1 or end == -1 or end <= start:
+        return ""
+    return line[start + 1 : end].strip()
+
+
+def _write_gcv_outputs(
+    pdf_path: Path,
+    out_dir: Path,
+    merged_lines: List[str],
+    make_excel: bool,
+    make_txt: bool,
+    log: LogFn,
+) -> ScanOutputs:
+    out = ScanOutputs()
+    dialog_lines = []
+    for line in merged_lines:
+        text = _extract_dialogue_text(line)
+        if text:
+            dialog_lines.append(text)
+
+    if not dialog_lines:
+        log("Sin resultados -> no se generan salidas.")
+        return out
+
+    stem = pdf_path.stem
+    if make_txt:
+        out_txt = out_dir / f"{stem}_scanner.txt"
+        out_txt.write_text("\n".join(dialog_lines), encoding="utf-8", errors="replace")
+        out.txt = str(out_txt)
+        log(f"TXT: {out_txt}")
+
+    if make_excel:
+        rows = []
+        for text in dialog_lines:
+            rows.append({"texto": text})
+        out_xlsx = out_dir / f"{stem}_scanner.xlsx"
+        try:
+            pd.DataFrame(rows).to_excel(out_xlsx, index=False)
+            out.xlsx = str(out_xlsx)
+            log(f"Excel: {out_xlsx}")
+        except Exception as e:
+            log(f"ERROR Excel: {e}")
+
+    return out
+
+
+def run_gcloud_scanner(
+    input_path: str,
+    out_dir: str,
+    make_excel: bool,
+    make_txt: bool,
+    crop_rect: Optional[CropRect] = None,
+    crop_rect_by_page: Optional[Dict[int, CropRect]] = None,
+    skip_polys_by_page: Optional[Dict[int, List[List[Tuple[float, float]]]]] = None,
+    skip_circles_by_page: Optional[Dict[int, List[Tuple[float, float, float]]]] = None,
+    suppress_pages: Optional[List[int]] = None,
+    vertical_cuts: Optional[List[float]] = None,
+    vertical_cuts_by_page: Optional[Dict[int, List[float]]] = None,
+    log: LogFn = lambda s: None,
+    cancel_event=None,
+) -> ScanOutputs:
+    if not _gcloud_exe():
+        raise RuntimeError("No se encontro gcloud. Agrega gcloud al PATH o define TAKOWORKS_GCLOUD_EXE.")
+    pdf_path = Path(input_path)
+    if not pdf_path.is_file() or pdf_path.suffix.lower() != ".pdf":
+        raise RuntimeError("Selecciona un PDF valido.")
+
+    out_dir_p = Path(out_dir)
+    out_dir_p.mkdir(parents=True, exist_ok=True)
+
+    crop_by_page = crop_rect_by_page or {}
+    skip_polys = skip_polys_by_page or {}
+    skip_circles = skip_circles_by_page or {}
+    suppress = set(suppress_pages or [])
+    vcuts = vertical_cuts or []
+    vcuts_by_page = vertical_cuts_by_page or {}
+
+    use_image_ocr = bool(
+        crop_rect
+        or crop_by_page
+        or skip_polys
+        or skip_circles
+        or suppress
+        or vcuts
+        or vcuts_by_page
+    )
+
+    if use_image_ocr:
+        lines = _gcv_ocr_images(
+            pdf_path=pdf_path,
+            crop_rect=crop_rect,
+            crop_rect_by_page=crop_by_page,
+            skip_polys_by_page=skip_polys,
+            skip_circles_by_page=skip_circles,
+            suppress_pages=suppress,
+            vertical_cuts=vcuts,
+            vertical_cuts_by_page=vcuts_by_page,
+            log=log,
+            cancel_event=cancel_event,
+        )
+        merged = _merge_lines_until_quote(lines)
+        return _write_gcv_outputs(pdf_path, out_dir_p, merged, make_excel, make_txt, log)
+
+    bucket = _gcv_bucket()
+    run_id = _gcv_run_id()
+    output_prefix = f"gs://{bucket}/output/{safe_name(pdf_path.stem)}_{run_id}/"
+
+    input_gcs = _gcv_upload_pdf(pdf_path, bucket, run_id, log, cancel_event)
+    _gcv_start_ocr(input_gcs, output_prefix, log, cancel_event)
+    _gcv_wait_for_output(output_prefix, log, cancel_event)
+
+    tmp_dir = Path(tempfile.gettempdir()) / f"takoworks_gcv_{run_id}"
+    try:
+        json_paths = _gcv_download_json(output_prefix, tmp_dir, log, cancel_event)
+        lines = _gcv_collect_lines(json_paths)
+        merged = _merge_lines_until_quote(lines)
+        outputs = _write_gcv_outputs(pdf_path, out_dir_p, merged, make_excel, make_txt, log)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    return outputs
 
 
 # =========================
@@ -334,10 +842,10 @@ def post_edit_yomitoku_md(md_text: str) -> str:
       3) Borra "~"
       4) Borra "←"
       5) Borra "□"
-      6) Reemplaza "\." por "."
-      7) Reemplaza "\(" por "("
-      8) Reemplaza "\)" por ")"
-      9) Reemplaza "\!" por "!"
+      6) Reemplaza "\\." por "."
+      7) Reemplaza "\\(" por "("
+      8) Reemplaza "\\)" por ")"
+      9) Reemplaza "\\!" por "!"
      10) Borra líneas vacías (o con solo espacios)
      11) Reemplaza "...。" por "..."
      12) Reemplaza "..。" por "..."
