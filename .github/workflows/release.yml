@@ -247,6 +247,15 @@ jobs:
             Write-Warning "signtool verify failed (often due to untrusted root in CI). Signed MSIX is still produced. Details: $_"
           }
 
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: TakoWorks_build_windows
+          path: |
+            ${{ env.ARTIFACT_NAME }}
+            TakoWorks.msix
+          if-no-files-found: error
+
       - name: Upload MSIX to MS Store (Partner Center API)
         shell: pwsh
         env:
