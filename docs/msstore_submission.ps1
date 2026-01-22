@@ -65,6 +65,16 @@ if ($msixVersion) {
   Write-Host "MSIX AppxManifest version: (unknown)"
 }
 
+# Use a versioned filename to avoid stale metadata when reusing the same MSIX name.
+$uploadPath = $msix.FullName
+$uploadName = $msix.Name
+if ($msixVersion) {
+  $uploadName = "TakoWorks_$msixVersion.msix"
+  $uploadPath = Join-Path $env:TEMP $uploadName
+  Copy-Item -LiteralPath $msix.FullName -Destination $uploadPath -Force
+}
+Write-Host "Uploading MSIX file: $uploadName"
+
 function Get-AccessToken {
   $tenant = $env:MSSTORE_TENANT_ID
   $clientId = $env:MSSTORE_CLIENT_ID
@@ -169,24 +179,22 @@ Write-Host "Uploading MSIX to SAS URL..."
 $uploadHeaders = @{
   "x-ms-blob-type" = "BlockBlob"
 }
-Invoke-RestMethod -Method Put -Uri $fileUploadUrl -InFile $msix.FullName -ContentType "application/octet-stream" -Headers $uploadHeaders
+Invoke-RestMethod -Method Put -Uri $fileUploadUrl -InFile $uploadPath -ContentType "application/octet-stream" -Headers $uploadHeaders
 
 # Update submission with package file name
 $packages = @()
 $matched = $false
 if ($submission.applicationPackages) {
   foreach ($p in $submission.applicationPackages) {
-    if ($p.fileName -eq $msix.Name) {
-      $p.fileStatus = "Uploaded"
+    if ($p.fileName -eq $uploadName) {
       $matched = $true
     }
-    $packages += $p
   }
 }
 if (-not $packages) {
-  $packages = @(@{ fileName = $msix.Name; fileStatus = "Uploaded" })
+  $packages = @(@{ fileName = $uploadName; fileStatus = "Uploaded" })
 } elseif (-not $matched) {
-  $packages += @{ fileName = $msix.Name; fileStatus = "Uploaded" }
+  $packages += @{ fileName = $uploadName; fileStatus = "Uploaded" }
 }
 
 $submission.packageDeliveryOptions = @{
@@ -202,6 +210,28 @@ if ($updated -and $updated.applicationPackages) {
   $updated.applicationPackages |
     Select-Object fileName, version, fileStatus, architecture |
     Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+}
+
+if ($msixVersion) {
+  $found = $false
+  for ($i = 0; $i -lt 6; $i++) {
+    try {
+      Start-Sleep -Seconds 10
+      $check = Invoke-PartnerApi -method "GET" -path "submissions/$submissionId"
+      $pkg = $check.applicationPackages | Where-Object { $_.fileName -eq $uploadName } | Select-Object -First 1
+      if ($pkg -and $pkg.version -eq $msixVersion) {
+        Write-Host "Partner Center ingestion shows version $($pkg.version) for $uploadName."
+        $found = $true
+        break
+      }
+    } catch {
+      Write-Warning "Could not verify ingestion yet: $_"
+      break
+    }
+  }
+  if (-not $found) {
+    Write-Warning "Partner Center still reports a different version for $uploadName. It may update after ingestion finishes."
+  }
 }
 
 # Commit submission
