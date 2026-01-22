@@ -92,12 +92,15 @@ jobs:
           if (-not $verLine) { throw "__version__ not found in $init" }
           if ($verLine -notmatch '"([^"]+)"') { throw "Could not parse version from $verLine" }
           $ver = $Matches[1]
+          Write-Host "Parsed __version__: $ver"
           $manifest = Join-Path $Env:GITHUB_WORKSPACE "dist_installer/AppxManifest.xml"
           if (-not (Test-Path $manifest)) { throw "AppxManifest.xml not found at $manifest" }
           $xml = [xml](Get-Content $manifest)
           $xml.Package.Identity.Version = "$ver.0"
           $xml.Save($manifest)
-          Write-Host "Set AppxManifest version to $ver.0"
+          $xmlCheck = [xml](Get-Content $manifest)
+          $finalVer = $xmlCheck.Package.Identity.Version
+          Write-Host "Set AppxManifest version to $finalVer"
 
       - name: Validate AppxManifest schema (makeappx)
         shell: pwsh
@@ -116,6 +119,9 @@ jobs:
             Select-Object -First 1
           if (-not $makeappx) { throw "makeappx.exe not found under Windows Kits" }
           Copy-Item -LiteralPath $manifest -Destination (Join-Path "${{ env.BUILD_DIR }}" "AppxManifest.xml") -Force
+          $buildManifest = Join-Path "${{ env.BUILD_DIR }}" "AppxManifest.xml"
+          $buildXml = [xml](Get-Content $buildManifest)
+          Write-Host "Build dir AppxManifest version: $($buildXml.Package.Identity.Version)"
           $dstAssets = Join-Path "${{ env.BUILD_DIR }}" "assets"
           if (-not (Test-Path $dstAssets)) { New-Item -ItemType Directory -Path $dstAssets | Out-Null }
           Copy-Item -Path (Join-Path $assetsSrc "*") -Destination $dstAssets -Recurse -Force
