@@ -32,6 +32,35 @@ if (-not $msix) {
   exit 1
 }
 
+function Get-MsixVersion([string]$path) {
+  try {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($path)
+    try {
+      $entry = $zip.Entries | Where-Object { $_.FullName -ieq "AppxManifest.xml" } | Select-Object -First 1
+      if (-not $entry) { return $null }
+      $reader = New-Object System.IO.StreamReader($entry.Open())
+      try {
+        $xml = [xml]$reader.ReadToEnd()
+        return $xml.Package.Identity.Version
+      } finally {
+        $reader.Dispose()
+      }
+    } finally {
+      $zip.Dispose()
+    }
+  } catch {
+    return $null
+  }
+}
+
+$msixVersion = Get-MsixVersion -path $msix.FullName
+if ($msixVersion) {
+  Write-Host "MSIX AppxManifest version: $msixVersion"
+} else {
+  Write-Host "MSIX AppxManifest version: (unknown)"
+}
+
 function Get-AccessToken {
   $tenant = $env:MSSTORE_TENANT_ID
   $clientId = $env:MSSTORE_CLIENT_ID
@@ -120,7 +149,13 @@ $submission.packageDeliveryOptions = @{
 }
 $submission.applicationPackages = $packages
 
-Invoke-PartnerApi -method "PUT" -path "submissions/$submissionId" -body $submission
+$updated = Invoke-PartnerApi -method "PUT" -path "submissions/$submissionId" -body $submission
+if ($updated -and $updated.applicationPackages) {
+  Write-Host "Submission packages (after upload):"
+  $updated.applicationPackages |
+    Select-Object fileName, version, fileStatus, architecture |
+    Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+}
 
 # Commit submission
 Invoke-PartnerApi -method "POST" -path "submissions/$submissionId/commit"

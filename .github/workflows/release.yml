@@ -121,6 +121,20 @@ jobs:
           Copy-Item -Path (Join-Path $assetsSrc "*") -Destination $dstAssets -Recurse -Force
           & $makeappx.FullName pack /o /d "${{ env.BUILD_DIR }}" /p "TakoWorks.msix"
 
+      - name: Inspect MSIX version
+        shell: pwsh
+        run: |
+          $msixPath = Join-Path $PWD "TakoWorks.msix"
+          if (-not (Test-Path $msixPath)) { throw "MSIX not found: $msixPath" }
+          $tmp = Join-Path $Env:RUNNER_TEMP "msix_inspect"
+          if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
+          Expand-Archive -Path $msixPath -DestinationPath $tmp
+          $manifest = Join-Path $tmp "AppxManifest.xml"
+          if (-not (Test-Path $manifest)) { throw "AppxManifest.xml not found inside MSIX" }
+          $xml = [xml](Get-Content $manifest)
+          $ver = $xml.Package.Identity.Version
+          Write-Host "MSIX AppxManifest version: $ver"
+
       - name: Sign MSIX
         shell: pwsh
         env:
