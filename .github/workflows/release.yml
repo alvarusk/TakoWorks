@@ -247,21 +247,69 @@ jobs:
             Write-Warning "signtool verify failed (often due to untrusted root in CI). Signed MSIX is still produced. Details: $_"
           }
 
-      - name: Upload MSIX to MS Store (Partner Center API)
+      - name: Configure Microsoft Store CLI
+        uses: microsoft/microsoft-store-apppublisher@v1.1
+
+      - name: Cancel pending Microsoft Store submission (if any)
         shell: pwsh
         env:
           MSSTORE_TENANT_ID: ${{ secrets.MSSTORE_TENANT_ID }}
           MSSTORE_CLIENT_ID: ${{ secrets.MSSTORE_CLIENT_ID }}
           MSSTORE_CLIENT_SECRET: ${{ secrets.MSSTORE_CLIENT_SECRET }}
-          MSSTORE_APP_ID: ${{ secrets.MSSTORE_APP_ID }}
-          MSSTORE_FORCE_NEW_SUBMISSION: "1"
+          MSSTORE_SELLER_ID: ${{ secrets.MSSTORE_SELLER_ID }}
+          MSSTORE_PRODUCT_ID: ${{ secrets.MSSTORE_PRODUCT_ID }}
         run: |
-          if (-not $env:MSSTORE_TENANT_ID -or -not $env:MSSTORE_CLIENT_ID -or -not $env:MSSTORE_CLIENT_SECRET -or -not $env:MSSTORE_APP_ID) {
-            Write-Host "Partner Center secrets not set; skipping upload."
-            exit 0
+          $ErrorActionPreference = "Stop"
+          if (-not $env:MSSTORE_TENANT_ID) { throw "Missing MSSTORE_TENANT_ID secret" }
+          if (-not $env:MSSTORE_CLIENT_ID) { throw "Missing MSSTORE_CLIENT_ID secret" }
+          if (-not $env:MSSTORE_CLIENT_SECRET) { throw "Missing MSSTORE_CLIENT_SECRET secret" }
+          if (-not $env:MSSTORE_SELLER_ID) { throw "Missing MSSTORE_SELLER_ID secret" }
+          if (-not $env:MSSTORE_PRODUCT_ID) { throw "Missing MSSTORE_PRODUCT_ID secret" }
+
+          msstore reconfigure `
+            --tenantId $env:MSSTORE_TENANT_ID `
+            --sellerId $env:MSSTORE_SELLER_ID `
+            --clientId $env:MSSTORE_CLIENT_ID `
+            --clientSecret $env:MSSTORE_CLIENT_SECRET
+
+          $output = & msstore submission delete $env:MSSTORE_PRODUCT_ID --no-confirm 2>&1
+          $exitCode = $LASTEXITCODE
+          if ($output) { $output | ForEach-Object { Write-Host $_ } }
+          if ($exitCode -ne 0) {
+            $joined = $output -join "`n"
+            if ($joined -match "No pending submission found") {
+              Write-Host "No pending submission; continuing."
+            } else {
+              throw "msstore submission delete failed (exit $exitCode)."
+            }
           }
 
-          powershell -ExecutionPolicy Bypass -File docs/msstore_submission.ps1 -MsixPath "TakoWorks.msix"
+      - name: Publish MSIX to Microsoft Store
+        shell: pwsh
+        env:
+          MSSTORE_TENANT_ID: ${{ secrets.MSSTORE_TENANT_ID }}
+          MSSTORE_CLIENT_ID: ${{ secrets.MSSTORE_CLIENT_ID }}
+          MSSTORE_CLIENT_SECRET: ${{ secrets.MSSTORE_CLIENT_SECRET }}
+          MSSTORE_SELLER_ID: ${{ secrets.MSSTORE_SELLER_ID }}
+          MSSTORE_PRODUCT_ID: ${{ secrets.MSSTORE_PRODUCT_ID }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (-not $env:MSSTORE_TENANT_ID) { throw "Missing MSSTORE_TENANT_ID secret" }
+          if (-not $env:MSSTORE_CLIENT_ID) { throw "Missing MSSTORE_CLIENT_ID secret" }
+          if (-not $env:MSSTORE_CLIENT_SECRET) { throw "Missing MSSTORE_CLIENT_SECRET secret" }
+          if (-not $env:MSSTORE_SELLER_ID) { throw "Missing MSSTORE_SELLER_ID secret" }
+          if (-not $env:MSSTORE_PRODUCT_ID) { throw "Missing MSSTORE_PRODUCT_ID secret" }
+
+          $msixPath = Join-Path $PWD "TakoWorks.msix"
+          if (-not (Test-Path $msixPath)) { throw "MSIX not found: $msixPath" }
+
+          msstore reconfigure `
+            --tenantId $env:MSSTORE_TENANT_ID `
+            --sellerId $env:MSSTORE_SELLER_ID `
+            --clientId $env:MSSTORE_CLIENT_ID `
+            --clientSecret $env:MSSTORE_CLIENT_SECRET
+
+          msstore publish "$msixPath" -id $env:MSSTORE_PRODUCT_ID
 
       - name: Attach artifact to release
         if: github.event_name == 'release' && github.event.action == 'published'
