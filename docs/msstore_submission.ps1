@@ -189,15 +189,27 @@ Invoke-RestMethod -Method Put -Uri $fileUploadUrl -InFile $uploadPath -ContentTy
 # Update submission with package file name
 $packages = @()
 $matched = $false
+$existingByName = @{}
 if ($submission.applicationPackages) {
   foreach ($p in $submission.applicationPackages) {
-    if ($p.fileName -eq $uploadName) {
-      $p.fileStatus = "Uploaded"
-      $matched = $true
+    if ($p.fileName) {
+      $existingByName[$p.fileName.ToLowerInvariant()] = $p
     }
     $packages += $p
   }
 }
+
+$uploadKey = $uploadName.ToLowerInvariant()
+if ($existingByName.ContainsKey($uploadKey)) {
+  $existing = $existingByName[$uploadKey]
+  if (-not $existing.id) {
+    Write-Error "Existing package '$uploadName' is missing id in submission. Discard the in-progress submission and retry."
+    exit 1
+  }
+  $existing.fileStatus = "Uploaded"
+  $matched = $true
+}
+
 if (-not $packages) {
   $packages = @(@{ fileName = $uploadName; fileStatus = "Uploaded" })
 } elseif (-not $matched) {
