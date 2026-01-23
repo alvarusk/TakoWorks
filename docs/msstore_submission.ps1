@@ -117,11 +117,12 @@ function Invoke-PartnerApiRoot([string]$method, [string]$path, $body = $null) {
 }
 
 # Validate AppId early and show accessible apps when possible
+$appIdInput = $AppId
 try {
   $apps = Invoke-PartnerApiRoot -method "GET" -path "applications"
   if ($apps -and $apps.value) {
     $match = $apps.value | Where-Object {
-      $_.id -eq $AppId -or $_.applicationId -eq $AppId -or $_.productId -eq $AppId
+      $_.id -eq $appIdInput -or $_.applicationId -eq $appIdInput -or $_.productId -eq $appIdInput
     } | Select-Object -First 1
     if (-not $match) {
       Write-Warning "MSSTORE_APP_ID not found in accessible applications for this tenant/app registration."
@@ -131,6 +132,10 @@ try {
         Format-Table -AutoSize | Out-String -Width 200 | Write-Host
     } else {
       Write-Host "Resolved application: $($match.primaryName) (id=$($match.id))"
+      if ($match.id -and $match.id -ne $appIdInput) {
+        Write-Host "Using application id from Partner Center: $($match.id)"
+        $AppId = $match.id
+      }
       if ($env:MSSTORE_PUBLISHER_ID -and $match.publisherId -and $match.publisherId -ne $env:MSSTORE_PUBLISHER_ID) {
         Write-Warning "MSSTORE_PUBLISHER_ID does not match Partner Center publisherId for this app."
       }
