@@ -22,6 +22,22 @@ if ($env:MSSTORE_PUBLISHER_ID) {
   Write-Host "MSSTORE_PUBLISHER_ID: $env:MSSTORE_PUBLISHER_ID"
 }
 
+function Test-Truthy([string]$value) {
+  if (-not $value) { return $false }
+  switch ($value.ToLowerInvariant()) {
+    "1" { return $true }
+    "true" { return $true }
+    "yes" { return $true }
+    "y" { return $true }
+    default { return $false }
+  }
+}
+
+$forceNewSubmission = Test-Truthy $env:MSSTORE_FORCE_NEW_SUBMISSION
+if ($forceNewSubmission) {
+  Write-Host "MSSTORE_FORCE_NEW_SUBMISSION enabled."
+}
+
 $msix = $null
 if (Test-Path $MsixPath) {
   $msix = Get-Item $MsixPath
@@ -151,6 +167,10 @@ try {
   $submission = Invoke-PartnerApi -method "POST" -path "submissions"
   $submissionId = $submission.id
 } catch {
+  if ($forceNewSubmission) {
+    Write-Error "Create submission failed and reuse is disabled. Discard any in-progress submission and retry. Details: $_"
+    exit 1
+  }
   Write-Host "Create submission failed; trying to reuse an in-progress submission..."
   try {
     $subs = Invoke-PartnerApi -method "GET" -path "submissions"
@@ -185,6 +205,29 @@ $uploadHeaders = @{
   "x-ms-blob-type" = "BlockBlob"
 }
 Invoke-RestMethod -Method Put -Uri $fileUploadUrl -InFile $uploadPath -ContentType "application/octet-stream" -Headers $uploadHeaders
+
+# Refresh submission to pick up any package ids created after upload
+$submissionAfterUpload = $null
+for ($i = 0; $i -lt 6; $i++) {
+  try {
+    $submissionAfterUpload = Invoke-PartnerApi -method "GET" -path "submissions/$submissionId"
+    $pkgFound = $null
+    if ($submissionAfterUpload -and $submissionAfterUpload.applicationPackages) {
+      $pkgFound = $submissionAfterUpload.applicationPackages |
+        Where-Object { $_.fileName -eq $uploadName } | Select-Object -First 1
+    }
+    if ($pkgFound) {
+      break
+    }
+  } catch {
+    Write-Warning "Could not refresh submission after upload (attempt $($i + 1)). Details: $_"
+    $submissionAfterUpload = $null
+  }
+  Start-Sleep -Seconds 5
+}
+if ($submissionAfterUpload) {
+  $submission = $submissionAfterUpload
+}
 
 # Update submission with package file name
 $packages = @()
