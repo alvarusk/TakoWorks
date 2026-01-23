@@ -187,8 +187,10 @@ $matched = $false
 if ($submission.applicationPackages) {
   foreach ($p in $submission.applicationPackages) {
     if ($p.fileName -eq $uploadName) {
+      $p.fileStatus = "Uploaded"
       $matched = $true
     }
+    $packages += $p
   }
 }
 if (-not $packages) {
