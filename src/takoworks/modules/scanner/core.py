@@ -177,7 +177,8 @@ def _run_cmd(cmd: List[str], log: LogFn, cancel_event=None) -> str:
         stdout = exc.stdout.strip() if exc.stdout else ""
         stderr = exc.stderr.strip() if exc.stderr else ""
         raise RuntimeError(f"Command failed: {' '.join(cmd)}\n{stdout}\n{stderr}")
-    return res.stdout.strip()
+    stdout = res.stdout if res.stdout is not None else ""
+    return stdout.strip()
 
 
 def _run_gcloud(args: List[str], log: LogFn, cancel_event=None) -> str:
@@ -195,7 +196,8 @@ def _run_shell_cmd(cmdline: str, log: LogFn, cancel_event=None) -> str:
         stdout = exc.stdout.strip() if exc.stdout else ""
         stderr = exc.stderr.strip() if exc.stderr else ""
         raise RuntimeError(f"Command failed: {cmdline}\n{stdout}\n{stderr}")
-    return res.stdout.strip()
+    stdout = res.stdout if res.stdout is not None else ""
+    return stdout.strip()
 
 
 def _gcv_bucket() -> str:
