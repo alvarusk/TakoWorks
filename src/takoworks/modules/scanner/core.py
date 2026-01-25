@@ -97,6 +97,11 @@ DELETE_TOKENS = [
 PUNCT_ONLY_RE = re.compile(
     r"^[!?！？]+$|^[。、。．\.…]+$|^[」』]+$|^[!?！？]+[」』]+$|^[」』]+[!?！？]+$"
 )
+NOISE_PUNCT_ONLY_RE = re.compile(r"^[!?！？.．…]+$")
+ELLIPSIS_END_RE = re.compile(r"(?P<ell>(?:[.．]{2,}|…+))(?P<closers>[」』]*)\s*$")
+LINE_BREAK_AFTER_PUNCT_RE = re.compile(
+    r"(?P<punc>(?:[!?！？]+|[。]|[、]|(?<![.．])[.．](?![.．])))(?P<closers>[」』]*)"
+)
 JP_CHAR_RE = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
 
 
@@ -513,6 +518,7 @@ def _write_gcv_outputs(
         if text:
             dialog_lines.append(text)
 
+    dialog_lines = _split_and_filter_lines(dialog_lines)
     if not dialog_lines:
         log("Sin resultados -> no se generan salidas.")
         return out
@@ -968,6 +974,34 @@ def merge_unbalanced_jp_quotes(lines: List[str]) -> List[str]:
     return out
 
 
+def _insert_line_breaks_after_punct(text: str) -> str:
+    if not text:
+        return ""
+    s = ELLIPSIS_END_RE.sub(
+        lambda m: f"{m.group('ell')}{m.group('closers')}\n",
+        text,
+    )
+    return LINE_BREAK_AFTER_PUNCT_RE.sub(
+        lambda m: f"{m.group('punc')}{m.group('closers')}\n",
+        s,
+    )
+
+
+def _split_and_filter_lines(lines: List[str]) -> List[str]:
+    out: List[str] = []
+    for line in lines:
+        if not line:
+            continue
+        for part in _insert_line_breaks_after_punct(line).splitlines():
+            s = part.strip()
+            if not s:
+                continue
+            if NOISE_PUNCT_ONLY_RE.match(s):
+                continue
+            out.append(s)
+    return out
+
+
 def clean_text(s: str) -> str:
     """Limpieza para bloques de texto (MD o PyMuPDF text). Conserva contenido entre paréntesis."""
     if not s:
@@ -1071,7 +1105,7 @@ def parse_text_only_lines(block: str) -> List[str]:
     block = clean_text(block)
     lines = [ln.strip() for ln in block.splitlines() if ln.strip()]
     lines = merge_unbalanced_jp_quotes(lines)
-    return lines
+    return _split_and_filter_lines(lines)
 
 
 # =========================
@@ -1534,16 +1568,39 @@ def df_to_ass_with_styles(
     ]
     lines += ["[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"]
 
+    def _format_ass_text(raw: str) -> str:
+        s = raw.replace("。", "。\\N").replace("」", "」\\N")
+        s = s.replace("「", "").replace("」", "")
+        s = s.replace("\n", r"\N").strip()
+        return s
+
     for r in df.itertuples(index=False):
         _check_cancel(cancel_event)
         actor = str(getattr(r, "actor", "") or "").strip().replace(",", " ")
         text = str(getattr(r, "texto", "") or "").strip()
         if not text and not actor:
             continue
-        text = text.replace("。", "。\\N").replace("」", "」\\N")
-        text = text.replace("「", "").replace("」", "")
-        text = text.replace("\n", r"\N").strip()
-        lines.append(f"Dialogue: 0,0:00:00.00,0:00:00.00,{style_name},{actor},0,0,0,,{text}")
+
+        split_idx = None
+        if "「" in text:
+            first_nonspace = re.search(r"\S", text)
+            idx = text.find("「")
+            if first_nonspace and idx > first_nonspace.start():
+                split_idx = idx
+
+        if split_idx is not None:
+            parts = [text[:split_idx], text[split_idx:]]
+            for part in parts:
+                formatted = _format_ass_text(part)
+                if not formatted:
+                    continue
+                lines.append(f"Comment: 0,0:00:00.00,0:00:00.00,{style_name},{actor},0,0,0,,{formatted}")
+        else:
+            event_type = "Comment" if "「" in text else "Dialogue"
+            formatted = _format_ass_text(text)
+            if not formatted:
+                continue
+            lines.append(f"{event_type}: 0,0:00:00.00,0:00:00.00,{style_name},{actor},0,0,0,,{formatted}")
 
     from ..stylizer import core as styl_core  # local import
     adapter = _dummy_console(log)

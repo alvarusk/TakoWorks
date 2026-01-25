@@ -279,6 +279,7 @@ jobs:
             $joined = $output -join "`n"
             if ($joined -match "No pending submission found") {
               Write-Host "No pending submission; continuing."
+              exit 0
             } else {
               throw "msstore submission delete failed (exit $exitCode)."
             }

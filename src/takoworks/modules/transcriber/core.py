@@ -750,7 +750,8 @@ def analyze_japanese_morph(text: str) -> str:
     for word in tagger(text):
         surface = word.surface
         lemma = getattr(word.feature, "lemma", surface) or surface
-        main_pos = word.pos.split("-")[0]  # p.ej. 名詞-普通名詞-一般 → 名詞
+        # fugashi puede devolver POS con "-" (ipadic) o "," (unidic)
+        main_pos = re.split(r"[-,]", word.pos)[0]  # p.ej. 名詞-普通名詞-一般 / 名詞,普通名詞,一般
 
         if main_pos not in interesting_pos:
             continue
