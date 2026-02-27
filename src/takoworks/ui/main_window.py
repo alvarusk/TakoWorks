@@ -12,6 +12,7 @@ from ..modules.unworder.panel import UnworderPanel
 from ..modules.scanner.panel import ScannerPanel
 from ..modules.transferer.panel import TransfererPanel
 from ..modules.corrector.panel import CorrectorPanel
+from ..modules.warpgate.panel import WarpGatePanel
 
 class MainWindow(ttk.Frame):
     def __init__(self, parent, cfg: dict):
@@ -47,6 +48,7 @@ class MainWindow(ttk.Frame):
         self.notebook.add(ScannerPanel(self.notebook, self.runner, self.cfg), text="Scanner")
         self.notebook.add(TransfererPanel(self.notebook, self.runner, self.cfg), text="Transferer")
         self.notebook.add(CorrectorPanel(self.notebook, self.runner, self.cfg), text="Corrector")
+        self.notebook.add(WarpGatePanel(self.notebook, self.runner, self.cfg), text="WarpGate")
 
     def _restore_splitter(self):
         # Si hay valor guardado, úsalo; si no, un 70% para tabs

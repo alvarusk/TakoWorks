@@ -75,3 +75,63 @@
 [24/01/2026 11:12:14,99] "C:\Users\ajime\OneDrive\Documentos\PENDING\137 - Hell's Paradise S2\3 - Scripts esES\HellsParadise_S2.0E3_HLPSIM0016_266026_subtitle_edited_es-es.ass" --serve 
 [24/01/2026 11:31:30,25] "C:\Users\ajime\OneDrive\Documentos\PENDING\137 - Hell's Paradise S2\2 - Scripts esLA\HellsParadise_S2E3_HLPSIM0016_266026_subtitle-edited_es-la.ass" --serve 
 [24/01/2026 12:07:30,48] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S1E5_YBVSIM0005_366528_subtitle_edited_es-es.ass" --serve 
+[27/01/2026  4:58:26,37] "C:\Users\ajime\OneDrive\Documentos\PENDING\124 - Dragon Raja S2\3 - Scripts ES\Japanese\DragonRaja_S2E16_DRJJPS0032_365502_subtitle_edited_es-es.ass" --serve 
+[27/01/2026  5:00:02,46] "C:\Users\ajime\OneDrive\Documentos\PENDING\124 - Dragon Raja S2\3 - Scripts ES\Japanese\DragonRaja_S2E16_DRJJPS0032_365502_subtitle_edited_es-la.ass" --serve 
+[27/01/2026  5:01:36,98] "C:\Users\ajime\OneDrive\Documentos\PENDING\124 - Dragon Raja S2\3 - Scripts ES\Japanese\DragonRaja_S2E16_DRJJPS0032_365502_subtitle_edited_es-la.ass" --serve 
+[27/01/2026  5:18:22,08] "C:\Users\ajime\OneDrive\Documentos\PENDING\136 - Shiboyugi\3 - Scripts ES\ShiboyugiPlayin_S1E11_PDGSIM0011_367398_subtitle_edited_es-la.ass" --serve 
+[28/01/2026 12:50:07,52] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimi_S001_E0008_FP_subtitle_edited_es-la.ass" --serve 
+[28/01/2026 19:03:35,46] "C:\Users\ajime\OneDrive\Documentos\PENDING\141 - MF Ghost S3\2 - Scripts esES\MfGhost_S3.0E5_MGHSIM0029_369275_subtitle_edited_es-es.ass" --serve 
+[29/01/2026 10:23:01,50] "C:\Users\ajime\OneDrive\Documentos\PENDING\139 - Frieren S2\2 - Scripts esES\FrierenBeyondJo_S2E3_FBJSIM0031_366516_subtitle_edited_es-es.ass" --serve 
+[29/01/2026 10:37:01,79] "C:\Users\ajime\OneDrive\Documentos\PENDING\139 - Frieren S2\2 - Scripts esES\FrierenBeyondJo_S2E3_FBJSIM0031_366516_subtitle_edited-es-la.ass" --serve 
+[29/01/2026 13:12:30,27] "C:\Users\ajime\OneDrive\Documentos\PENDING\PVs\Clevatess_S002_PV1_ESES_Full.ass" --serve 
+[29/01/2026 13:54:40,74] "C:\Users\ajime\OneDrive\Documentos\PENDING\140 - The Daily Life of the Immortal King S5\3 - Scripts esES\DailyLifeOfImmo_S5E9_TDISIM0060_364573_subtitle_edited_es-es.ass" --serve 
+[29/01/2026 14:17:07,11] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S1E6_YBVSIM0006_366529_subtitle_edited_es-es.ass" --serve 
+[30/01/2026 10:07:14,94] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\ep04\DeadAccount_S1.0E4_TBVSIM0004_367619_subtitle_edited_es-la.ass" --serve 
+[30/01/2026 20:18:20,85] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\ep04\DeadAccount_S1.0E4_TBVSIM0004_367619_subtitle_edited_es-es.ass" --serve 
+[31/01/2026 12:49:12,15] "C:\Users\ajime\OneDrive\Documentos\PENDING\137 - Hell's Paradise S2\2 - Scripts esLA\HellsParadise_S2E4_HLPSIM0017_266027_subtitle_edited_es-la.ass" --serve 
+[31/01/2026 12:51:05,50] "C:\Users\ajime\OneDrive\Documentos\PENDING\137 - Hell's Paradise S2\3 - Scripts esES\HellsParadise_S2.0E4_HLPSIM0017_266027_subtitle_edited_es-es.ass" --serve 
+[03/02/2026  8:36:56,47] "C:\Users\ajime\OneDrive\Documentos\PENDING\124 - Dragon Raja S2\3 - Scripts ES\Japanese\DragonRaja_S2E17_DRJJPS0033_365503_full_edited_es-es.ass" --serve 
+[03/02/2026  8:38:43,12] "C:\Users\ajime\OneDrive\Documentos\PENDING\124 - Dragon Raja S2\3 - Scripts ES\Japanese\DragonRaja_S2E17_DRJJPS0033_365503_full_edited_es-la.ass" --serve 
+[04/02/2026 13:07:52,92] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimiForYouI_S1E9_YBVSIM0009_366532_subtitle_edited_es-la.ass" --serve 
+[04/02/2026 15:31:43,79] "C:\Users\ajime\OneDrive\Documentos\PENDING\141 - MF Ghost S3\2 - Scripts esES\MfGhost_S3E6_MGHSIM0030_369276_subtitle_timed_es-es.ass" --serve 
+[05/02/2026  5:10:50,39] "C:\Users\ajime\OneDrive\Documentos\PENDING\140 - The Daily Life of the Immortal King S5\3 - Scripts esES\DailyLifeOfImmo_S5E10_TDISIM0061_364575_subtitle_edited_es-es.ass" --serve 
+[05/02/2026 13:33:36,71] "C:\Users\ajime\OneDrive\Documentos\PENDING\139 - Frieren S2\2 - Scripts esES\FrierenBeyondJo_S2E4_FBJSIM0032_366517_subtitle_edited_es-la.ass" --serve 
+[05/02/2026 13:34:27,46] "C:\Users\ajime\OneDrive\Documentos\PENDING\139 - Frieren S2\2 - Scripts esES\FrierenBeyondJo_S2E4_FBJSIM0032_366517_subtitle_edited_es-es.ass" --serve 
+[06/02/2026 12:56:30,93] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S1.0E5_TBVSIM0005_367620_subtitle_timed_es-es.ass" --serve 
+[06/02/2026 18:30:10,82] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S1.0E5_TBVSIM0005_367620_subtitle_edited_es-la.ass" --serve 
+[07/02/2026 15:36:43,84] "C:\Users\ajime\OneDrive\Documentos\PENDING\137 - Hell's Paradise S2\2 - Scripts esLA\HellsParadise_S2E5_HLPSIM0018_266028_subtitle_edited_es-la.ass" --serve 
+[07/02/2026 15:40:08,16] "C:\Users\ajime\OneDrive\Documentos\PENDING\137 - Hell's Paradise S2\3 - Scripts esES\HellsParadise_S2.0E5_HLPSIM0018_266028_subtitle_edited_es-es.ass" --serve 
+[07/02/2026 17:45:16,09] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S1E7_YBVSIM0007_366530_subtitle_edited_es-es.ass" --serve 
+[10/02/2026 17:42:02,47] "C:\Users\ajime\OneDrive\Documentos\PENDING\124 - Dragon Raja S2\3 - Scripts ES\Japanese\DragonRaja_S2E18_DRJJPS0034_365504_subtitle_full_es-es.ass" --serve 
+[10/02/2026 17:43:57,51] "C:\Users\ajime\OneDrive\Documentos\PENDING\124 - Dragon Raja S2\3 - Scripts ES\Japanese\DragonRaja_S2E18_DRJJPS0034_365504_subtitle_full_es-la.ass" --serve 
+[11/02/2026  6:05:09,31] "C:\Users\ajime\OneDrive\Documentos\PENDING\141 - MF Ghost S3\2 - Scripts esES\MfGhost_S3E7_MGHSIM0031_369277_subtitle_edited_es-es.ass" --serve 
+[11/02/2026 14:34:19,88] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimi_S001_E0010_FP_subtitle_edited_es-la.ass" --serve 
+[12/02/2026  7:13:28,62] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S1.0E6_TBVSIM0006_367621_subtitle_edited_es-es.ass" --serve 
+[12/02/2026 12:19:26,70] "C:\Users\ajime\OneDrive\Documentos\PENDING\139 - Frieren S2\2 - Scripts esES\FrierenBeyondJo_S2E5_FBJSIM0033_366518_subtitle_edited_es-es.ass" --serve 
+[12/02/2026 16:06:08,24] "C:\Users\ajime\OneDrive\Documentos\PENDING\139 - Frieren S2\1 - Scripts esLA\FrierenBeyondJo_S2E5_FBJSIM0033_366518_subtitle_edited_es-la.ass" --serve 
+[13/02/2026 18:31:56,76] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S1.0E6_TBVSIM0006_367621_subtitle_edited_es-la.ass" --serve 
+[13/02/2026 19:38:23,33] "C:\Users\ajime\OneDrive\Documentos\PENDING\140 - The Daily Life of the Immortal King S5\3 - Scripts esES\DailyLifeOfImmo_S5E11.0_TDISIM0062_364577_subtitle_edited_es-es.ass" --serve 
+[14/02/2026 10:51:36,68] "C:\Users\ajime\OneDrive\Documentos\PENDING\137 - Hell's Paradise S2\3 - Scripts esES\HellsParadise_S2E6_HLPSIM0019_266029_subtitle_edited_es-es.ass" --serve 
+[14/02/2026 11:39:40,88] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S1E8_YBVSIM0008_366531_subtitle_edited_es-es.ass" --serve 
+[14/02/2026 17:14:35,43] "C:\Users\ajime\OneDrive\Documentos\PENDING\137 - Hell's Paradise S2\2 - Scripts esLA\HellsParadise_S2E6_HLPSIM0019_266029_subtitle_edited_es-la.ass" --serve 
+[16/02/2026  7:07:37,03] "C:\Users\ajime\OneDrive\Documentos\PENDING\124 - Dragon Raja S2\3 - Scripts ES\Japanese\DragonRaja_S2E19_DRJJPS0035_365505_subtitle_full_es-es.ass" --serve 
+[16/02/2026  7:08:36,82] "C:\Users\ajime\OneDrive\Documentos\PENDING\124 - Dragon Raja S2\3 - Scripts ES\Japanese\DragonRaja_S2E19_DRJJPS0035_365505_subtitle_full_es-la.ass" --serve 
+[18/02/2026 15:12:01,11] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimi_S001_E0011_FP_subtitle_edited_es-la.ass" --serve 
+[18/02/2026 19:24:43,52] "C:\Users\ajime\OneDrive\Documentos\PENDING\141 - MF Ghost S3\2 - Scripts esES\MfGhost_S3E8_MGHSIM0032_369278_subtitle_edited_es-es.ass" --serve 
+[20/02/2026  8:06:15,29] "C:\Users\ajime\OneDrive\Documentos\PENDING\140 - The Daily Life of the Immortal King S5\3 - Scripts esES\DailyLifeOfImmo_S5E12_TDISIM0063_364579_subtitle_edited_es-es.ass" --serve 
+[20/02/2026 15:08:38,59] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S1.0E7_TBVSIM0007_367622_subtitle_edited_es-la.ass" --serve 
+[20/02/2026 19:21:26,23] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S1.0E7_TBVSIM0007_367622_subtitle_edited_es-es.ass" --serve 
+[21/02/2026  6:29:48,49] "C:\Users\ajime\OneDrive\Documentos\PENDING\137 - Hell's Paradise S2\2 - Scripts esLA\HellsParadise_S2E7_HLPSIM0020_266030_subtitle_edited_es-la.ass" --serve 
+[21/02/2026 10:00:12,94] "C:\Users\ajime\OneDrive\Documentos\PENDING\137 - Hell's Paradise S2\3 - Scripts esES\HellsParadise_S2E7_HLPSIM0020_266030_subtitle_edited_es-es.ass" --serve 
+[21/02/2026 12:46:55,57] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S1E9_YBVSIM0009_366532_subtitle_edited_es-es.ass" --serve 
+[23/02/2026 22:40:53,37] "C:\Users\ajime\OneDrive\Documentos\PENDING\124 - Dragon Raja S2\3 - Scripts ES\Japanese\DragonRaja_S2E20_DRJJPS0036_365506_subtitle_full_es-es.ass" --serve 
+[23/02/2026 22:42:01,22] "C:\Users\ajime\OneDrive\Documentos\PENDING\124 - Dragon Raja S2\3 - Scripts ES\Japanese\DragonRaja_S2E20_DRJJPS0036_365506_subtitle_full_es-la.ass" --serve 
+[24/02/2026  8:04:55,10] "C:\Users\ajime\OneDrive\Documentos\PENDING\143 - Me & Roboco\MeRoboco_S0E0_MBCSIMM001_369365_subtitle_edited_es-es.ass" --serve 
+[25/02/2026  7:56:03,97] "C:\Users\ajime\OneDrive\Documentos\PENDING\143 - Me & Roboco\MeRoboco_S0E0_MBCSIMM001_369365_subtitle_edited_es-es_Parte2.ass" --serve 
+[25/02/2026 14:03:25,64] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimi_S001_E0012_FP_subtitle_edited_es-la.ass" --serve 
+[25/02/2026 19:12:08,26] "C:\Users\ajime\OneDrive\Documentos\PENDING\141 - MF Ghost S3\2 - Scripts esES\MfGhost_S3E9_MGHSIM0033_369279_subtitle_edited_es-es.ass" --serve 
+[25/02/2026 19:15:20,86] "C:\Users\ajime\OneDrive\Documentos\PENDING\141 - MF Ghost S3\2 - Scripts esES\MfGhost_S3E9_MGHSIM0033_369279_subtitle_edited_es-la.ass" --serve 
+[26/02/2026 18:30:03,18] "C:\Users\ajime\OneDrive\Documentos\PENDING\139 - Frieren S2\FrierenBeyondJo_S2E6_FBJSIM0034_366519_subtitle_edited_es-es.ass" --serve 
+[26/02/2026 18:46:26,16] "C:\Users\ajime\OneDrive\Documentos\PENDING\139 - Frieren S2\FrierenBeyondJo_S2E6_FBJSIM0034_366519_subtitle_edited_es-la.ass" --serve 
+[27/02/2026  6:17:26,85] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S1.0E8_TBVSIM0008_367623_subtitle_edited_es-la.ass" --serve 
+[27/02/2026  8:13:55,86] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S1.0E8_TBVSIM0008_367623_subtitle_edited_es-es.ass" --serve 

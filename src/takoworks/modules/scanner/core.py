@@ -459,17 +459,52 @@ def _gcv_ocr_images(
     return lines
 
 
-def _gcv_collect_lines(json_paths: List[Path]) -> List[str]:
+def _gcv_collect_pages(json_paths: List[Path]) -> List[Tuple[int, int, str]]:
+    def _parse_range(path: Path) -> Optional[Tuple[int, int]]:
+        m = re.search(r"(\d+)-to-(\d+)\.json$", path.name)
+        if not m:
+            return None
+        try:
+            return int(m.group(1)), int(m.group(2))
+        except ValueError:
+            return None
+
+    def _coerce_page_num(value) -> Optional[int]:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _sort_key(path: Path) -> Tuple[int, int, int, str]:
+        rng = _parse_range(path)
+        if rng:
+            return (0, rng[0], rng[1], path.name)
+        return (1, 0, 0, path.name)
+
     pages: List[Tuple[int, int, str]] = []
     order = 0
-    for path in json_paths:
+    for path in sorted(json_paths, key=_sort_key):
         data = json.loads(path.read_text(encoding="utf-8"))
-        for resp in data.get("responses", []):
+        responses = data.get("responses", [])
+        rng = _parse_range(path)
+        start_page = rng[0] if rng else None
+        for resp_idx, resp in enumerate(responses):
             text = resp.get("fullTextAnnotation", {}).get("text", "") or ""
-            page_num = resp.get("context", {}).get("pageNumber", order + 1)
+            page_num = _coerce_page_num(resp.get("context", {}).get("pageNumber"))
+            if page_num is None:
+                if start_page is not None:
+                    page_num = start_page + resp_idx
+                else:
+                    page_num = order + 1
             pages.append((page_num, order, text))
             order += 1
     pages.sort(key=lambda x: (x[0], x[1]))
+    return pages
+
+
+def _gcv_lines_from_pages(pages: List[Tuple[int, int, str]]) -> List[str]:
     lines: List[str] = []
     for _page_num, _idx, text in pages:
         for line in text.splitlines():
@@ -477,6 +512,19 @@ def _gcv_collect_lines(json_paths: List[Path]) -> List[str]:
             if stripped:
                 lines.append(stripped)
     return lines
+
+
+def _gcv_raw_text_from_pages(pages: List[Tuple[int, int, str]]) -> str:
+    blocks: List[str] = []
+    for _page_num, _idx, text in pages:
+        if not text:
+            continue
+        blocks.append(text.strip("\n"))
+    return "\n\n".join(blocks).strip("\n")
+
+
+def _gcv_collect_lines(json_paths: List[Path]) -> List[str]:
+    return _gcv_lines_from_pages(_gcv_collect_pages(json_paths))
 
 
 def _merge_lines_until_quote(lines: List[str]) -> List[str]:
@@ -509,9 +557,19 @@ def _write_gcv_outputs(
     merged_lines: List[str],
     make_excel: bool,
     make_txt: bool,
+    make_raw: bool,
+    raw_text: Optional[str],
     log: LogFn,
 ) -> ScanOutputs:
     out = ScanOutputs()
+    stem = pdf_path.stem
+    raw_payload = raw_text or ""
+    if make_raw:
+        out_raw = out_dir / f"{stem}_scanner_raw.txt"
+        out_raw.write_text(raw_payload, encoding="utf-8", errors="replace")
+        out.raw = str(out_raw)
+        log(f"TXT RAW: {out_raw}")
+
     dialog_lines = []
     for line in merged_lines:
         text = _extract_dialogue_text(line)
@@ -520,10 +578,12 @@ def _write_gcv_outputs(
 
     dialog_lines = _split_and_filter_lines(dialog_lines)
     if not dialog_lines:
-        log("Sin resultados -> no se generan salidas.")
+        if make_raw:
+            log("Sin resultados en dialogos -> OCR bruto generado.")
+        else:
+            log("Sin resultados -> no se generan salidas.")
         return out
 
-    stem = pdf_path.stem
     if make_txt:
         out_txt = out_dir / f"{stem}_scanner.txt"
         out_txt.write_text("\n".join(dialog_lines), encoding="utf-8", errors="replace")
@@ -550,6 +610,7 @@ def run_gcloud_scanner(
     out_dir: str,
     make_excel: bool,
     make_txt: bool,
+    make_raw: bool = False,
     crop_rect: Optional[CropRect] = None,
     crop_rect_by_page: Optional[Dict[int, CropRect]] = None,
     skip_polys_by_page: Optional[Dict[int, List[List[Tuple[float, float]]]]] = None,
@@ -599,8 +660,18 @@ def run_gcloud_scanner(
             log=log,
             cancel_event=cancel_event,
         )
+        raw_text = "\n".join(lines)
         merged = _merge_lines_until_quote(lines)
-        return _write_gcv_outputs(pdf_path, out_dir_p, merged, make_excel, make_txt, log)
+        return _write_gcv_outputs(
+            pdf_path,
+            out_dir_p,
+            merged,
+            make_excel,
+            make_txt,
+            make_raw,
+            raw_text,
+            log,
+        )
 
     bucket = _gcv_bucket()
     run_id = _gcv_run_id()
@@ -613,9 +684,20 @@ def run_gcloud_scanner(
     tmp_dir = Path(tempfile.gettempdir()) / f"takoworks_gcv_{run_id}"
     try:
         json_paths = _gcv_download_json(output_prefix, tmp_dir, log, cancel_event)
-        lines = _gcv_collect_lines(json_paths)
+        pages = _gcv_collect_pages(json_paths)
+        raw_text = _gcv_raw_text_from_pages(pages)
+        lines = _gcv_lines_from_pages(pages)
         merged = _merge_lines_until_quote(lines)
-        outputs = _write_gcv_outputs(pdf_path, out_dir_p, merged, make_excel, make_txt, log)
+        outputs = _write_gcv_outputs(
+            pdf_path,
+            out_dir_p,
+            merged,
+            make_excel,
+            make_txt,
+            make_raw,
+            raw_text,
+            log,
+        )
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -1688,6 +1770,7 @@ class ScanOutputs:
     xlsx: Optional[str] = None
     ass: Optional[str] = None
     txt: Optional[str] = None
+    raw: Optional[str] = None
 
 
 def run_scanner(

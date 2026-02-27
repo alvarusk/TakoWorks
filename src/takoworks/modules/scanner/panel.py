@@ -747,6 +747,7 @@ class ScannerPanel(ttk.Frame):
 
         self.out_excel_var = tk.BooleanVar(value=bool(cfg["last"].get("scanner_out_excel", True)))
         self.out_txt_var = tk.BooleanVar(value=bool(cfg["last"].get("scanner_out_txt", True)))
+        self.out_raw_var = tk.BooleanVar(value=bool(cfg["last"].get("scanner_out_raw", False)))
 
         self._build()
 
@@ -779,6 +780,7 @@ class ScannerPanel(ttk.Frame):
         roo = ttk.Frame(outs); roo.pack(fill="x", padx=8, pady=6)
         ttk.Checkbutton(roo, text="Excel", variable=self.out_excel_var).pack(side="left", padx=(0, 10))
         ttk.Checkbutton(roo, text="TXT", variable=self.out_txt_var).pack(side="left", padx=(0, 10))
+        ttk.Checkbutton(roo, text="OCR bruto", variable=self.out_raw_var).pack(side="left", padx=(0, 10))
 
         # Buttons
         btns = ttk.Frame(frm); btns.pack(fill="x", pady=10)
@@ -856,8 +858,8 @@ class ScannerPanel(ttk.Frame):
         out_dir = os.path.dirname(inp)
         self.out_var.set(out_dir)
 
-        if not (self.out_excel_var.get() or self.out_txt_var.get()):
-            messagebox.showwarning("Aviso", "Selecciona al menos una salida (Excel/TXT).")
+        if not (self.out_excel_var.get() or self.out_txt_var.get() or self.out_raw_var.get()):
+            messagebox.showwarning("Aviso", "Selecciona al menos una salida (Excel/TXT/OCR bruto).")
             return
 
         # persist config
@@ -877,6 +879,7 @@ class ScannerPanel(ttk.Frame):
 
         self.cfg["last"]["scanner_out_excel"] = bool(self.out_excel_var.get())
         self.cfg["last"]["scanner_out_txt"] = bool(self.out_txt_var.get())
+        self.cfg["last"]["scanner_out_raw"] = bool(self.out_raw_var.get())
         save_config(self.cfg)
 
         def job(cancel_event, log):
@@ -886,6 +889,7 @@ class ScannerPanel(ttk.Frame):
                 out_dir=out_dir,
                 make_excel=bool(self.out_excel_var.get()),
                 make_txt=bool(self.out_txt_var.get()),
+                make_raw=bool(self.out_raw_var.get()),
                 crop_rect=self.selection.crop_rect,
                 crop_rect_by_page=self.selection.crop_rect_by_page,
                 skip_polys_by_page=self.selection.skip_polys_by_page,

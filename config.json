@@ -45,12 +45,12 @@
     }
   },
   "last": {
-    "ass_in": "C:\\Users\\ajime\\OneDrive\\Documentos\\PENDING\\141 - MF Ghost S3\\2 - Scripts esES\\ep05\\mfghost305_ja.ass",
+    "ass_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - The Daily Life of the Immortal King S5/3 - Scripts esES/s5e11/DailyLifeOfImmo_S5E11.0_TDISIM0062_364577_subtitle_edited_zh-cn.ass",
     "video_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/141 - MF Ghost S3/3 - Vídeos/CR_MfGhost_S3.0E4.0_MGHSIM0028_369274_video_ja-jp_J6126574.mp4",
     "word_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/0 - Ref/XW5#06_台词本_净版_250418.docx",
-    "pdf_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/141 - MF Ghost S3/0 - Ref/ep05/#29_MF GHOST_Final script_v3.pdf",
-    "out_dir": "C:/Users/ajime/OneDrive/Documentos/PENDING/141 - MF Ghost S3/0 - Ref/ep05",
-    "splitter_pos": 462,
+    "pdf_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/142 - Dead Account/0 - Ref/ep05/#05_Dead Account_Final script_v3.pdf",
+    "out_dir": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - The Daily Life of the Immortal King S5/3 - Scripts esES/s5e11/",
+    "splitter_pos": 466,
     "scanner_batch": false,
     "yomitoku_exe": "C:\\TakoWorks\\bin\\yomitoku\\yomitoku.exe",
     "cut_upper_ratio": 0.0,
@@ -66,7 +66,11 @@
     "cut_right_ratio": 1.0,
     "cut_top_ratio": 0.0,
     "cut_bottom_ratio": 1.0,
-    "transferer_src": "C:\\Users\\ajime\\OneDrive\\Documentos\\PENDING\\142 - Dead Account\\2 - Scripts esES\\ep03\\DeadAccount_S1.0E3_TBVSIM0003_367618_subtitle_full_en-us_OUT.ass",
-    "transferer_dst": "C:\\Users\\ajime\\OneDrive\\Documentos\\PENDING\\142 - Dead Account\\2 - Scripts esES\\ep03\\DeadAccount_S1E3_TBVSIM0003_367618_subtitle_timed_en-us.ass"
+    "transferer_src": "C:\\Users\\ajime\\OneDrive\\Documentos\\PENDING\\141 - MF Ghost S3\\1 - Scripts enUS\\ep05\\MfGhost_S3.0E5_MGHSIM0029_369275_subtitle_edited_en-us.ass",
+    "transferer_dst": "C:\\Users\\ajime\\OneDrive\\Documentos\\PENDING\\141 - MF Ghost S3\\1 - Scripts enUS\\ep05\\MfGhost_S3.0E5_MGHSIM0029_369275_subtitle_timed.ass",
+    "scanner_out_raw": true,
+    "warpgate_video": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - The Daily Life of the Immortal King S5/1 - Vídeos/CR_DailyLifeOfImmo_S5E11.0_TDISIM0062_364577_video_cmn-cn_J5837146.mp4",
+    "warpgate_ass_a": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - The Daily Life of the Immortal King S5/3 - Scripts esES/s5e11/DailyLifeOfImmo_S5E11_TDISIM0062_364577_subtitle_timed.ass",
+    "warpgate_ass_b": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - The Daily Life of the Immortal King S5/3 - Scripts esES/s5e11/DailyLifeOfImmo_S5E11.0_TDISIM0062_364577_subtitle_edited_zh-cn_v2.ass"
   }
 }
