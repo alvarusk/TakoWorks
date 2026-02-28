@@ -3,8 +3,7 @@ param(
     [string]$Manifest = "dist_installer/AppxManifest.xml",
     [string]$AssetsDir = "dist_installer/assets",
     [string]$BuildDir = "dist/TakoWorks",
-    [string]$OutFile = "TakoWorks.msix",
-    [switch]$ExcludeTransformersPythonSources = $true
+    [string]$OutFile = "TakoWorks.msix"
 )
 
 $ErrorActionPreference = "Stop"
@@ -87,19 +86,10 @@ $files = Get-ChildItem -LiteralPath $resolvedBuildDir.Path -Recurse -File -Force
 $pathStats = New-Object System.Collections.Generic.List[object]
 $skipped = New-Object System.Collections.Generic.List[object]
 $copiedCount = 0
-$policySkipped = 0
 
 foreach ($file in $files) {
     $rel = [IO.Path]::GetRelativePath($resolvedBuildDir.Path, $file.FullName).Replace("/", "\")
     $pathStats.Add([pscustomobject]@{ Rel = $rel; Len = $rel.Length }) | Out-Null
-
-    # PyInstaller includes many transformers source files under _internal.
-    # Runtime uses bundled bytecode, so excluding these sources keeps package payload cleaner.
-    if ($ExcludeTransformersPythonSources -and $rel -match '^(?:_internal|internal)\\transformers\\.*\.py$') {
-        $policySkipped++
-        $skipped.Add([pscustomobject]@{ Rel = $rel; Reason = "Excluded transformers source .py for MSIX packaging" }) | Out-Null
-        continue
-    }
 
     $reason = Test-AppxRelativePath -RelPath $rel
     if ($reason) {
@@ -118,7 +108,6 @@ foreach ($file in $files) {
 
 Write-Host "Copied files: $copiedCount"
 Write-Host "Skipped files: $($skipped.Count)"
-Write-Host "Policy-skipped transformers .py files: $policySkipped"
 Write-Host "Top 20 longest relative paths:"
 $pathStats | Sort-Object Len -Descending | Select-Object -First 20 | ForEach-Object {
     Write-Host ("  {0,4}  {1}" -f $_.Len, $_.Rel)
