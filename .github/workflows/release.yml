@@ -188,7 +188,13 @@ jobs:
             if ($_.RelLength -gt 180) {
               $longRelPaths.Add([PSCustomObject]@{ Path = $_.RelPath; Length = $_.RelLength }) | Out-Null
             }
+            if ($_.RelPath -match '[\x00-\x1F]') {
+              $invalid.Add([PSCustomObject]@{ Path = $_.RelPath; Reason = "Control character in package path" }) | Out-Null
+            }
           }
+          $duplicateRelPaths = $packageFiles |
+            Group-Object { $_.RelPath.ToLowerInvariant() } |
+            Where-Object { $_.Count -gt 1 }
 
           if ($longPaths.Count -gt 0) {
             Write-Warning "Detected $($longPaths.Count) very long file paths (>240 chars) under build dir. makeappx can fail with opaque path syntax errors."
@@ -212,16 +218,33 @@ jobs:
             throw "Aborting MSIX build: found $($invalid.Count) invalid package-relative file path(s)."
           }
 
+          if ($duplicateRelPaths.Count -gt 0) {
+            Write-Host "Duplicate package-relative paths detected (case-insensitive):"
+            $duplicateRelPaths | Select-Object -First 20 | ForEach-Object {
+              $items = $_.Group | ForEach-Object { $_.RelPath }
+              Write-Host (" - {0}" -f ($items -join " | "))
+            }
+            throw "Aborting MSIX build: found $($duplicateRelPaths.Count) duplicate package-relative path group(s)."
+          }
+
+          function New-MappingFile {
+            param(
+              [Parameter(Mandatory = $true)][object[]]$Entries,
+              [Parameter(Mandatory = $true)][string]$Path
+            )
+            $lines = New-Object System.Collections.Generic.List[string]
+            $lines.Add("[Files]") | Out-Null
+            $Entries | ForEach-Object {
+              $src = $_.FullPath -replace '"', '""'
+              $dst = $_.RelPath -replace '"', '""'
+              $lines.Add(("`"{0}`" `"{1}`"" -f $src, $dst)) | Out-Null
+            }
+            Set-Content -LiteralPath $Path -Value $lines -Encoding UTF8
+          }
+
           $mappingFile = Join-Path $Env:RUNNER_TEMP "makeappx.pack.mapping.txt"
           if (Test-Path $mappingFile) { Remove-Item $mappingFile -Force }
-          $mappingLines = New-Object System.Collections.Generic.List[string]
-          $mappingLines.Add("[Files]") | Out-Null
-          $packageFiles | ForEach-Object {
-            $src = $_.FullPath -replace '"','""'
-            $dst = $_.RelPath -replace '"','""'
-            $mappingLines.Add(("`"{0}`" `"{1}`"" -f $src, $dst)) | Out-Null
-          }
-          Set-Content -LiteralPath $mappingFile -Value $mappingLines -Encoding UTF8
+          New-MappingFile -Entries $packageFiles -Path $mappingFile
           Write-Host "Generated makeappx mapping file with $($packageFiles.Count) entries: $mappingFile"
 
           $makeappxOut = Join-Path $Env:RUNNER_TEMP "makeappx.pack.out.log"
@@ -256,8 +279,9 @@ jobs:
             $lastPackagePath = if ($pkgPathMatch) { $pkgPathMatch.Matches[0].Groups[1].Value -replace '/', '\' } else { $null }
 
             $neighborsText = "<not-available>"
+            $relPaths = @($packageFiles | ForEach-Object { $_.RelPath })
+            $idx = -1
             if ($lastPackagePath) {
-              $relPaths = @($packageFiles | ForEach-Object { $_.RelPath })
               $idx = [Array]::IndexOf($relPaths, $lastPackagePath)
               if ($idx -ge 0) {
                 $start = [Math]::Max(0, $idx - 2)
@@ -269,9 +293,95 @@ jobs:
               }
             }
 
+            $likelyOffendingPath = "<not-found>"
+            $probeSummary = "<not-run>"
+            if ($errorCode -ieq "0x8007007b") {
+              $probeLines = New-Object System.Collections.Generic.List[string]
+
+              $baselineSet = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+              $baselineSet.Add("AppxManifest.xml") | Out-Null
+              $exeRel = $buildXml.Package.Applications.Application.Executable
+              if ($exeRel) {
+                $baselineSet.Add(($exeRel -replace '/', '\')) | Out-Null
+              }
+              $packageFiles | Where-Object { $_.RelPath -like 'assets\*' } | ForEach-Object {
+                $baselineSet.Add($_.RelPath) | Out-Null
+              }
+              $baselineEntries = @($packageFiles | Where-Object { $baselineSet.Contains($_.RelPath) })
+              $probeLines.Add("baseline entries: $($baselineEntries.Count)") | Out-Null
+
+              function Invoke-ProbePack {
+                param(
+                  [Parameter(Mandatory = $true)][object[]]$Entries,
+                  [Parameter(Mandatory = $true)][string]$Tag
+                )
+                $probeMap = Join-Path $Env:RUNNER_TEMP ("makeappx.probe.{0}.map.txt" -f $Tag)
+                $probeOut = Join-Path $Env:RUNNER_TEMP ("makeappx.probe.{0}.out.log" -f $Tag)
+                $probeErr = Join-Path $Env:RUNNER_TEMP ("makeappx.probe.{0}.err.log" -f $Tag)
+                $probePkg = Join-Path $Env:RUNNER_TEMP ("makeappx.probe.{0}.msix" -f $Tag)
+                if (Test-Path $probeMap) { Remove-Item $probeMap -Force }
+                if (Test-Path $probeOut) { Remove-Item $probeOut -Force }
+                if (Test-Path $probeErr) { Remove-Item $probeErr -Force }
+                if (Test-Path $probePkg) { Remove-Item $probePkg -Force }
+
+                New-MappingFile -Entries $Entries -Path $probeMap
+                $p = Start-Process -FilePath $makeappx.FullName `
+                  -ArgumentList @("pack", "/o", "/f", $probeMap, "/p", $probePkg) `
+                  -RedirectStandardOutput $probeOut `
+                  -RedirectStandardError $probeErr `
+                  -PassThru -WindowStyle Hidden
+                $p.WaitForExit()
+
+                $probeStdout = if (Test-Path $probeOut) { Get-Content $probeOut } else { @() }
+                $probeStderr = if (Test-Path $probeErr) { Get-Content $probeErr } else { @() }
+                $probeAll = $probeStdout + $probeStderr
+                $probeCodeMatch = $probeAll | Select-String -Pattern '0x[0-9A-Fa-f]{8}' | Select-Object -Last 1
+                $probeCode = if ($probeCodeMatch) { $probeCodeMatch.Matches[0].Value } else { "<not-detected>" }
+
+                if (Test-Path $probePkg) { Remove-Item $probePkg -Force }
+                [PSCustomObject]@{
+                  ExitCode = $p.ExitCode
+                  ErrorCode = $probeCode
+                }
+              }
+
+              $baseProbe = Invoke-ProbePack -Entries $baselineEntries -Tag "baseline"
+              $probeLines.Add(("baseline probe -> exit={0} code={1}" -f $baseProbe.ExitCode, $baseProbe.ErrorCode)) | Out-Null
+              if ($baseProbe.ErrorCode -ieq "0x8007007b") {
+                $likelyOffendingPath = "<baseline-files>"
+              } else {
+                $candidateRels = New-Object System.Collections.Generic.List[string]
+                if ($idx -ge 0) {
+                  $cStart = [Math]::Max(0, $idx - 2)
+                  $cEnd = [Math]::Min($packageFiles.Count - 1, $idx + 20)
+                  for ($i = $cStart; $i -le $cEnd; $i++) {
+                    $candidateRels.Add($packageFiles[$i].RelPath) | Out-Null
+                  }
+                } else {
+                  $packageFiles | Select-Object -First 25 | ForEach-Object { $candidateRels.Add($_.RelPath) | Out-Null }
+                }
+
+                $probeIndex = 0
+                foreach ($candRel in $candidateRels | Select-Object -Unique) {
+                  $candEntry = $packageFiles | Where-Object { $_.RelPath -eq $candRel } | Select-Object -First 1
+                  if (-not $candEntry) { continue }
+                  $probeIndex++
+                  $tag = ("cand_{0}" -f $probeIndex)
+                  $probeEntries = @($baselineEntries + $candEntry)
+                  $probe = Invoke-ProbePack -Entries $probeEntries -Tag $tag
+                  $probeLines.Add(("candidate {0} -> exit={1} code={2}" -f $candRel, $probe.ExitCode, $probe.ErrorCode)) | Out-Null
+                  if ($probe.ErrorCode -ieq "0x8007007b") {
+                    $likelyOffendingPath = $candRel
+                    break
+                  }
+                }
+              }
+              $probeSummary = $probeLines -join [Environment]::NewLine
+            }
+
             $hint = "Review the last 'Processing ... as a payload file' line and inspect nearby file names/paths."
             if ($errorCode -ieq "0x8007007b") {
-              $hint = "0x8007007B indicates invalid filename/path syntax. Check the neighbor list below and validate those package paths first."
+              $hint = "0x8007007B indicates invalid filename/path syntax. Check likely offending path and probe summary below."
             }
 
             throw (
@@ -286,8 +396,11 @@ jobs:
                 "Logs:"
                 "  stdout: $makeappxOut"
                 "  stderr: $makeappxErr"
+                "Likely offending package path: $likelyOffendingPath"
                 "Neighbor files around last processed package path:"
                 $neighborsText
+                "0x8007007B probe summary:"
+                $probeSummary
               ) -join [Environment]::NewLine
             )
           }
