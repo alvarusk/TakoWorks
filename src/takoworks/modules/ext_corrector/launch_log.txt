@@ -136,3 +136,4 @@
 [27/02/2026  6:17:26,85] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S1.0E8_TBVSIM0008_367623_subtitle_edited_es-la.ass" --serve 
 [27/02/2026  8:13:55,86] "C:\Users\ajime\OneDrive\Documentos\PENDING\142 - Dead Account\2 - Scripts esES\DeadAccount_S1.0E8_TBVSIM0008_367623_subtitle_edited_es-es.ass" --serve 
 [28/02/2026 10:21:31,55] "C:\Users\ajime\OneDrive\Documentos\PENDING\137 - Hell's Paradise S2\3 - Scripts esES\HellsParadise_S2E8_HLPSIM0021_266031_subtitle_edited_es-es.ass" --serve 
+[28/02/2026 10:27:08,71] "C:\Users\ajime\OneDrive\Documentos\PENDING\137 - Hell's Paradise S2\2 - Scripts esLA\HellsParadise_S2E8_HLPSIM0021_266031_subtitle_edited_es-la.ass" --serve 
