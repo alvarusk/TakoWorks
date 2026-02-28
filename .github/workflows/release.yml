@@ -219,16 +219,18 @@ jobs:
               $hint = "0x8007007B indicates invalid filename/path syntax. Check for trailing dots/spaces, reserved names (CON/AUX/NUL/COMx/LPTx), or too-long paths in dist/TakoWorks."
             }
 
-            throw @"
-makeappx pack failed with exit code $($proc.ExitCode).
-Windows error code: $errorCode
-Last payload processed: $lastProcessingText
-Hint: $hint
-Build dir: $buildDirResolved
-Logs:
-  stdout: $makeappxOut
-  stderr: $makeappxErr
-"@
+            throw (
+              @(
+                "makeappx pack failed with exit code $($proc.ExitCode)."
+                "Windows error code: $errorCode"
+                "Last payload processed: $lastProcessingText"
+                "Hint: $hint"
+                "Build dir: $buildDirResolved"
+                "Logs:"
+                "  stdout: $makeappxOut"
+                "  stderr: $makeappxErr"
+              ) -join [Environment]::NewLine
+            )
           }
 
       - name: Inspect MSIX version
