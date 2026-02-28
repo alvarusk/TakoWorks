@@ -110,12 +110,28 @@ jobs:
       - name: Build MSIX (makeappx)
         shell: pwsh
         run: |
+          $manifest = Join-Path $Env:GITHUB_WORKSPACE "dist_installer/AppxManifest.xml"
+          $assetsSrc = Join-Path $Env:GITHUB_WORKSPACE "dist_installer/assets"
+          $buildDir = (Resolve-Path "${{ env.BUILD_DIR }}" -ErrorAction Stop).Path
           $msixOut = Join-Path $Env:GITHUB_WORKSPACE "TakoWorks.msix"
-          .\bin\build_msix.ps1 `
-            -Manifest "dist_installer/AppxManifest.xml" `
-            -AssetsDir "dist_installer/assets" `
-            -BuildDir "${{ env.BUILD_DIR }}" `
-            -OutFile $msixOut
+          if (-not (Test-Path $manifest)) { throw "AppxManifest not found at $manifest" }
+          $makeappx = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter makeappx.exe |
+            Where-Object { $_.FullName -match '\\x64\\' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $makeappx) { throw "makeappx.exe not found under Windows Kits" }
+          if (Test-Path $msixOut) { Remove-Item -Force $msixOut }
+          Copy-Item -LiteralPath $manifest -Destination (Join-Path $buildDir "AppxManifest.xml") -Force
+          $buildManifest = Join-Path $buildDir "AppxManifest.xml"
+          $buildXml = [xml](Get-Content $buildManifest)
+          Write-Host "Build dir AppxManifest version: $($buildXml.Package.Identity.Version)"
+          $dstAssets = Join-Path $buildDir "assets"
+          if (-not (Test-Path $dstAssets)) { New-Item -ItemType Directory -Path $dstAssets | Out-Null }
+          Copy-Item -Path (Join-Path $assetsSrc "*") -Destination $dstAssets -Recurse -Force
+          Write-Host "Packaging from: $buildDir"
+          Write-Host "MSIX output: $msixOut"
+          & $makeappx.FullName pack /o /d $buildDir /p $msixOut
+          if ($LASTEXITCODE -ne 0) { throw "makeappx failed with exit code $LASTEXITCODE" }
 
       - name: Inspect MSIX version
         shell: pwsh
