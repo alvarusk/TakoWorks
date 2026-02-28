@@ -125,7 +125,111 @@ jobs:
           $dstAssets = Join-Path "${{ env.BUILD_DIR }}" "assets"
           if (-not (Test-Path $dstAssets)) { New-Item -ItemType Directory -Path $dstAssets | Out-Null }
           Copy-Item -Path (Join-Path $assetsSrc "*") -Destination $dstAssets -Recurse -Force
-          & $makeappx.FullName pack /o /d "${{ env.BUILD_DIR }}" /p "TakoWorks.msix"
+
+          function Test-AppxSafeRelativePath {
+            param([string]$RelativePath)
+
+            $norm = $RelativePath -replace '/', '\'
+            if ([string]::IsNullOrWhiteSpace($norm)) {
+              return [PSCustomObject]@{ IsValid = $false; Reason = "Empty relative path" }
+            }
+            if ($norm.StartsWith('\') -or $norm -match '^[A-Za-z]:') {
+              return [PSCustomObject]@{ IsValid = $false; Reason = "Path is not package-relative" }
+            }
+
+            $segments = $norm -split '\\'
+            foreach ($seg in $segments) {
+              if ([string]::IsNullOrWhiteSpace($seg)) { continue }
+              if ($seg -in @(".", "..")) {
+                return [PSCustomObject]@{ IsValid = $false; Reason = "Dot segment not allowed: '$seg'" }
+              }
+              if ($seg.TrimEnd(' ', '.').Length -ne $seg.Length) {
+                return [PSCustomObject]@{ IsValid = $false; Reason = "Segment ends with dot/space: '$seg'" }
+              }
+              if ($seg -match '^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?$') {
+                return [PSCustomObject]@{ IsValid = $false; Reason = "Reserved Windows device name: '$seg'" }
+              }
+              if ($seg.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0) {
+                return [PSCustomObject]@{ IsValid = $false; Reason = "Invalid character in segment: '$seg'" }
+              }
+            }
+            return [PSCustomObject]@{ IsValid = $true; Reason = "" }
+          }
+
+          $buildDirResolved = (Resolve-Path -LiteralPath "${{ env.BUILD_DIR }}").Path
+          $invalid = New-Object System.Collections.Generic.List[object]
+          $longPaths = New-Object System.Collections.Generic.List[object]
+          Get-ChildItem -LiteralPath $buildDirResolved -File -Recurse | ForEach-Object {
+            $rel = [IO.Path]::GetRelativePath($buildDirResolved, $_.FullName)
+            $check = Test-AppxSafeRelativePath -RelativePath $rel
+            if (-not $check.IsValid) {
+              $invalid.Add([PSCustomObject]@{ Path = $rel; Reason = $check.Reason }) | Out-Null
+            }
+            if ($_.FullName.Length -gt 240) {
+              $longPaths.Add([PSCustomObject]@{ Path = $rel; Length = $_.FullName.Length }) | Out-Null
+            }
+          }
+
+          if ($longPaths.Count -gt 0) {
+            Write-Warning "Detected $($longPaths.Count) very long file paths (>240 chars) under build dir. makeappx can fail with opaque path syntax errors."
+            $longPaths | Select-Object -First 10 | ForEach-Object {
+              Write-Warning ("long-path [{0} chars] {1}" -f $_.Length, $_.Path)
+            }
+          }
+
+          if ($invalid.Count -gt 0) {
+            Write-Host "Invalid package paths detected before makeappx:"
+            $invalid | Select-Object -First 20 | ForEach-Object {
+              Write-Host (" - {0} ({1})" -f $_.Path, $_.Reason)
+            }
+            throw "Aborting MSIX build: found $($invalid.Count) invalid package-relative file path(s)."
+          }
+
+          $makeappxOut = Join-Path $Env:RUNNER_TEMP "makeappx.pack.out.log"
+          $makeappxErr = Join-Path $Env:RUNNER_TEMP "makeappx.pack.err.log"
+          if (Test-Path $makeappxOut) { Remove-Item $makeappxOut -Force }
+          if (Test-Path $makeappxErr) { Remove-Item $makeappxErr -Force }
+
+          Write-Host "Running makeappx: $($makeappx.FullName) pack /o /d $buildDirResolved /p TakoWorks.msix"
+          $proc = Start-Process -FilePath $makeappx.FullName `
+            -ArgumentList @("pack", "/o", "/d", $buildDirResolved, "/p", "TakoWorks.msix") `
+            -RedirectStandardOutput $makeappxOut `
+            -RedirectStandardError $makeappxErr `
+            -PassThru -WindowStyle Hidden
+          $proc.WaitForExit()
+
+          Write-Host "---- makeappx stdout (tail 300) ----"
+          if (Test-Path $makeappxOut) { Get-Content $makeappxOut -Tail 300 | Write-Host }
+          Write-Host "---- makeappx stderr (tail 300) ----"
+          if (Test-Path $makeappxErr) { Get-Content $makeappxErr -Tail 300 | Write-Host }
+
+          if ($proc.ExitCode -ne 0) {
+            $stdout = @()
+            $stderr = @()
+            if (Test-Path $makeappxOut) { $stdout = Get-Content $makeappxOut }
+            if (Test-Path $makeappxErr) { $stderr = Get-Content $makeappxErr }
+            $all = $stdout + $stderr
+            $lastProcessing = $all | Where-Object { $_ -like 'Processing "*' } | Select-Object -Last 1
+            $codeMatch = $all | Select-String -Pattern '0x[0-9A-Fa-f]{8}' | Select-Object -Last 1
+            $errorCode = if ($codeMatch) { $codeMatch.Matches[0].Value } else { "<not-detected>" }
+            $lastProcessingText = if ($lastProcessing) { $lastProcessing } else { "<not-found>" }
+
+            $hint = "Review the last 'Processing ... as a payload file' line and inspect nearby file names/paths."
+            if ($errorCode -ieq "0x8007007b") {
+              $hint = "0x8007007B indicates invalid filename/path syntax. Check for trailing dots/spaces, reserved names (CON/AUX/NUL/COMx/LPTx), or too-long paths in dist/TakoWorks."
+            }
+
+            throw @"
+makeappx pack failed with exit code $($proc.ExitCode).
+Windows error code: $errorCode
+Last payload processed: $lastProcessingText
+Hint: $hint
+Build dir: $buildDirResolved
+Logs:
+  stdout: $makeappxOut
+  stderr: $makeappxErr
+"@
+          }
 
       - name: Inspect MSIX version
         shell: pwsh

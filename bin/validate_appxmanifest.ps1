@@ -94,11 +94,54 @@ if (-not (Test-Path $exePath)) { [IO.File]::WriteAllBytes($exePath, [byte[]]@())
 $tmpOut = Join-Path ([IO.Path]::GetTempPath()) "manifest_validate.msix"
 if (Test-Path $tmpOut) { Remove-Item $tmpOut -Force }
 
-& $makeappxPath pack /o /nv /nfv /d $tmpDir /p $tmpOut
-$exit = $LASTEXITCODE
-if (Test-Path $tmpOut) { Remove-Item $tmpOut -Force }
-Remove-Item $tmpDir -Recurse -Force
-if ($exit -ne 0) {
-    throw "makeappx pack (validation) failed with exit code $exit"
+$valOut = Join-Path ([IO.Path]::GetTempPath()) ("makeappx_validate_" + [guid]::NewGuid().ToString() + ".out.log")
+$valErr = Join-Path ([IO.Path]::GetTempPath()) ("makeappx_validate_" + [guid]::NewGuid().ToString() + ".err.log")
+
+try {
+    $proc = Start-Process -FilePath $makeappxPath `
+        -ArgumentList @("pack", "/o", "/nv", "/nfv", "/d", $tmpDir, "/p", $tmpOut) `
+        -RedirectStandardOutput $valOut `
+        -RedirectStandardError $valErr `
+        -PassThru -WindowStyle Hidden
+    $proc.WaitForExit()
+
+    Write-Host "---- makeappx validation stdout (tail 200) ----"
+    if (Test-Path $valOut) { Get-Content $valOut -Tail 200 | Write-Host }
+    Write-Host "---- makeappx validation stderr (tail 200) ----"
+    if (Test-Path $valErr) { Get-Content $valErr -Tail 200 | Write-Host }
+
+    if ($proc.ExitCode -ne 0) {
+        $stdout = @()
+        $stderr = @()
+        if (Test-Path $valOut) { $stdout = Get-Content $valOut }
+        if (Test-Path $valErr) { $stderr = Get-Content $valErr }
+        $all = $stdout + $stderr
+        $lastProcessing = $all | Where-Object { $_ -like 'Processing "*' } | Select-Object -Last 1
+        $codeMatch = $all | Select-String -Pattern '0x[0-9A-Fa-f]{8}' | Select-Object -Last 1
+        $errorCode = if ($codeMatch) { $codeMatch.Matches[0].Value } else { "<not-detected>" }
+        $lastProcessingText = if ($lastProcessing) { $lastProcessing } else { "<not-found>" }
+
+        $hint = "Review manifest-declared files and the last payload line above."
+        if ($errorCode -ieq "0x8007007b") {
+            $hint = "0x8007007B indicates invalid filename/path syntax. Verify asset names and manifest paths (no trailing dots/spaces, reserved names, or malformed separators)."
+        }
+
+        throw @"
+makeappx validation pack failed with exit code $($proc.ExitCode).
+Windows error code: $errorCode
+Last payload processed: $lastProcessingText
+Hint: $hint
+Logs:
+  stdout: $valOut
+  stderr: $valErr
+"@
+    }
+
+    Write-Host "Manifest validation succeeded."
 }
-Write-Host "Manifest validation succeeded."
+finally {
+    if (Test-Path $tmpOut) { Remove-Item $tmpOut -Force }
+    if (Test-Path $tmpDir) { Remove-Item $tmpDir -Recurse -Force }
+    if (Test-Path $valOut) { Remove-Item $valOut -Force }
+    if (Test-Path $valErr) { Remove-Item $valErr -Force }
+}
