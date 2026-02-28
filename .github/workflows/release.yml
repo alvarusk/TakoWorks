@@ -157,10 +157,17 @@ jobs:
           }
 
           $buildDirResolved = (Resolve-Path -LiteralPath "${{ env.BUILD_DIR }}").Path
+          $packDir = Join-Path $Env:RUNNER_TEMP "msix_pack_in"
+          if (Test-Path $packDir) { Remove-Item -LiteralPath $packDir -Recurse -Force }
+          New-Item -ItemType Directory -Path $packDir | Out-Null
+          Copy-Item -Path (Join-Path $buildDirResolved "*") -Destination $packDir -Recurse -Force
+          $packageSourceDir = (Resolve-Path -LiteralPath $packDir).Path
+          Write-Host "Packaging from short staging dir: $packageSourceDir"
+
           $invalid = New-Object System.Collections.Generic.List[object]
           $longPaths = New-Object System.Collections.Generic.List[object]
-          Get-ChildItem -LiteralPath $buildDirResolved -File -Recurse | ForEach-Object {
-            $rel = [IO.Path]::GetRelativePath($buildDirResolved, $_.FullName)
+          Get-ChildItem -LiteralPath $packageSourceDir -File -Recurse | ForEach-Object {
+            $rel = [IO.Path]::GetRelativePath($packageSourceDir, $_.FullName)
             $check = Test-AppxSafeRelativePath -RelativePath $rel
             if (-not $check.IsValid) {
               $invalid.Add([PSCustomObject]@{ Path = $rel; Reason = $check.Reason }) | Out-Null
@@ -190,9 +197,9 @@ jobs:
           if (Test-Path $makeappxOut) { Remove-Item $makeappxOut -Force }
           if (Test-Path $makeappxErr) { Remove-Item $makeappxErr -Force }
 
-          Write-Host "Running makeappx: $($makeappx.FullName) pack /o /d $buildDirResolved /p TakoWorks.msix"
+          Write-Host "Running makeappx: $($makeappx.FullName) pack /o /d $packageSourceDir /p TakoWorks.msix"
           $proc = Start-Process -FilePath $makeappx.FullName `
-            -ArgumentList @("pack", "/o", "/d", $buildDirResolved, "/p", "TakoWorks.msix") `
+            -ArgumentList @("pack", "/o", "/d", $packageSourceDir, "/p", "TakoWorks.msix") `
             -RedirectStandardOutput $makeappxOut `
             -RedirectStandardError $makeappxErr `
             -PassThru -WindowStyle Hidden
@@ -226,6 +233,7 @@ jobs:
                 "Last payload processed: $lastProcessingText"
                 "Hint: $hint"
                 "Build dir: $buildDirResolved"
+                "Pack dir: $packageSourceDir"
                 "Logs:"
                 "  stdout: $makeappxOut"
                 "  stderr: $makeappxErr"
