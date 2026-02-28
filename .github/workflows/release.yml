@@ -350,29 +350,44 @@ jobs:
               if ($baseProbe.ErrorCode -ieq "0x8007007b") {
                 $likelyOffendingPath = "<baseline-files>"
               } else {
-                $candidateRels = New-Object System.Collections.Generic.List[string]
-                if ($idx -ge 0) {
-                  $cStart = [Math]::Max(0, $idx - 2)
-                  $cEnd = [Math]::Min($packageFiles.Count - 1, $idx + 20)
-                  for ($i = $cStart; $i -le $cEnd; $i++) {
-                    $candidateRels.Add($packageFiles[$i].RelPath) | Out-Null
+                $extraEntries = @($packageFiles | Where-Object { -not $baselineSet.Contains($_.RelPath) })
+                $probeLines.Add("extra entries: $($extraEntries.Count)") | Out-Null
+                if ($extraEntries.Count -gt 0) {
+                  $lo = 0
+                  $hi = $extraEntries.Count - 1
+                  $firstFail = -1
+                  $probeIndex = 0
+                  while (($lo -le $hi) -and ($probeIndex -lt 25)) {
+                    $mid = [int](($lo + $hi) / 2)
+                    $probeIndex++
+                    $subset = @($baselineEntries + $extraEntries[0..$mid])
+                    $probe = Invoke-ProbePack -Entries $subset -Tag ("prefix_{0}" -f $probeIndex)
+                    $midPath = $extraEntries[$mid].RelPath
+                    $probeLines.Add(("prefix[0..{0}] count={1} mid={2} -> exit={3} code={4}" -f $mid, ($mid + 1), $midPath, $probe.ExitCode, $probe.ErrorCode)) | Out-Null
+                    if ($probe.ErrorCode -ieq "0x8007007b") {
+                      $firstFail = $mid
+                      $hi = $mid - 1
+                    } else {
+                      $lo = $mid + 1
+                    }
                   }
-                } else {
-                  $packageFiles | Select-Object -First 25 | ForEach-Object { $candidateRels.Add($_.RelPath) | Out-Null }
-                }
 
-                $probeIndex = 0
-                foreach ($candRel in $candidateRels | Select-Object -Unique) {
-                  $candEntry = $packageFiles | Where-Object { $_.RelPath -eq $candRel } | Select-Object -First 1
-                  if (-not $candEntry) { continue }
-                  $probeIndex++
-                  $tag = ("cand_{0}" -f $probeIndex)
-                  $probeEntries = @($baselineEntries + $candEntry)
-                  $probe = Invoke-ProbePack -Entries $probeEntries -Tag $tag
-                  $probeLines.Add(("candidate {0} -> exit={1} code={2}" -f $candRel, $probe.ExitCode, $probe.ErrorCode)) | Out-Null
-                  if ($probe.ErrorCode -ieq "0x8007007b") {
-                    $likelyOffendingPath = $candRel
-                    break
+                  if ($firstFail -ge 0) {
+                    $candidate = $extraEntries[$firstFail]
+                    $likelyOffendingPath = $candidate.RelPath
+                    $confirm = Invoke-ProbePack -Entries @($baselineEntries + $candidate) -Tag "candidate_single"
+                    $probeLines.Add(("single-candidate {0} -> exit={1} code={2}" -f $candidate.RelPath, $confirm.ExitCode, $confirm.ErrorCode)) | Out-Null
+                    if ($confirm.ErrorCode -ieq "0x8007007b") {
+                      $likelyOffendingPath = "$($candidate.RelPath) [confirmed-single]"
+                    } else {
+                      $probeLines.Add("single candidate did not fail; likely interaction with one or more earlier files in sorted mapping order.") | Out-Null
+                      $tailStart = [Math]::Max(0, $firstFail - 8)
+                      $tail = for ($j = $tailStart; $j -le $firstFail; $j++) { "{0}: {1}" -f $j, $extraEntries[$j].RelPath }
+                      $probeLines.Add("prefix tail near failure boundary:") | Out-Null
+                      $tail | ForEach-Object { $probeLines.Add($_) | Out-Null }
+                    }
+                  } else {
+                    $probeLines.Add("No failing prefix found in extra entries. Failure may be non-deterministic or require full-set interaction.") | Out-Null
                   }
                 }
               }
