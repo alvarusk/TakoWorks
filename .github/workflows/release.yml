@@ -174,23 +174,26 @@ jobs:
             }
           } | Sort-Object RelPath
 
-          function Has-DotLeadingSegment {
-            param([string]$RelativePath)
-            $segments = $RelativePath -split '\\'
-            foreach ($seg in $segments) {
-              if ([string]::IsNullOrWhiteSpace($seg)) { continue }
-              if ($seg.StartsWith(".")) { return $true }
+          $docxTemplateExploded = @(
+            '^_internal\\docx\\templates\\default-docx-template\\'
+          )
+          $excludedDocxTemplateFiles = @(
+            $packageFiles | Where-Object {
+              $rp = $_.RelPath
+              ($docxTemplateExploded | Where-Object { $rp -imatch $_ } | Select-Object -First 1)
             }
-            return $false
-          }
-
-          $dotSegmentFiles = @($packageFiles | Where-Object { Has-DotLeadingSegment -RelativePath $_.RelPath })
-          if ($dotSegmentFiles.Count -gt 0) {
-            Write-Warning "Excluding $($dotSegmentFiles.Count) file(s) from MSIX because makeappx rejects path segments that start with '.'."
-            $dotSegmentFiles | Select-Object -First 20 | ForEach-Object {
-              Write-Warning ("excluded-dot-segment: {0}" -f $_.RelPath)
+          )
+          if ($excludedDocxTemplateFiles.Count -gt 0) {
+            Write-Warning "Excluding $($excludedDocxTemplateFiles.Count) python-docx exploded template file(s) from MSIX (contains .rels entries that makeappx rejects)."
+            $excludedDocxTemplateFiles | Select-Object -First 20 | ForEach-Object {
+              Write-Warning ("excluded-docx-template: {0}" -f $_.RelPath)
             }
-            $packageFiles = @($packageFiles | Where-Object { -not (Has-DotLeadingSegment -RelativePath $_.RelPath) })
+            $packageFiles = @(
+              $packageFiles | Where-Object {
+                $rp = $_.RelPath
+                -not ($docxTemplateExploded | Where-Object { $rp -imatch $_ } | Select-Object -First 1)
+              }
+            )
           }
 
           $invalid = New-Object System.Collections.Generic.List[object]
