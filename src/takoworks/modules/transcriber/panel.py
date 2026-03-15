@@ -92,7 +92,7 @@ class TranscriberPanel(ttk.Frame):
         opts.pack(fill="x", pady=8)
 
         ttk.Checkbutton(opts, text="Ignore transcription (skip ASR; no video required)", variable=self.v_skip_asr, command=self._toggle_video).pack(anchor="w", padx=8, pady=2)
-        ttk.Checkbutton(opts, text="Add romaji/pinyin + dictionary", variable=self.v_do_roman).pack(anchor="w", padx=8, pady=2)
+        ttk.Checkbutton(opts, text="Add romaji/pinyin + contextual note", variable=self.v_do_roman).pack(anchor="w", padx=8, pady=2)
         ttk.Checkbutton(opts, text="Generate summary HTML", variable=self.v_html).pack(anchor="w", padx=8, pady=2)
 
         models = ttk.LabelFrame(frm, text="Translation Models")

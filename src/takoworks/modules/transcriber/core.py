@@ -20,6 +20,10 @@ from .ass_utils import (
     _ass_sanitize_braces,
     _ass_unsanitize_braces,
 )
+from .context_notes import (
+    build_contextual_explanation_prompt,
+    parse_contextual_explanation_response,
+)
 from .json_utils import parse_json_translations
 
 try:
@@ -153,6 +157,17 @@ class ApiUsage:
         return self.prompt_tokens + self.completion_tokens
 
 
+def merge_api_usage(base: ApiUsage, extra: Optional[ApiUsage]) -> ApiUsage:
+    if extra is None:
+        return base
+    base.prompt_tokens += extra.prompt_tokens
+    base.completion_tokens += extra.completion_tokens
+    base.cost_usd += extra.cost_usd
+    if not base.model_name and extra.model_name:
+        base.model_name = extra.model_name
+    return base
+
+
 def _safe_int(val) -> int:
     try:
         return int(val or 0)
@@ -213,6 +228,8 @@ _WARNED_PRICING: Set[str] = set()
 _WARNED_MISSING_USAGE: Set[str] = set()
 _WARNED_JA_TAGGER: bool = False
 _JA_TAGGER_FAILED: bool = False
+_WARNED_CONTEXT_NOTE_MISSING_KEY: bool = False
+_WARNED_CONTEXT_NOTE_CLIENT: bool = False
 
 
 def estimate_cost(model_key: str, prompt_tokens: int, completion_tokens: int) -> float:
@@ -358,7 +375,7 @@ def _ensure_ja_tagger() -> Optional[Tagger]:
         if not _WARNED_JA_TAGGER:
             print(
                 "[JA] No se pudo iniciar Tagger (fugashi/UniDic). "
-                "Se usa kakasi simple y se omite analisis diccionario. "
+                "Se usa kakasi simple para la romanizacion. "
                 f"Detalle: {e}"
             )
             _WARNED_JA_TAGGER = True
@@ -1094,12 +1111,13 @@ def transcribe_ass(
     pad_ms: int,
     lang: str,
     do_roman_morph: bool,
+    context_note_usage: Optional[ApiUsage] = None,
 ) -> pysubs2.SSAFile:
     """
     Carga un .ass, transcribe audio, pule la puntuación con modelos libres
     y opcionalmente añade:
       - romaji/pinyin
-      - análisis tipo diccionario
+      - nota contextual con ChatGPT
     en líneas adicionales (separadas con \\N).
     Además, imprime progreso por línea para que la GUI
     pueda mostrar en qué línea va y el % completado.
@@ -1171,6 +1189,10 @@ def transcribe_ass(
 
         romaji_converter = build_romaji_converter() if (lang == "ja" and do_roman_morph) else None
         ja_tagger = _ensure_ja_tagger() if (lang == "ja" and do_roman_morph) else None
+        context_notes = (
+            build_contextual_notes(refined_lines, lang, usage_accumulator=context_note_usage)
+            if do_roman_morph else []
+        )
 
         for i, (ev, text) in enumerate(zip(events, refined_lines), start=1):
             base_text = (text or "").strip()
@@ -1190,18 +1212,17 @@ def transcribe_ass(
                     if romaji:
                         lines.append("{" + _ass_sanitize_braces(romaji) + "}")
 
-                    if ja_tagger is not None:
-                        morph_line = analyze_japanese_morph(base_text)
-                        if morph_line:
-                            lines.append(_ass_hide(morph_line))
+                    context_note = context_notes[i - 1] if i - 1 < len(context_notes) else ""
+                    if context_note:
+                        lines.append(_ass_hide(context_note))
 
                 elif lang == "zh":
                     pinyin = text_to_pinyin(base_text)
                     if pinyin:
                         lines.append("{" + _ass_sanitize_braces(pinyin) + "}")
-                    morph_line = analyze_chinese_morph(base_text)
-                    if morph_line:
-                        lines.append(_ass_hide(morph_line))
+                    context_note = context_notes[i - 1] if i - 1 < len(context_notes) else ""
+                    if context_note:
+                        lines.append(_ass_hide(context_note))
 
             ev.text = "\\N".join(lines)
             snippet = base_text.replace("\n", " ")[:60]
@@ -1211,9 +1232,13 @@ def transcribe_ass(
     return subs
 
 
-def add_roman_morph_to_subs(subs: pysubs2.SSAFile, lang: str) -> pysubs2.SSAFile:
+def add_roman_morph_to_subs(
+    subs: pysubs2.SSAFile,
+    lang: str,
+    context_note_usage: Optional[ApiUsage] = None,
+) -> pysubs2.SSAFile:
     """
-    Añade romaji/pinyin + análisis diccionario a un ASS que YA tiene el guion
+    Añade romaji/pinyin + nota contextual a un ASS que YA tiene el guion
     (japonés o chino) en la primera línea de cada diálogo.
     - NO exige que las líneas tengan duración > 0.
     - Trabaja sobre cualquier línea Dialogue con texto no vacío.
@@ -1242,6 +1267,9 @@ def add_roman_morph_to_subs(subs: pysubs2.SSAFile, lang: str) -> pysubs2.SSAFile
         romaji_converter = build_romaji_converter()
         ja_tagger = _ensure_ja_tagger()
 
+    base_texts = [((ev.text or "").split("\\N")[0] or "").strip() for ev in events]
+    context_notes = build_contextual_notes(base_texts, lang, usage_accumulator=context_note_usage)
+
     for i, ev in enumerate(events, start=1):
         raw_text = (ev.text or "")
         parts = raw_text.split("\\N")
@@ -1268,11 +1296,10 @@ def add_roman_morph_to_subs(subs: pysubs2.SSAFile, lang: str) -> pysubs2.SSAFile
             if romaji:
                 lines.append("{" + _ass_sanitize_braces(romaji) + "}")
 
-            # Análisis diccionario JA→EN (si tienes jpdict configurado)
-            if ja_tagger is not None:
-                morph_line = analyze_japanese_morph(base_text)
-                if morph_line:
-                    lines.append(_ass_hide(morph_line))
+            # Nota contextual JA con ChatGPT
+            context_note = context_notes[i - 1] if i - 1 < len(context_notes) else ""
+            if context_note:
+                lines.append(_ass_hide(context_note))
 
         elif lang == "zh":
             # Pinyin
@@ -1280,10 +1307,10 @@ def add_roman_morph_to_subs(subs: pysubs2.SSAFile, lang: str) -> pysubs2.SSAFile
             if pinyin:
                 lines.append("{" + _ass_sanitize_braces(pinyin) + "}")
 
-            # Análisis diccionario ZH→EN (si tienes cndict configurado)
-            morph_line = analyze_chinese_morph(base_text)
-            if morph_line:
-                lines.append(_ass_hide(morph_line))
+            # Nota contextual ZH con ChatGPT
+            context_note = context_notes[i - 1] if i - 1 < len(context_notes) else ""
+            if context_note:
+                lines.append(_ass_hide(context_note))
 
         # Conservamos cualquier línea extra ya existente
         lines.extend(extra_lines)
@@ -1415,6 +1442,92 @@ def get_openai_client() -> OpenAI:
     if not OPENAI_API_KEY:
         raise RuntimeError("Falta OPENAI_API_KEY (env o api_keys en config.local.json).")
     return OpenAI(api_key=OPENAI_API_KEY)
+
+
+def analyze_contextual_note_with_openai(
+    client: OpenAI,
+    lines: List[str],
+    index: int,
+    lang: str,
+) -> Tuple[str, ApiUsage]:
+    prompt = build_contextual_explanation_prompt(lang, lines, index)
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        temperature=0.2,
+        max_completion_tokens=220,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Sigue exactamente el formato solicitado y devuelve solo la nota pedida, "
+                    "sin encabezados ni texto extra."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+    )
+    content = (response.choices[0].message.content or "").strip()
+    usage = ApiUsage(engine="gpt", model_name=OPENAI_MODEL)
+    resp_usage = getattr(response, "usage", None)
+    if resp_usage:
+        pt = _safe_int(getattr(resp_usage, "prompt_tokens", 0))
+        ct = _safe_int(getattr(resp_usage, "completion_tokens", 0))
+        usage.prompt_tokens += pt
+        usage.completion_tokens += ct
+        usage.cost_usd += estimate_cost("gpt", pt, ct)
+    else:
+        _warn_missing_usage("gpt")
+    return parse_contextual_explanation_response(content), usage
+
+
+def build_contextual_notes(
+    lines: List[str],
+    lang: str,
+    usage_accumulator: Optional[ApiUsage] = None,
+) -> List[str]:
+    global _WARNED_CONTEXT_NOTE_MISSING_KEY, _WARNED_CONTEXT_NOTE_CLIENT
+
+    cleaned_lines = [(line or "").strip() for line in lines]
+    if not cleaned_lines:
+        return []
+
+    if lang not in {"ja", "zh"}:
+        return [""] * len(cleaned_lines)
+
+    if not OPENAI_API_KEY:
+        if not _WARNED_CONTEXT_NOTE_MISSING_KEY:
+            print("[Nota contextual] Se omite porque falta OPENAI_API_KEY.")
+            _WARNED_CONTEXT_NOTE_MISSING_KEY = True
+        return [""] * len(cleaned_lines)
+
+    try:
+        client = get_openai_client()
+    except Exception as e:
+        if not _WARNED_CONTEXT_NOTE_CLIENT:
+            print(f"[Nota contextual] No se puede inicializar OpenAI: {e}")
+            _WARNED_CONTEXT_NOTE_CLIENT = True
+        return [""] * len(cleaned_lines)
+
+    total = len(cleaned_lines)
+    notes: List[str] = []
+    lang_label = "JA" if lang == "ja" else "ZH"
+
+    for idx, line in enumerate(cleaned_lines, start=1):
+        if not line:
+            notes.append("")
+            continue
+
+        print(f"[Nota contextual {lang_label}] Línea {idx}/{total}...")
+        try:
+            note, note_usage = analyze_contextual_note_with_openai(client, cleaned_lines, idx - 1, lang)
+            if usage_accumulator is not None:
+                merge_api_usage(usage_accumulator, note_usage)
+        except Exception as e:
+            print(f"[Nota contextual {lang_label}] Error en la línea {idx}: {e}")
+            note = ""
+        notes.append(note)
+
+    return notes
 
 
 def get_deepseek_client() -> OpenAI:
@@ -1757,6 +1870,9 @@ def format_morph_cell_html(morph: str) -> str:
       <b>已经 (d)</b> -> already; ...<br>
       <b>能 (v)</b> -> ...<br>
     """
+    if "->" not in morph:
+        return html.escape(morph).replace("\n", "<br>")
+
     parts = [p.strip() for p in morph.split("|") if p.strip()]
     if not parts:
         return ""
@@ -1786,7 +1902,7 @@ def generate_html(
 ):
     """
     Genera un HTML con columnas:
-    Texto original | Romaji/Pinyin | Análisis diccionario | GPT | Claude | Gemini | DeepSeek
+    Texto original | Romaji/Pinyin | Nota contextual | GPT | Claude | Gemini | DeepSeek
     Todas las columnas con el mismo ancho.
     """
     events = [ev for ev in subs if not getattr(ev, "is_comment", False)]
@@ -1824,7 +1940,7 @@ def generate_html(
         headers = [
             "Texto original",
             "Romaji/Pinyin",
-            "Análisis diccionario",
+            "Nota contextual",
             "GPT",
             "Claude",
             "Gemini",
@@ -1852,7 +1968,7 @@ def generate_html(
 
             f.write("<tr>")
             for col_idx, v in enumerate(row_vals):
-                if col_idx == 2 and v:  # columna "Análisis diccionario"
+                if col_idx == 2 and v:  # columna "Nota contextual"
                     cell_html = format_morph_cell_html(v)
                     f.write("<td>" + cell_html + "</td>")
                 else:
@@ -1986,12 +2102,12 @@ def main():
     parser = argparse.ArgumentParser(
         description=(
             "Transcribe un .ass + vídeo a japonés o chino (Anime-Whisper / BELLE-2), "
-            "pulido de puntuación con modelos libres, añade romaji/pinyin y análisis "
-            "tipo diccionario opcional y traduce con GPT, Claude, Gemini y DeepSeek. "
+            "pulido de puntuación con modelos libres, añade romaji/pinyin y una nota "
+            "contextual opcional con ChatGPT, y traduce con GPT, Claude, Gemini y DeepSeek. "
             "Cada .ass de salida puede tener:\n"
             "  - línea 1: japonés/chino\n"
             "  - línea 2: romaji/pinyin (si se activa)\n"
-            "  - línea 3: análisis diccionario (si se activa)\n"
+            "  - línea 3: nota contextual (si se activa)\n"
             "  - última línea: traducción."
         )
     )
@@ -2043,12 +2159,12 @@ def main():
     parser.add_argument(
         "--do-roman-morph",
         action="store_true",
-        help="Añadir romaji/pinyin y análisis diccionario en el ASS.",
+        help="Añadir romaji/pinyin y nota contextual con ChatGPT en el ASS.",
     )
     parser.add_argument(
         "--html",
         action="store_true",
-        help="Generar un HTML resumen con original, romanización, análisis diccionario y traducciones.",
+        help="Generar un HTML resumen con original, romanización, nota contextual y traducciones.",
     )
     parser.add_argument(
         "--skip-asr",
@@ -2056,7 +2172,7 @@ def main():
         help=(
             "Omitir la transcripción de audio. Se asume que el .ass ya contiene la "
             "transcripción en japonés o chino en la primera línea de cada subtítulo. "
-            "Aun así se puede añadir romaji/pinyin y análisis diccionario (--do-roman-morph) "
+            "Aun así se puede añadir romaji/pinyin y nota contextual (--do-roman-morph) "
             "y hacer las traducciones."
         ),
     )
@@ -2095,14 +2211,16 @@ def main():
     else:
         source_type = ask_source_type()
 
+    context_note_usage = ApiUsage(engine="gpt", model_name=OPENAI_MODEL)
+
     # 1) Obtener subs de partida
     if args.skip_asr:
         print("[+] Omitiendo fase de transcripción de audio: se usará el texto ya presente en el .ass.")
         subs = pysubs2.load(ass_in, encoding="utf-8")
 
         if args.do_roman_morph:
-            print("[+] Añadiendo romaji/pinyin y análisis diccionario sobre el guion existente.")
-            subs = add_roman_morph_to_subs(subs, lang)
+            print("[+] Añadiendo romaji/pinyin y nota contextual sobre el guion existente.")
+            subs = add_roman_morph_to_subs(subs, lang, context_note_usage=context_note_usage)
         else:
             print("[+] --do-roman-morph NO está activado: se usará el guion tal cual para la traducción.")
 
@@ -2110,7 +2228,7 @@ def main():
         asr_suffix = "_ja_asr" if lang == "ja" else "_zh_asr"
         asr_out = os.path.join(out_dir, f"{base_name}{asr_suffix}.ass")
         subs.save(asr_out, encoding="utf-8-sig")
-        print(f"[+] Archivo intermedio (sin ASR, solo romanización/diccionario si procede): {asr_out}\n")
+        print(f"[+] Archivo intermedio (sin ASR, solo romanización/nota contextual si procede): {asr_out}\n")
 
     else:
         print("[+] Ejecutando pipeline completo: ASR + puntuación + romaji/pinyin (si procede).")
@@ -2120,13 +2238,14 @@ def main():
             pad_ms=args.pad_ms,
             lang=lang,
             do_roman_morph=args.do_roman_morph,
+            context_note_usage=context_note_usage,
         )
 
         # Guardamos ASS intermedio (asr)
         asr_suffix = "_ja_asr" if lang == "ja" else "_zh_asr"
         asr_out = os.path.join(out_dir, f"{base_name}{asr_suffix}.ass")
         subs.save(asr_out, encoding="utf-8-sig")
-        print(f"[+] Archivo intermedio (solo transcripción + puntuación + romanización/diccionario): {asr_out}\n")
+        print(f"[+] Archivo intermedio (solo transcripción + puntuación + romanización/nota contextual): {asr_out}\n")
 
     # 2) Traducir
     models = normalize_models_arg(args.models)
@@ -2139,6 +2258,17 @@ def main():
         models,
         out_dir,
     )
+
+    if context_note_usage.total_tokens > 0:
+        usage_by_model["gpt"] = merge_api_usage(
+            usage_by_model.get("gpt", ApiUsage(engine="gpt", model_name=OPENAI_MODEL)),
+            context_note_usage,
+        )
+        print(
+            f"[Costes] Nota contextual GPT: prompt={context_note_usage.prompt_tokens} "
+            f"completion={context_note_usage.completion_tokens} "
+            f"total={context_note_usage.total_tokens} cost_usd=${context_note_usage.cost_usd:.4f}"
+        )
 
     if usage_by_model:
         log_cost_summary(run_id, usage_by_model, series_name, base_name)

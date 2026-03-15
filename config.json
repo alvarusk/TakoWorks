@@ -45,12 +45,12 @@
     }
   },
   "last": {
-    "ass_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - The Daily Life of the Immortal King S5/3 - Scripts esES/s5e11/DailyLifeOfImmo_S5E11.0_TDISIM0062_364577_subtitle_edited_zh-cn.ass",
+    "ass_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/141 - MF Ghost S3/2 - Scripts esES/ep12/MfGhost_S3E12_MGHSIM0036_369282_subtitle_ja-jp.ass",
     "video_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/141 - MF Ghost S3/3 - Vídeos/CR_MfGhost_S3.0E4.0_MGHSIM0028_369274_video_ja-jp_J6126574.mp4",
     "word_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/0 - Ref/XW5#06_台词本_净版_250418.docx",
-    "pdf_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/142 - Dead Account/0 - Ref/ep05/#05_Dead Account_Final script_v3.pdf",
-    "out_dir": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - The Daily Life of the Immortal King S5/3 - Scripts esES/s5e11/",
-    "splitter_pos": 466,
+    "pdf_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/141 - MF Ghost S3/0 - Ref/ep11/#35_MF_GHOST_Final script_v3.pdf",
+    "out_dir": "C:/Users/ajime/OneDrive/Documentos/PENDING/141 - MF Ghost S3/2 - Scripts esES/ep12/",
+    "splitter_pos": 470,
     "scanner_batch": false,
     "yomitoku_exe": "C:\\TakoWorks\\bin\\yomitoku\\yomitoku.exe",
     "cut_upper_ratio": 0.0,

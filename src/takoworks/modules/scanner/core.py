@@ -279,14 +279,69 @@ def _gcv_download_json(output_prefix: str, local_dir: Path, log: LogFn, cancel_e
 
 
 def _gcv_parse_text(payload) -> str:
+    def _text_from_symbols(full_text: dict) -> str:
+        pages = full_text.get("pages", []) if isinstance(full_text, dict) else []
+        if not isinstance(pages, list):
+            return ""
+        parts: List[str] = []
+        for page in pages:
+            if not isinstance(page, dict):
+                continue
+            for block in page.get("blocks", []) or []:
+                if not isinstance(block, dict):
+                    continue
+                for para in block.get("paragraphs", []) or []:
+                    if not isinstance(para, dict):
+                        continue
+                    for word in para.get("words", []) or []:
+                        if not isinstance(word, dict):
+                            continue
+                        for sym in word.get("symbols", []) or []:
+                            if not isinstance(sym, dict):
+                                continue
+                            parts.append(sym.get("text", "") or "")
+                            br = (
+                                sym.get("property", {})
+                                .get("detectedBreak", {})
+                                .get("type")
+                            )
+                            if br in {"LINE_BREAK", "EOL_SURE_SPACE"}:
+                                parts.append("\n")
+                            elif br in {"SPACE", "SURE_SPACE"}:
+                                parts.append(" ")
+        return "".join(parts).strip()
+
+    def _text_from_response(resp: dict) -> str:
+        if not isinstance(resp, dict):
+            return ""
+        full = resp.get("fullTextAnnotation", {}) or {}
+        text = full.get("text", "") if isinstance(full, dict) else ""
+        text = text or ""
+        if text.strip():
+            return text
+        text = _text_from_symbols(full)
+        if text.strip():
+            return text
+        # Fallback for detect-text variants that only expose textAnnotations.
+        anns = resp.get("textAnnotations", [])
+        if isinstance(anns, list) and anns:
+            first = anns[0]
+            if isinstance(first, dict):
+                desc = first.get("description", "") or ""
+                if desc.strip():
+                    return desc
+        return ""
+
     if payload is None:
         return ""
     if isinstance(payload, dict):
         if "fullTextAnnotation" in payload:
-            return payload.get("fullTextAnnotation", {}).get("text", "") or ""
+            text = _text_from_response(payload)
+            if text:
+                return text
         if "responses" in payload:
             for resp in payload.get("responses", []):
-                text = resp.get("fullTextAnnotation", {}).get("text", "") or ""
+                text = _text_from_response(resp)
                 if text:
                     return text
         return ""
@@ -310,7 +365,19 @@ def _gcv_detect_document_text(img_path: Path, log: LogFn, cancel_event=None) -> 
         payload = json.loads(stdout)
     except json.JSONDecodeError:
         return ""
-    return _gcv_parse_text(payload)
+    text = _gcv_parse_text(payload)
+    if text:
+        return text
+    if isinstance(payload, dict):
+        for resp in payload.get("responses", []) or []:
+            if not isinstance(resp, dict):
+                continue
+            err = resp.get("error", {}) if isinstance(resp.get("error", {}), dict) else {}
+            msg = (err.get("message", "") or "").strip()
+            if msg:
+                log(f"[GCV][WARN] detect-document sin texto ({img_path.name}): {msg}")
+                break
+    return ""
 
 
 def _render_page_bgr(doc: fitz.Document, page_index: int, dpi: int) -> np.ndarray:
@@ -491,7 +558,7 @@ def _gcv_collect_pages(json_paths: List[Path]) -> List[Tuple[int, int, str]]:
         rng = _parse_range(path)
         start_page = rng[0] if rng else None
         for resp_idx, resp in enumerate(responses):
-            text = resp.get("fullTextAnnotation", {}).get("text", "") or ""
+            text = _gcv_parse_text(resp)
             page_num = _coerce_page_num(resp.get("context", {}).get("pageNumber"))
             if page_num is None:
                 if start_page is not None:
@@ -534,7 +601,8 @@ def _merge_lines_until_quote(lines: List[str]) -> List[str]:
         if not buf:
             buf = line
         else:
-            buf += line
+            # Preserva separación visual para no colapsar actor+diálogo en una sola línea.
+            buf += "\n" + line
         if buf.endswith("」"):
             merged.append(buf)
             buf = ""
@@ -549,6 +617,170 @@ def _extract_dialogue_text(line: str) -> str:
     if start == -1 or end == -1 or end <= start:
         return ""
     return line[start + 1 : end].strip()
+
+
+def _gcv_dialogue_rows(source_lines: List[str]) -> List[dict]:
+    def _rescue_collapsed(rows_in: List[dict], block_text: str) -> List[dict]:
+        max_len = max((len(str(r.get("texto", "") or "")) for r in rows_in), default=0)
+        if not (len(rows_in) <= 2 and max_len >= 80):
+            return rows_in
+        rescue_rows: List[dict] = []
+        current_actor = ""
+        for ln in parse_text_only_lines(block_text):
+            s = str(ln or "").strip()
+            if not s:
+                continue
+            if looks_like_actor(s):
+                current_actor = s
+                continue
+            rescue_rows.append({"actor": current_actor, "texto": s})
+        if not rescue_rows:
+            return rows_in
+        rescued = _finalize(rescue_rows)
+        out = rescued or rows_in
+
+        # Último fallback: si sigue casi colapsado, trocea por puntuación.
+        max_len_out = max((len(str(r.get("texto", "") or "")) for r in out), default=0)
+        if len(out) <= 2 and max_len_out >= 80:
+            split_rows: List[dict] = []
+            for r in out:
+                a = str(r.get("actor", "") or "").strip()
+                t = str(r.get("texto", "") or "").strip()
+                if not t:
+                    continue
+                parts = _split_and_filter_lines([t]) if len(t) >= 40 else [t]
+                if not parts:
+                    continue
+                for part in parts:
+                    split_rows.append({"actor": a, "texto": part})
+            if split_rows:
+                out = _finalize(split_rows) or split_rows
+        return out
+
+    def _finalize(rows_in: List[dict]) -> List[dict]:
+        def _leading_actor_candidates(text: str) -> List[str]:
+            s = (text or "").strip()
+            if not s:
+                return []
+            out: List[str] = []
+            max_n = min(6, len(s) - 1)
+            for n in range(2, max_n + 1):
+                cand = s[:n].strip()
+                rest = s[n:].strip()
+                if not cand or not rest or len(rest) < 2:
+                    continue
+                if not looks_like_actor(cand):
+                    continue
+                out.append(cand)
+            return out
+
+        if not rows_in:
+            return rows_in
+        staged: List[dict] = []
+        for i, r in enumerate(rows_in, start=1):
+            staged.append(
+                {
+                    "pagina": 1,
+                    "seccion": i,
+                    "actor": str(r.get("actor", "") or "").strip(),
+                    "texto": str(r.get("texto", "") or "").strip(),
+                }
+            )
+        try:
+            df_stage = finalize_df(pd.DataFrame(staged))
+        except Exception:
+            return rows_in
+        out_rows: List[dict] = []
+        for r in df_stage.itertuples(index=False):
+            a = str(getattr(r, "actor", "") or "").strip()
+            t = str(getattr(r, "texto", "") or "").strip()
+            if a or t:
+                out_rows.append({"actor": a, "texto": t})
+        if not out_rows:
+            return rows_in
+
+        actor_set = {str(r.get("actor", "") or "").strip() for r in out_rows if str(r.get("actor", "") or "").strip()}
+        prefix_counts: Dict[str, int] = {}
+        for r in out_rows:
+            for cand in _leading_actor_candidates(str(r.get("texto", "") or "")):
+                prefix_counts[cand] = prefix_counts.get(cand, 0) + 1
+        repeated_prefixes = {k for k, v in prefix_counts.items() if v >= 2}
+
+        fixed_rows: List[dict] = []
+        for r in out_rows:
+            a = str(r.get("actor", "") or "").strip()
+            t = str(r.get("texto", "") or "").strip()
+            candidates = sorted(
+                [c for c in _leading_actor_candidates(t) if c in actor_set or c in repeated_prefixes],
+                key=len,
+                reverse=True,
+            )
+            if candidates:
+                cand = candidates[0]
+                if cand != a:
+                    rest = t[len(cand):].lstrip()
+                    if len(rest) >= 2:
+                        a = cand
+                        t = rest
+            fixed_rows.append({"actor": a, "texto": t})
+        return fixed_rows
+
+    rows: List[dict] = []
+    block = "\n".join(source_lines)
+    parsed = parse_dialogues_from_text(block)
+    if parsed:
+        for item in parsed:
+            actor = str(item.get("actor", "") or "").strip()
+            text = str(item.get("texto", "") or "").replace("\r", "\n")
+            text = re.sub(r"\s*\n+\s*", " ", text).strip()
+            if not text and not actor:
+                continue
+            if text and NOISE_PUNCT_ONLY_RE.match(text):
+                continue
+            if text:
+                rows.append({"actor": actor, "texto": text})
+            elif actor:
+                rows.append({"actor": actor, "texto": ""})
+        if rows:
+            return _rescue_collapsed(_finalize(rows), block)
+
+    # Fallback: comportamiento anterior (solo dialogo), para no perder texto.
+    dialog_lines: List[str] = []
+    for line in source_lines:
+        text = _extract_dialogue_text(line)
+        if text:
+            dialog_lines.append(text)
+    for text in dialog_lines:
+        s = str(text or "").replace("\r", "\n")
+        s = re.sub(r"\s*\n+\s*", " ", s).strip()
+        if not s:
+            continue
+        if NOISE_PUNCT_ONLY_RE.match(s):
+            continue
+        rows.append({"actor": "", "texto": s})
+    return _rescue_collapsed(_finalize(rows), block)
+
+
+def _write_excel_with_fallback(df: pd.DataFrame, out_xlsx: Path, log: LogFn) -> Optional[Path]:
+    try:
+        df.to_excel(out_xlsx, index=False)
+        log(f"Excel: {out_xlsx}")
+        return out_xlsx
+    except ModuleNotFoundError as e:
+        if "openpyxl" not in str(e).lower():
+            log(f"ERROR Excel: {e}")
+            return None
+        out_csv = out_xlsx.with_suffix(".csv")
+        try:
+            df.to_csv(out_csv, index=False, encoding="utf-8-sig")
+            log(f"Excel no disponible (falta openpyxl). CSV: {out_csv}")
+            log("Instala openpyxl para recuperar salida .xlsx: pip install openpyxl")
+        except Exception as csv_err:
+            log(f"ERROR CSV fallback: {csv_err}")
+        return None
+    except Exception as e:
+        log(f"ERROR Excel: {e}")
+        return None
 
 
 def _write_gcv_outputs(
@@ -570,37 +802,33 @@ def _write_gcv_outputs(
         out.raw = str(out_raw)
         log(f"TXT RAW: {out_raw}")
 
-    dialog_lines = []
-    for line in merged_lines:
-        text = _extract_dialogue_text(line)
-        if text:
-            dialog_lines.append(text)
+    source_lines: List[str] = []
+    if raw_payload.strip():
+        source_lines = [ln.strip() for ln in raw_payload.splitlines() if ln.strip()]
+    if not source_lines:
+        source_lines = [ln.strip() for ln in merged_lines if str(ln).strip()]
 
-    dialog_lines = _split_and_filter_lines(dialog_lines)
-    if not dialog_lines:
+    dialogue_rows = _gcv_dialogue_rows(source_lines)
+    if not dialogue_rows:
         if make_raw:
             log("Sin resultados en dialogos -> OCR bruto generado.")
         else:
             log("Sin resultados -> no se generan salidas.")
         return out
 
+    df_dialog = pd.DataFrame(dialogue_rows)
+
     if make_txt:
         out_txt = out_dir / f"{stem}_scanner.txt"
-        out_txt.write_text("\n".join(dialog_lines), encoding="utf-8", errors="replace")
+        write_txt(df_dialog, out_txt)
         out.txt = str(out_txt)
         log(f"TXT: {out_txt}")
 
     if make_excel:
-        rows = []
-        for text in dialog_lines:
-            rows.append({"texto": text})
         out_xlsx = out_dir / f"{stem}_scanner.xlsx"
-        try:
-            pd.DataFrame(rows).to_excel(out_xlsx, index=False)
-            out.xlsx = str(out_xlsx)
-            log(f"Excel: {out_xlsx}")
-        except Exception as e:
-            log(f"ERROR Excel: {e}")
+        saved = _write_excel_with_fallback(df_dialog, out_xlsx, log)
+        if saved is not None:
+            out.xlsx = str(saved)
 
     return out
 
@@ -621,6 +849,13 @@ def run_gcloud_scanner(
     log: LogFn = lambda s: None,
     cancel_event=None,
 ) -> ScanOutputs:
+    def _is_identity_crop(rect: Optional[CropRect]) -> bool:
+        if rect is None:
+            return True
+        l, r, t, b = (float(rect[0]), float(rect[1]), float(rect[2]), float(rect[3]))
+        eps = 1e-6
+        return abs(l - 0.0) <= eps and abs(r - 1.0) <= eps and abs(t - 0.0) <= eps and abs(b - 1.0) <= eps
+
     if not _gcloud_exe():
         raise RuntimeError("No se encontro gcloud. Agrega gcloud al PATH o define TAKOWORKS_GCLOUD_EXE.")
     pdf_path = Path(input_path)
@@ -637,14 +872,21 @@ def run_gcloud_scanner(
     vcuts = vertical_cuts or []
     vcuts_by_page = vertical_cuts_by_page or {}
 
+    has_crop_global = not _is_identity_crop(crop_rect)
+    has_crop_by_page = any(not _is_identity_crop(rect) for rect in crop_by_page.values())
+    has_skip_polys = any(bool(v) for v in skip_polys.values())
+    has_skip_circles = any(bool(v) for v in skip_circles.values())
+    has_vcuts_global = bool(vcuts)
+    has_vcuts_by_page = any(bool(v) for v in vcuts_by_page.values())
+
     use_image_ocr = bool(
-        crop_rect
-        or crop_by_page
-        or skip_polys
-        or skip_circles
+        has_crop_global
+        or has_crop_by_page
+        or has_skip_polys
+        or has_skip_circles
         or suppress
-        or vcuts
-        or vcuts_by_page
+        or has_vcuts_global
+        or has_vcuts_by_page
     )
 
     if use_image_ocr:
@@ -1620,7 +1862,12 @@ def write_txt(df: pd.DataFrame, out_txt: Path) -> None:
     for r in df.itertuples(index=False):
         a = str(getattr(r, "actor", "") or "").strip()
         t = str(getattr(r, "texto", "") or "").strip()
-        lines.append(f"{a}|{t}" if a else t)
+        if a and t:
+            lines.extend([a, t])
+        elif t:
+            lines.append(t)
+        elif a:
+            lines.append(a)
     out_txt.write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -1989,12 +2236,9 @@ def _write_outputs(
 
     if make_excel:
         out_xlsx = out_dir / f"{stem}_scanner.xlsx"
-        try:
-            df.to_excel(out_xlsx, index=False)
-            out.xlsx = str(out_xlsx)
-            log(f"Excel: {out_xlsx}")
-        except Exception as e:
-            log(f"ERROR Excel (¿openpyxl instalado?): {e}")
+        saved = _write_excel_with_fallback(df, out_xlsx, log)
+        if saved is not None:
+            out.xlsx = str(saved)
 
     if make_txt:
         out_txt = out_dir / f"{stem}_scanner.txt"
