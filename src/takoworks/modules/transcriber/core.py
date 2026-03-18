@@ -33,7 +33,6 @@ except Exception:
 
 import pysubs2
 import torch
-from transformers import pipeline
 from pykakasi import kakasi
 from pypinyin import lazy_pinyin, Style
 
@@ -61,6 +60,9 @@ OPENAI_MODEL   = "gpt-5.1"                  # OpenAI (ajusta si hace falta)
 CLAUDE_MODEL   = "claude-opus-4-5-20251101" # Anthropic (ajusta si hace falta)
 GEMINI_MODEL   = "gemini-2.5-flash"         # Gemini 2.5 Flash
 DEEPSEEK_MODEL = "deepseek-chat"            # DeepSeek (OpenAI-like)
+OPENAI_TIMEOUT_S = 180
+OPENAI_MAX_RETRIES = 2
+OPENAI_BLOCK_ATTEMPTS = 3
 
 def _read_api_key(key: str, env_name: str) -> str:
     env_val = os.getenv(env_name)
@@ -883,6 +885,27 @@ def clean_repetitions(text: str) -> str:
 
     return text
 
+
+@lru_cache(maxsize=1)
+def _get_transformers_pipeline():
+    """
+    Import perezoso del pipeline de Hugging Face.
+
+    Evita fallos al importar este modulo cuando la ejecucion no necesita ASR
+    y reduce el impacto de dependencias opcionales resueltas por transformers
+    durante la carga de `pipeline`.
+    """
+    try:
+        from transformers import pipeline as hf_pipeline
+    except Exception as e:
+        raise RuntimeError(
+            "No se pudo cargar transformers.pipeline. "
+            "En la version empaquetada, verifica que el bundle incluya "
+            "torchcodec y su metadata de paquete. "
+            f"Detalle: {e}"
+        ) from e
+    return hf_pipeline
+
 def build_asr_pipeline(lang: str):
     """
     Crea el pipeline de ASR según el idioma elegido.
@@ -896,6 +919,8 @@ def build_asr_pipeline(lang: str):
         device = "cpu"
         dtype = torch.float32
         batch_size = 8
+
+    pipeline = _get_transformers_pipeline()
 
     if lang == "ja":
         print("[+] Idioma seleccionado: japonés (Anime-Whisper)")
@@ -1441,7 +1466,11 @@ def build_user_prompt(chunk_lines: List[str], lang: str, series_name: str, sourc
 def get_openai_client() -> OpenAI:
     if not OPENAI_API_KEY:
         raise RuntimeError("Falta OPENAI_API_KEY (env o api_keys en config.local.json).")
-    return OpenAI(api_key=OPENAI_API_KEY)
+    return OpenAI(
+        api_key=OPENAI_API_KEY,
+        timeout=OPENAI_TIMEOUT_S,
+        max_retries=OPENAI_MAX_RETRIES,
+    )
 
 
 def analyze_contextual_note_with_openai(
@@ -1455,6 +1484,7 @@ def analyze_contextual_note_with_openai(
         model=OPENAI_MODEL,
         temperature=0.2,
         max_completion_tokens=220,
+        timeout=OPENAI_TIMEOUT_S,
         messages=[
             {
                 "role": "system",
@@ -1585,18 +1615,49 @@ def translate_with_openai(
         end_line = min(start + CHUNK_SIZE, total)
         print(f"[{DISPLAY_NAMES['gpt']}] Líneas {start + 1}-{end_line} de {total}...")
 
-        try:
-            response = client.chat.completions.create(
-                model=OPENAI_MODEL,
-                temperature=0.1,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
+        response = None
+        content = ""
+
+        for attempt in range(1, OPENAI_BLOCK_ATTEMPTS + 1):
+            block_started_at = time.time()
+            print(
+                f"[GPT-5] Solicitud bloque {start + 1}-{end_line}, "
+                f"intento {attempt}/{OPENAI_BLOCK_ATTEMPTS}..."
             )
-            content = response.choices[0].message.content.strip()
-        except Exception as e:
-            print(f"[GPT-5] Error al traducir; se omite GPT en este bloque. Detalle: {e}")
+            try:
+                response = client.chat.completions.create(
+                    model=OPENAI_MODEL,
+                    temperature=0.1,
+                    timeout=OPENAI_TIMEOUT_S,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                )
+                content = (response.choices[0].message.content or "").strip()
+                elapsed = time.time() - block_started_at
+                print(
+                    f"[GPT-5] Bloque {start + 1}-{end_line} completado "
+                    f"en {elapsed:.1f} s."
+                )
+                break
+            except Exception as e:
+                elapsed = time.time() - block_started_at
+                if attempt < OPENAI_BLOCK_ATTEMPTS:
+                    wait_s = min(12, 3 * attempt)
+                    print(
+                        f"[GPT-5] Error/transitorio o timeout en bloque "
+                        f"{start + 1}-{end_line} tras {elapsed:.1f} s: {e}. "
+                        f"Reintentando en {wait_s} s..."
+                    )
+                    time.sleep(wait_s)
+                else:
+                    print(
+                        f"[GPT-5] Error al traducir; se omite GPT en este bloque. "
+                        f"Detalle: {e}"
+                    )
+
+        if response is None:
             translations = chunk
             all_translations.extend(translations)
             skipped_reason = skipped_reason or "partial_error"

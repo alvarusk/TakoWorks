@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, copy_metadata
 import os
 
 datas = [('data', 'data'), ('bin', 'bin'), ('assets', 'assets'), ('src\\takoworks\\modules\\transcriber\\weight', 'takoworks\\modules\\transcriber\\weight'), ('src\\takoworks\\modules\\transcriber\\weight', 'takoworks\\modules\\transcriber\\weight')]
@@ -9,6 +9,12 @@ tmp_ret = collect_all('pykakasi')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('unidic_lite')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+try:
+    tmp_ret = collect_all('torchcodec')
+    datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+    datas += copy_metadata('torchcodec')
+except Exception:
+    pass
 try:
     import unidic_lite
     dicdir_path = os.path.join(os.path.dirname(unidic_lite.__file__), "dicdir")

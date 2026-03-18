@@ -4,6 +4,7 @@ google-generativeai>=0.7.0
 requests>=2.31.0
 pysubs2>=1.6.0
 torch>=2.2.0
+torchcodec>=0.10.0
 transformers>=4.38.0
 pykakasi>=2.2.1
 pypinyin>=0.50.0
