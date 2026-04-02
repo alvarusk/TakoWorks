@@ -225,7 +225,6 @@ def _load_price_table() -> Dict[str, Dict[str, float]]:
     return table
 
 
-_PRICE_TABLE = _load_price_table()
 _WARNED_PRICING: Set[str] = set()
 _WARNED_MISSING_USAGE: Set[str] = set()
 _WARNED_JA_TAGGER: bool = False
@@ -235,7 +234,9 @@ _WARNED_CONTEXT_NOTE_CLIENT: bool = False
 
 
 def estimate_cost(model_key: str, prompt_tokens: int, completion_tokens: int) -> float:
-    prices = _PRICE_TABLE.get(model_key, {})
+    # Reload pricing from the effective config each time so a long-lived GUI
+    # process does not keep stale zero-cost values after the user updates config.
+    prices = _load_price_table().get(model_key, {})
     in_price = float(prices.get("input", 0.0) or 0.0)
     out_price = float(prices.get("output", 0.0) or 0.0)
 
