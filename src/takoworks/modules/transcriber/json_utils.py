@@ -1,38 +1,82 @@
 import json
 import re
+from dataclasses import dataclass
 from typing import List, Optional
 
 
-def parse_json_translations(raw_content: str, fallback_lines: List[str]) -> List[str]:
+@dataclass
+class TranslationParseResult:
+    translations: List[str]
+    expected_count: int
+    raw_count: int
+    parser: str
+    exact_match: bool
+    normalized: bool
+    used_fallback: bool
+    error: Optional[str] = None
+
+    @property
+    def missing_indices(self) -> List[int]:
+        if self.raw_count >= self.expected_count:
+            return []
+        return list(range(self.raw_count, self.expected_count))
+
+    @property
+    def extra_count(self) -> int:
+        return max(0, self.raw_count - self.expected_count)
+
+
+def parse_json_translations_result(raw_content: str, fallback_lines: List[str]) -> TranslationParseResult:
     """
     Extrae un array de traducciones desde un JSON con forma:
       {"translations": ["...", "...", ...]}
-    Aplica heurísticas básicas para limpiar fences ``` ``` y saltos de línea
-    insertados. Si no se puede parsear, devuelve las líneas originales
-    (fallback_lines).
+    Aplica heuristicas basicas para limpiar fences ``` ``` y saltos de linea
+    insertados. Si no se puede parsear, devuelve las lineas originales
+    (fallback_lines), junto con metadatos de diagnostico.
     """
+    expected_count = len(fallback_lines)
     raw = (raw_content or "").strip()
-    if not raw:
-        return fallback_lines
 
-    def _normalize(translations: List[str]) -> List[str]:
-        translations = [("" if t is None else str(t)) for t in translations]
-        if len(translations) == len(fallback_lines):
-            return translations
-        print("[AVISO] Nº de traducciones != nº de líneas. Se ajusta al mínimo en común.")
-        if len(translations) > len(fallback_lines):
-            return translations[:len(fallback_lines)]
-        return translations + fallback_lines[len(translations):]
+    def _result(
+        translations: List[str],
+        *,
+        parser: str,
+        error: Optional[str] = None,
+    ) -> TranslationParseResult:
+        raw_count = len(translations)
+        cooked = [("" if t is None else str(t)) for t in translations]
+        exact_match = raw_count == expected_count
+        normalized = not exact_match
+        used_fallback = False
+
+        if normalized:
+            print("[AVISO] Nº de traducciones != nº de lineas. Se ajusta al minimo en comun.")
+            if raw_count > expected_count:
+                cooked = cooked[:expected_count]
+            else:
+                cooked = cooked + fallback_lines[raw_count:]
+                used_fallback = True
+
+        return TranslationParseResult(
+            translations=cooked,
+            expected_count=expected_count,
+            raw_count=raw_count,
+            parser=parser,
+            exact_match=exact_match,
+            normalized=normalized,
+            used_fallback=used_fallback or parser == "fallback",
+            error=error,
+        )
 
     def _fix_invalid_backslashes(s: str) -> str:
-        # En JSON, solo son válidos: \" \\ \/ \b \f \n \r \t \uXXXX
-        # Esto rescata cosas típicas como \N (ASS) o \an8, etc.
+        # En JSON, solo son validos: \" \\ \/ \b \f \n \r \t \uXXXX
+        # Esto rescata cosas tipicas como \N (ASS) o \an8, etc.
         return re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', s)
 
     def _extract_translations_loose(s: str) -> Optional[List[str]]:
         """
         Extrae strings del array translations con un parser ligero, tolerante a:
-        - saltos de línea literales dentro de strings
+        - saltos de linea literales dentro de strings
         - comas / whitespace extra
         """
         m = re.search(r'"translations"\s*:\s*\[', s)
@@ -43,7 +87,7 @@ def parse_json_translations(raw_content: str, fallback_lines: List[str]) -> List
         if not m:
             return None
 
-        i = m.end()  # justo después del '['
+        i = m.end()
         depth = 1
         in_str = False
         esc = False
@@ -61,14 +105,11 @@ def parse_json_translations(raw_content: str, fallback_lines: List[str]) -> List
                     buf.append(ch)
                     esc = True
                 elif ch == q:
-                    # fin de string
-                    raw_item = "".join(buf)
-                    items.append(raw_item)
+                    items.append("".join(buf))
                     buf = []
                     in_str = False
                     q = ""
                 else:
-                    # Permitimos '\n' literal dentro de strings (JSON estricto no lo permite)
                     buf.append(ch)
             else:
                 if ch in ('"', "'"):
@@ -83,14 +124,12 @@ def parse_json_translations(raw_content: str, fallback_lines: List[str]) -> List
                         break
             i += 1
 
-        # Decodificar escapes “tipo JSON” de manera segura
         out: List[str] = []
         for raw_item in items:
             fixed = raw_item.replace("\r\n", "\n").replace("\r", "\n")
-            fixed = fixed.replace("\n", "\\n")  # convertir newline literal a escape JSON
+            fixed = fixed.replace("\n", "\\n")
             fixed = _fix_invalid_backslashes(fixed)
 
-            # Intento 1: json.loads (si la cadena estaba en comillas dobles originalmente)
             try:
                 if quote_mode == '"':
                     out.append(json.loads('"' + fixed + '"'))
@@ -98,15 +137,15 @@ def parse_json_translations(raw_content: str, fallback_lines: List[str]) -> List
             except Exception:
                 pass
 
-            # Intento 2: decodificación “manual” conservadora
-            # (mantiene secuencias raras tal cual, pero rescata \n, \t, \\, \")
             fixed2 = fixed.replace(r"\n", "\n").replace(r"\t", "\t").replace(r"\r", "\r")
             fixed2 = fixed2.replace(r"\\", "\\").replace(r"\/", "/").replace(r"\"", '"')
             out.append(fixed2)
 
         return out
 
-    # 1) Quitar fences ```...``` (incluye ```json)
+    if not raw:
+        return _result(list(fallback_lines), parser="fallback", error="empty_response")
+
     if raw.startswith("```"):
         lines = raw.splitlines()
         if lines and lines[0].startswith("```"):
@@ -115,22 +154,19 @@ def parse_json_translations(raw_content: str, fallback_lines: List[str]) -> List
             lines = lines[:-1]
         raw = "\n".join(lines).strip()
 
-    # 2) Quedarnos con lo que parece el JSON “real”
     first = raw.find("{")
     last = raw.rfind("}")
     candidate = raw[first:last + 1] if first != -1 and last != -1 and last > first else raw
 
-    # 3) Intento directo
     try:
         data = json.loads(candidate)
         if isinstance(data, dict) and isinstance(data.get("translations"), list):
-            return _normalize(list(data["translations"]))
+            return _result(list(data["translations"]), parser="json_object")
         if isinstance(data, list):
-            return _normalize(list(data))
+            return _result(list(data), parser="json_array")
     except Exception:
         pass
 
-    # 4) Heurística: buscar la clave "translations" y decodificar con JSONDecoder
     decoder = json.JSONDecoder()
     for m in re.finditer(r'"translations"\s*:', candidate):
         start = m.end()
@@ -139,15 +175,18 @@ def parse_json_translations(raw_content: str, fallback_lines: List[str]) -> List
         except Exception:
             continue
         if isinstance(arr, list):
-            return _normalize(list(arr))
+            return _result(list(arr), parser="decoder_array")
 
-    # 5) Parse “tolerante” (para casos tipo: Unterminated string / newlines literales)
     try:
         rescued = _extract_translations_loose(candidate)
         if rescued is not None and len(rescued) > 0:
-            return _normalize(rescued)
+            return _result(rescued, parser="loose_array")
     except Exception as e:
         print(f"[AVISO] Error parseando JSON, se usa fallback. Detalle: {e}")
+        return _result(list(fallback_lines), parser="fallback", error=str(e))
 
-    # 6) Fallback: devolver las líneas originales
-    return fallback_lines
+    return _result(list(fallback_lines), parser="fallback", error="unparseable_response")
+
+
+def parse_json_translations(raw_content: str, fallback_lines: List[str]) -> List[str]:
+    return parse_json_translations_result(raw_content, fallback_lines).translations

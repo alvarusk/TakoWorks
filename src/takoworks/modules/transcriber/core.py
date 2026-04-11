@@ -24,7 +24,7 @@ from .context_notes import (
     build_contextual_explanation_prompt,
     parse_contextual_explanation_response,
 )
-from .json_utils import parse_json_translations
+from .json_utils import TranslationParseResult, parse_json_translations_result
 
 try:
     import requests  # type: ignore
@@ -63,6 +63,7 @@ DEEPSEEK_MODEL = "deepseek-chat"            # DeepSeek (OpenAI-like)
 OPENAI_TIMEOUT_S = 180
 OPENAI_MAX_RETRIES = 2
 OPENAI_BLOCK_ATTEMPTS = 3
+MODEL_BLOCK_ATTEMPTS = 3
 
 def _read_api_key(key: str, env_name: str) -> str:
     env_val = os.getenv(env_name)
@@ -259,6 +260,136 @@ def _warn_missing_usage(model_key: str) -> None:
         "Revisa la versión del SDK o las opciones de la API si quieres token counts reales."
     )
     _WARNED_MISSING_USAGE.add(model_key)
+
+
+def _build_translation_response_format(expected_count: int) -> Dict[str, object]:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "subtitle_translations",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "translations": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": expected_count,
+                        "maxItems": expected_count,
+                    }
+                },
+                "required": ["translations"],
+            },
+        },
+    }
+
+
+def _build_retry_user_prompt(user_prompt: str, expected_count: int, attempt: int) -> str:
+    if attempt <= 1:
+        return user_prompt
+    return (
+        user_prompt
+        + "\n\nCORRECCION OBLIGATORIA:\n"
+        + f"- Debes devolver EXACTAMENTE {expected_count} elementos en \"translations\".\n"
+        + "- No fusiones lineas.\n"
+        + "- No dividas lineas.\n"
+        + "- No omitas ninguna linea.\n"
+        + "- Devuelve SOLO JSON valido."
+    )
+
+
+def _save_translation_debug_response(
+    debug_dir: Optional[str],
+    model_key: str,
+    start_line: int,
+    end_line: int,
+    attempt: int,
+    issue: str,
+    chunk: List[str],
+    raw_response: str,
+    parse_result: Optional[TranslationParseResult] = None,
+    extra: Optional[Dict[str, object]] = None,
+) -> None:
+    if not debug_dir:
+        return
+
+    os.makedirs(debug_dir, exist_ok=True)
+    safe_issue = re.sub(r"[^a-zA-Z0-9_-]+", "_", issue).strip("_") or "issue"
+    file_name = f"{model_key}_{start_line:05d}-{end_line:05d}_attempt{attempt}_{safe_issue}.json"
+    path = os.path.join(debug_dir, file_name)
+
+    payload: Dict[str, object] = {
+        "model": model_key,
+        "start_line": start_line,
+        "end_line": end_line,
+        "attempt": attempt,
+        "issue": issue,
+        "expected_count": len(chunk),
+        "source_lines": chunk,
+        "raw_response": raw_response,
+    }
+    if parse_result is not None:
+        payload.update(
+            {
+                "parser": parse_result.parser,
+                "raw_count": parse_result.raw_count,
+                "exact_match": parse_result.exact_match,
+                "normalized": parse_result.normalized,
+                "used_fallback": parse_result.used_fallback,
+                "missing_indices": parse_result.missing_indices,
+                "extra_count": parse_result.extra_count,
+                "error": parse_result.error,
+                "normalized_translations": parse_result.translations,
+            }
+        )
+    if extra:
+        payload["extra"] = extra
+
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, indent=2)
+        print(f"[DEBUG {DISPLAY_NAMES.get(model_key, model_key)}] Respuesta guardada en {path}")
+    except Exception as e:
+        print(f"[DEBUG {DISPLAY_NAMES.get(model_key, model_key)}] No se pudo guardar respuesta bruta: {e}")
+
+
+def _log_translation_count_issue(
+    model_key: str,
+    start_line: int,
+    end_line: int,
+    parse_result: TranslationParseResult,
+    chunk: Optional[List[str]] = None,
+) -> None:
+    detail = (
+        f"[{DISPLAY_NAMES.get(model_key, model_key)}] Bloque {start_line}-{end_line}: "
+        f"esperadas {parse_result.expected_count}, recibidas {parse_result.raw_count} "
+        f"(parser={parse_result.parser})."
+    )
+    if parse_result.missing_indices:
+        missing_abs = [start_line + idx for idx in parse_result.missing_indices]
+        detail += f" Faltan posiciones/lineas: {missing_abs}."
+    if parse_result.extra_count:
+        detail += f" Sobran {parse_result.extra_count} traducciones."
+    if parse_result.error:
+        detail += f" Error: {parse_result.error}."
+    print(detail)
+
+    if parse_result.missing_indices and chunk:
+        print(f"[{DISPLAY_NAMES.get(model_key, model_key)}] Líneas sin traducción devuelta por el modelo:")
+        for idx in parse_result.missing_indices:
+            absolute_line = start_line + idx
+            source_text = chunk[idx].strip() if idx < len(chunk) else ""
+            print(f"  - línea {absolute_line}: {source_text}")
+
+    if parse_result.extra_count and chunk:
+        preview_count = min(3, len(chunk))
+        if preview_count:
+            print(f"[{DISPLAY_NAMES.get(model_key, model_key)}] Contexto del bloque con exceso de traducciones:")
+            for rel_idx in range(preview_count):
+                absolute_line = start_line + rel_idx
+                source_text = chunk[rel_idx].strip()
+                print(f"  - línea {absolute_line}: {source_text}")
 
 
 def _read_supabase_value(field: str, env_names) -> str:
@@ -1593,6 +1724,7 @@ def translate_with_openai(
     lang: str,
     series_name: str,
     source_type: str,
+    debug_dir: Optional[str] = None,
 ) -> Tuple[List[str], ApiUsage, Optional[str]]:
     if not OPENAI_API_KEY:
         print("[GPT-5] Se omite GPT porque falta OPENAI_API_KEY (env o config.local.json).")
@@ -1612,38 +1744,77 @@ def translate_with_openai(
 
     for start in range(0, total, CHUNK_SIZE):
         chunk = src_lines[start:start + CHUNK_SIZE]
-        user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
+        base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
         end_line = min(start + CHUNK_SIZE, total)
         print(f"[{DISPLAY_NAMES['gpt']}] Líneas {start + 1}-{end_line} de {total}...")
 
         response = None
         content = ""
+        parse_result: Optional[TranslationParseResult] = None
+        use_response_format = True
 
         for attempt in range(1, OPENAI_BLOCK_ATTEMPTS + 1):
             block_started_at = time.time()
+            user_prompt = _build_retry_user_prompt(base_user_prompt, len(chunk), attempt)
             print(
                 f"[GPT-5] Solicitud bloque {start + 1}-{end_line}, "
                 f"intento {attempt}/{OPENAI_BLOCK_ATTEMPTS}..."
             )
             try:
-                response = client.chat.completions.create(
-                    model=OPENAI_MODEL,
-                    temperature=0.1,
-                    timeout=OPENAI_TIMEOUT_S,
-                    messages=[
+                request_kwargs: Dict[str, object] = {
+                    "model": OPENAI_MODEL,
+                    "temperature": 0.1,
+                    "timeout": OPENAI_TIMEOUT_S,
+                    "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
-                )
+                }
+                if use_response_format:
+                    request_kwargs["response_format"] = _build_translation_response_format(len(chunk))
+                response = client.chat.completions.create(**request_kwargs)
                 content = (response.choices[0].message.content or "").strip()
                 elapsed = time.time() - block_started_at
                 print(
                     f"[GPT-5] Bloque {start + 1}-{end_line} completado "
                     f"en {elapsed:.1f} s."
                 )
+                parse_result = parse_json_translations_result(content, fallback_lines=chunk)
+                if parse_result.exact_match:
+                    break
+
+                _log_translation_count_issue("gpt", start + 1, end_line, parse_result, chunk)
+                _save_translation_debug_response(
+                    debug_dir,
+                    "gpt",
+                    start + 1,
+                    end_line,
+                    attempt,
+                    "count_mismatch",
+                    chunk,
+                    content,
+                    parse_result=parse_result,
+                )
+                if attempt < OPENAI_BLOCK_ATTEMPTS:
+                    wait_s = min(12, 3 * attempt)
+                    print(
+                        f"[GPT-5] Reintentando bloque {start + 1}-{end_line} en {wait_s} s "
+                        "porque el número de traducciones no coincide..."
+                    )
+                    time.sleep(wait_s)
+                    continue
                 break
             except Exception as e:
                 elapsed = time.time() - block_started_at
+                err_text = str(e)
+                if use_response_format and "response_format" in err_text.lower():
+                    use_response_format = False
+                    print(
+                        f"[GPT-5] El modelo/SDK rechazó response_format en bloque "
+                        f"{start + 1}-{end_line}; se reintenta sin JSON schema."
+                    )
+                    if attempt < OPENAI_BLOCK_ATTEMPTS:
+                        continue
                 if attempt < OPENAI_BLOCK_ATTEMPTS:
                     wait_s = min(12, 3 * attempt)
                     print(
@@ -1673,8 +1844,23 @@ def translate_with_openai(
             usage.cost_usd += estimate_cost("gpt", pt, ct)
         else:
             _warn_missing_usage("gpt")
-        translations = parse_json_translations(content, fallback_lines=chunk)
-        all_translations.extend(translations)
+        if parse_result is None:
+            parse_result = parse_json_translations_result(content, fallback_lines=chunk)
+        if not parse_result.exact_match:
+            skipped_reason = skipped_reason or "partial_error"
+            _log_translation_count_issue("gpt", start + 1, end_line, parse_result, chunk)
+            _save_translation_debug_response(
+                debug_dir,
+                "gpt",
+                start + 1,
+                end_line,
+                OPENAI_BLOCK_ATTEMPTS,
+                "final_mismatch",
+                chunk,
+                content,
+                parse_result=parse_result,
+            )
+        all_translations.extend(parse_result.translations)
 
     return all_translations, usage, skipped_reason
 
@@ -1684,6 +1870,7 @@ def translate_with_deepseek(
     lang: str,
     series_name: str,
     source_type: str,
+    debug_dir: Optional[str] = None,
 ) -> Tuple[List[str], ApiUsage, Optional[str]]:
     try:
         client = get_deepseek_client()
@@ -1698,26 +1885,64 @@ def translate_with_deepseek(
 
     for start in range(0, total, CHUNK_SIZE):
         chunk = src_lines[start:start + CHUNK_SIZE]
-        user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
+        base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
         end_line = min(start + CHUNK_SIZE, total)
         print(f"[DeepSeek] Líneas {start + 1}-{end_line} de {total}...")
 
-        try:
-            response = client.chat.completions.create(
-                model=DEEPSEEK_MODEL,
-                temperature=0.1,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-            )
-            content = response.choices[0].message.content.strip()
-        except Exception as e:
-            print(f"[DeepSeek] Error al traducir; se omite DeepSeek en este bloque. Detalle: {e}")
+        response = None
+        content = ""
+        parse_result: Optional[TranslationParseResult] = None
+
+        for attempt in range(1, MODEL_BLOCK_ATTEMPTS + 1):
+            user_prompt = _build_retry_user_prompt(base_user_prompt, len(chunk), attempt)
+            try:
+                response = client.chat.completions.create(
+                    model=DEEPSEEK_MODEL,
+                    temperature=0.1,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                )
+                content = (response.choices[0].message.content or "").strip()
+                parse_result = parse_json_translations_result(content, fallback_lines=chunk)
+                if parse_result.exact_match:
+                    break
+
+                _log_translation_count_issue("deepseek", start + 1, end_line, parse_result, chunk)
+                _save_translation_debug_response(
+                    debug_dir,
+                    "deepseek",
+                    start + 1,
+                    end_line,
+                    attempt,
+                    "count_mismatch",
+                    chunk,
+                    content,
+                    parse_result=parse_result,
+                )
+                if attempt < MODEL_BLOCK_ATTEMPTS:
+                    wait_s = min(9, 2 * attempt)
+                    print(f"[DeepSeek] Reintentando bloque {start + 1}-{end_line} en {wait_s} s...")
+                    time.sleep(wait_s)
+                    continue
+                break
+            except Exception as e:
+                if attempt < MODEL_BLOCK_ATTEMPTS:
+                    wait_s = min(9, 2 * attempt)
+                    print(
+                        f"[DeepSeek] Error en bloque {start + 1}-{end_line}: {e}. "
+                        f"Reintentando en {wait_s} s..."
+                    )
+                    time.sleep(wait_s)
+                    continue
+                print(f"[DeepSeek] Error al traducir; se omite DeepSeek en este bloque. Detalle: {e}")
+
+        if response is None:
             skipped_reason = skipped_reason or "partial_error"
-            translations = chunk
-            all_translations.extend(translations)
+            all_translations.extend(chunk)
             continue
+
         resp_usage = getattr(response, "usage", None)
         if resp_usage:
             pt = _safe_int(getattr(resp_usage, "prompt_tokens", 0))
@@ -1727,8 +1952,23 @@ def translate_with_deepseek(
             usage.cost_usd += estimate_cost("deepseek", pt, ct)
         else:
             _warn_missing_usage("deepseek")
-        translations = parse_json_translations(content, fallback_lines=chunk)
-        all_translations.extend(translations)
+        if parse_result is None:
+            parse_result = parse_json_translations_result(content, fallback_lines=chunk)
+        if not parse_result.exact_match:
+            skipped_reason = skipped_reason or "partial_error"
+            _log_translation_count_issue("deepseek", start + 1, end_line, parse_result, chunk)
+            _save_translation_debug_response(
+                debug_dir,
+                "deepseek",
+                start + 1,
+                end_line,
+                MODEL_BLOCK_ATTEMPTS,
+                "final_mismatch",
+                chunk,
+                content,
+                parse_result=parse_result,
+            )
+        all_translations.extend(parse_result.translations)
 
     return all_translations, usage, skipped_reason
 
@@ -1738,6 +1978,7 @@ def translate_with_claude(
     lang: str,
     series_name: str,
     source_type: str,
+    debug_dir: Optional[str] = None,
 ) -> Tuple[List[str], ApiUsage, Optional[str]]:
     try:
         client = get_claude_client()
@@ -1753,39 +1994,82 @@ def translate_with_claude(
 
     for start in range(0, total, CHUNK_SIZE):
         chunk = src_lines[start:start + CHUNK_SIZE]
-        user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
+        base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
         end_line = min(start + CHUNK_SIZE, total)
         print(f"[Claude] Líneas {start + 1}-{end_line} de {total}...")
 
-        try:
-            message = client.messages.create(
-                model=CLAUDE_MODEL,
-                max_tokens=4096,
-                temperature=0.1,
-                system=system_prompt,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": user_prompt,
-                    }
-                ],
+        message = None
+        content = ""
+        parse_result: Optional[TranslationParseResult] = None
+
+        for attempt in range(1, MODEL_BLOCK_ATTEMPTS + 1):
+            user_prompt = _build_retry_user_prompt(base_user_prompt, len(chunk), attempt)
+            try:
+                message = client.messages.create(
+                    model=CLAUDE_MODEL,
+                    max_tokens=4096,
+                    temperature=0.1,
+                    system=system_prompt,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": user_prompt,
+                        }
+                    ],
+                )
+            except Exception as e:
+                if attempt < MODEL_BLOCK_ATTEMPTS:
+                    wait_s = min(9, 2 * attempt)
+                    print(
+                        f"[Claude] Error en bloque {start + 1}-{end_line}: {e}. "
+                        f"Reintentando en {wait_s} s..."
+                    )
+                    time.sleep(wait_s)
+                    continue
+                print(f"[Claude] Error al traducir; se omite Claude en este bloque. Detalle: {e}")
+                break
+
+            content = "".join(
+                block.text for block in message.content if getattr(block, "type", None) == "text"
+            ).strip()
+            if not content:
+                if attempt < MODEL_BLOCK_ATTEMPTS:
+                    wait_s = min(9, 2 * attempt)
+                    print(
+                        f"[Claude] Respuesta vacía en bloque {start + 1}-{end_line}. "
+                        f"Reintentando en {wait_s} s..."
+                    )
+                    time.sleep(wait_s)
+                    continue
+                print("[Claude] Respuesta vacía, se devuelven líneas originales para este bloque.")
+                break
+
+            parse_result = parse_json_translations_result(content, fallback_lines=chunk)
+            if parse_result.exact_match:
+                break
+
+            _log_translation_count_issue("claude", start + 1, end_line, parse_result, chunk)
+            _save_translation_debug_response(
+                debug_dir,
+                "claude",
+                start + 1,
+                end_line,
+                attempt,
+                "count_mismatch",
+                chunk,
+                content,
+                parse_result=parse_result,
             )
-        except Exception as e:
-            print(f"[Claude] Error al traducir; se omite Claude en este bloque. Detalle: {e}")
-            skipped_reason = skipped_reason or "partial_error"
-            translations = chunk
-            all_translations.extend(translations)
-            continue
+            if attempt < MODEL_BLOCK_ATTEMPTS:
+                wait_s = min(9, 2 * attempt)
+                print(f"[Claude] Reintentando bloque {start + 1}-{end_line} en {wait_s} s...")
+                time.sleep(wait_s)
+                continue
+            break
 
-        content = "".join(
-            block.text for block in message.content if getattr(block, "type", None) == "text"
-        ).strip()
-
-        if not content:
-            print("[Claude] Respuesta vacía, se devuelven líneas originales para este bloque.")
+        if message is None or not content:
             skipped_reason = skipped_reason or "partial_error"
-            translations = chunk
-            all_translations.extend(translations)
+            all_translations.extend(chunk)
             continue
 
         msg_usage = getattr(message, "usage", None)
@@ -1798,8 +2082,23 @@ def translate_with_claude(
         else:
             _warn_missing_usage("claude")
 
-        translations = parse_json_translations(content, fallback_lines=chunk)
-        all_translations.extend(translations)
+        if parse_result is None:
+            parse_result = parse_json_translations_result(content, fallback_lines=chunk)
+        if not parse_result.exact_match:
+            skipped_reason = skipped_reason or "partial_error"
+            _log_translation_count_issue("claude", start + 1, end_line, parse_result, chunk)
+            _save_translation_debug_response(
+                debug_dir,
+                "claude",
+                start + 1,
+                end_line,
+                MODEL_BLOCK_ATTEMPTS,
+                "final_mismatch",
+                chunk,
+                content,
+                parse_result=parse_result,
+            )
+        all_translations.extend(parse_result.translations)
 
     return all_translations, usage, skipped_reason
 
@@ -1809,6 +2108,7 @@ def translate_with_gemini(
     lang: str,
     series_name: str,
     source_type: str,
+    debug_dir: Optional[str] = None,
 ) -> Tuple[List[str], ApiUsage, Optional[str]]:
     """
     Usa Gemini 2.5 Flash, con bloques más pequeños y max_output_tokens
@@ -1826,33 +2126,115 @@ def translate_with_gemini(
 
     for start in range(0, total, GEMINI_CHUNK):
         chunk = src_lines[start:start + GEMINI_CHUNK]
-        user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
+        base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
         end_line = min(start + GEMINI_CHUNK, total)
         print(f"[Gemini 2.5 Flash] Líneas {start + 1}-{end_line} de {total}...")
 
-        try:
-            response = model.generate_content(
-                user_prompt,
-                generation_config={
-                    "temperature": 0.1,
-                    "max_output_tokens": 2000,  # prueba 800–1500
+        response = None
+        raw = ""
+        parse_result: Optional[TranslationParseResult] = None
+
+        for attempt in range(1, MODEL_BLOCK_ATTEMPTS + 1):
+            user_prompt = _build_retry_user_prompt(base_user_prompt, len(chunk), attempt)
+            try:
+                response = model.generate_content(
+                    user_prompt,
+                    generation_config={
+                        "temperature": 0.1,
+                        "max_output_tokens": 2000,
+                    },
+                )
+            except Exception as e:
+                if attempt < MODEL_BLOCK_ATTEMPTS:
+                    wait_s = min(9, 2 * attempt)
+                    print(
+                        f"[Gemini] Error de API en líneas {start + 1}-{end_line}: {e}. "
+                        f"Reintentando en {wait_s} s..."
+                    )
+                    time.sleep(wait_s)
+                    continue
+                print(f"[Gemini] Error de API en líneas {start + 1}-{end_line}: {e}. "
+                      "Se devuelven las líneas originales para este bloque.")
+                break
+
+            cand = response.candidates[0] if getattr(response, "candidates", None) else None
+            if cand is not None:
+                print(f"[Gemini DEBUG] finish_reason={getattr(cand, 'finish_reason', None)}")
+                print(f"[Gemini DEBUG] safety_ratings={getattr(cand, 'safety_ratings', None)}")
+
+            if not cand or not getattr(cand, "content", None) or not getattr(cand.content, "parts", None):
+                finish_reason = getattr(cand, "finish_reason", None) if cand else None
+                safety = getattr(cand, "safety_ratings", None) if cand else None
+                if attempt < MODEL_BLOCK_ATTEMPTS:
+                    wait_s = min(9, 2 * attempt)
+                    print(
+                        f"[Gemini] Respuesta vacía o bloqueada (finish_reason={finish_reason}). "
+                        f"Reintentando en {wait_s} s..."
+                    )
+                    print(f"[Gemini DEBUG] safety_ratings={safety}")
+                    time.sleep(wait_s)
+                    continue
+                print(f"[Gemini] Respuesta vacía o bloqueada (finish_reason={finish_reason}). "
+                      "Se devuelven las líneas originales para este bloque.")
+                print(f"[Gemini DEBUG] safety_ratings={safety}")
+                break
+
+            text_parts = [
+                getattr(part, "text", "")
+                for part in cand.content.parts
+                if getattr(part, "text", "")
+            ]
+            raw = "".join(text_parts).strip()
+            if not raw:
+                finish_reason = getattr(cand, "finish_reason", None)
+                safety = getattr(cand, "safety_ratings", None)
+                if attempt < MODEL_BLOCK_ATTEMPTS:
+                    wait_s = min(9, 2 * attempt)
+                    print(
+                        f"[Gemini] Sin texto utilizable (finish_reason={finish_reason}). "
+                        f"Reintentando en {wait_s} s..."
+                    )
+                    print(f"[Gemini DEBUG] safety_ratings={safety}")
+                    time.sleep(wait_s)
+                    continue
+                print(f"[Gemini] Sin texto utilizable (finish_reason={finish_reason}). "
+                      "Se devuelven las líneas originales para este bloque.")
+                print(f"[Gemini DEBUG] safety_ratings={safety}")
+                break
+
+            parse_result = parse_json_translations_result(raw, chunk)
+            if parse_result.exact_match:
+                break
+
+            _log_translation_count_issue("gemini", start + 1, end_line, parse_result, chunk)
+            _save_translation_debug_response(
+                debug_dir,
+                "gemini",
+                start + 1,
+                end_line,
+                attempt,
+                "count_mismatch",
+                chunk,
+                raw,
+                parse_result=parse_result,
+                extra={
+                    "finish_reason": getattr(cand, "finish_reason", None),
+                    "safety_ratings": getattr(cand, "safety_ratings", None),
                 },
             )
-        except Exception as e:
-            print(f"[Gemini] Error de API en líneas {start + 1}-{end_line}: {e}. "
-                  f"Se devuelven las líneas originales para este bloque.")
+            if attempt < MODEL_BLOCK_ATTEMPTS:
+                wait_s = min(9, 2 * attempt)
+                print(f"[Gemini] Reintentando bloque {start + 1}-{end_line} en {wait_s} s...")
+                time.sleep(wait_s)
+                continue
+            break
+
+        if response is None:
+            skipped_reason = skipped_reason or "partial_error"
             all_translations.extend(chunk)
             continue
 
-        cand = None
-        if getattr(response, "candidates", None):
-            cand = response.candidates[0]
-            
-        # DEBUG: ver por qué Gemini corta la respuesta
-        if cand is not None:
-            print(f"[Gemini DEBUG] finish_reason={getattr(cand, 'finish_reason', None)}")
-            print(f"[Gemini DEBUG] safety_ratings={getattr(cand, 'safety_ratings', None)}")
-
+        cand = response.candidates[0] if getattr(response, "candidates", None) else None
         usage_md = getattr(response, "usage_metadata", None)
         if usage_md is None and cand is not None and getattr(cand, "usage_metadata", None):
             usage_md = cand.usage_metadata
@@ -1865,34 +2247,39 @@ def translate_with_gemini(
         else:
             _warn_missing_usage("gemini")
 
-        if not cand or not getattr(cand, "content", None) or not getattr(cand.content, "parts", None):
-            finish_reason = getattr(cand, "finish_reason", None) if cand else None
-            safety = getattr(cand, "safety_ratings", None) if cand else None
-            print(f"[Gemini] Respuesta vacía o bloqueada (finish_reason={finish_reason}). "
-                  "Se devuelven las líneas originales para este bloque.")
-            print(f"[Gemini DEBUG] safety_ratings={safety}")
-            translations = chunk
-            skipped_reason = skipped_reason or "partial_error"
-        else:
-            text_parts = [
-                getattr(part, "text", "")
-                for part in cand.content.parts
-                if getattr(part, "text", "")
-            ]
-            raw = "".join(text_parts).strip()
-
-            if not raw:
-                finish_reason = getattr(cand, "finish_reason", None)
-                safety = getattr(cand, "safety_ratings", None)
-                print(f"[Gemini] Sin texto utilizable (finish_reason={finish_reason}). "
-                      "Se devuelven las líneas originales para este bloque.")
-                print(f"[Gemini DEBUG] safety_ratings={safety}")
-                translations = chunk
-                skipped_reason = skipped_reason or "partial_error"
+        if parse_result is None:
+            if raw:
+                parse_result = parse_json_translations_result(raw, chunk)
             else:
-                translations = parse_json_translations(raw, chunk)
-
-        all_translations.extend(translations)
+                parse_result = TranslationParseResult(
+                    translations=list(chunk),
+                    expected_count=len(chunk),
+                    raw_count=0,
+                    parser="fallback",
+                    exact_match=False,
+                    normalized=True,
+                    used_fallback=True,
+                    error="empty_response",
+                )
+        if not parse_result.exact_match:
+            skipped_reason = skipped_reason or "partial_error"
+            _log_translation_count_issue("gemini", start + 1, end_line, parse_result, chunk)
+            _save_translation_debug_response(
+                debug_dir,
+                "gemini",
+                start + 1,
+                end_line,
+                MODEL_BLOCK_ATTEMPTS,
+                "final_mismatch",
+                chunk,
+                raw,
+                parse_result=parse_result,
+                extra={
+                    "finish_reason": getattr(cand, "finish_reason", None) if cand else None,
+                    "safety_ratings": getattr(cand, "safety_ratings", None) if cand else None,
+                },
+            )
+        all_translations.extend(parse_result.translations)
 
     return all_translations, usage, skipped_reason
 
@@ -2082,6 +2469,7 @@ def process_all_models_with_subs(
         return {}, {}
 
     os.makedirs(out_dir, exist_ok=True)
+    debug_dir = os.path.join(out_dir, "_debug", base_name)
 
     translations_by_model: Dict[str, List[str]] = {}
     usage_by_model: Dict[str, ApiUsage] = {}
@@ -2090,7 +2478,9 @@ def process_all_models_with_subs(
     if "gpt" in models:
         print(f"=== {DISPLAY_NAMES['gpt']} ===")
         start = time.time()
-        gpt_trans, gpt_usage, gpt_skip = translate_with_openai(src_lines, lang, series_name, source_type)
+        gpt_trans, gpt_usage, gpt_skip = translate_with_openai(
+            src_lines, lang, series_name, source_type, debug_dir=debug_dir
+        )
         elapsed = time.time() - start
         translations_by_model["gpt"] = gpt_trans
         usage_by_model["gpt"] = gpt_usage
@@ -2106,7 +2496,9 @@ def process_all_models_with_subs(
     if "claude" in models:
         print(f"=== {DISPLAY_NAMES['claude']} ===")
         start = time.time()
-        claude_trans, claude_usage, claude_skip = translate_with_claude(src_lines, lang, series_name, source_type)
+        claude_trans, claude_usage, claude_skip = translate_with_claude(
+            src_lines, lang, series_name, source_type, debug_dir=debug_dir
+        )
         elapsed = time.time() - start
         translations_by_model["claude"] = claude_trans
         usage_by_model["claude"] = claude_usage
@@ -2122,7 +2514,9 @@ def process_all_models_with_subs(
     if "gemini" in models:
         print(f"=== {DISPLAY_NAMES['gemini']} ===")
         start = time.time()
-        gemini_trans, gemini_usage, gemini_skip = translate_with_gemini(src_lines, lang, series_name, source_type)
+        gemini_trans, gemini_usage, gemini_skip = translate_with_gemini(
+            src_lines, lang, series_name, source_type, debug_dir=debug_dir
+        )
         elapsed = time.time() - start
         translations_by_model["gemini"] = gemini_trans
         usage_by_model["gemini"] = gemini_usage
@@ -2138,7 +2532,9 @@ def process_all_models_with_subs(
     if "deepseek" in models:
         print(f"=== {DISPLAY_NAMES['deepseek']} ===")
         start = time.time()
-        deepseek_trans, deepseek_usage, deepseek_skip = translate_with_deepseek(src_lines, lang, series_name, source_type)
+        deepseek_trans, deepseek_usage, deepseek_skip = translate_with_deepseek(
+            src_lines, lang, series_name, source_type, debug_dir=debug_dir
+        )
         elapsed = time.time() - start
         translations_by_model["deepseek"] = deepseek_trans
         usage_by_model["deepseek"] = deepseek_usage
