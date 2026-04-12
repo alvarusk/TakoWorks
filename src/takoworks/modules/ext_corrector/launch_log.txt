@@ -190,3 +190,4 @@
 [07/04/2026  9:58:29,27] "C:\Users\ajime\OneDrive\Documentos\PENDING\146 - Vending Machine S3\3 - Scripts esES\RebornAsAVendin_S3E2_RVMSIM0026_354762_subtitle_edited_es-la.ass" --serve 
 [07/04/2026 16:16:35,14] "C:\Users\ajime\OneDrive\Documentos\PENDING\145 - TBATE S2\3 - Scripts esES\TheBeginningAft_S2.0E2_BGFSIM0014_350643_subtitle_edited_es-es.ass" --serve 
 [10/04/2026 14:18:25,38] "C:\Users\ajime\OneDrive\Documentos\PENDING\146 - Vending Machine S3\3 - Scripts esES\RebornAsAVendin_S3E3_RVMSIM0027_354764_subtitle_edited_es-es.ass" --serve 
+[12/04/2026 13:16:29,35] "C:\Users\ajime\OneDrive\Documentos\PENDING\146 - Vending Machine S3\3 - Scripts esES\RebornAsAVendin_S3E4_RVMSIM0028_354766_subtitle_edited_es-es.ass" --serve 

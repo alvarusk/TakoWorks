@@ -6,6 +6,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from takoworks.modules.transcriber.context_notes import (  # type: ignore
     build_contextual_explanation_prompt,
+    ensure_japanese_furigana,
     get_context_window,
     parse_contextual_explanation_response,
 )
@@ -28,9 +29,27 @@ def test_prompt_includes_target_and_neighbors():
 
 def test_prompt_requests_hiragana_readings_for_japanese_terms():
     prompt = build_contextual_explanation_prompt("ja", ["A"], 0)
+    assert "SIEMPRE" in prompt
+    assert "cada aparicion" in prompt
     assert "sin espacios" in prompt
     assert "言葉(ことば)" in prompt
     assert "No uses romaji para indicar lecturas japonesas." in prompt
+
+
+def test_ensure_japanese_furigana_adds_readings_to_every_kanji_span():
+    mapping = {
+        "言葉": "ことば",
+        "気を付けて": "きをつけて",
+    }
+    text = "Analiza 言葉 y el matiz de 気を付けて."
+    expected = "Analiza 言葉(ことば) y el matiz de 気を付けて(きをつけて)."
+    assert ensure_japanese_furigana(text, mapping.get) == expected
+
+
+def test_ensure_japanese_furigana_preserves_existing_readings():
+    mapping = {"言葉": "ことば"}
+    text = "Ya viene como 言葉(ことば) en la nota."
+    assert ensure_japanese_furigana(text, mapping.get) == text
 
 
 def test_parse_contextual_response_accepts_braced_text():

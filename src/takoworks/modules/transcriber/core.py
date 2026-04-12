@@ -22,6 +22,7 @@ from .ass_utils import (
 )
 from .context_notes import (
     build_contextual_explanation_prompt,
+    ensure_japanese_furigana,
     parse_contextual_explanation_response,
 )
 from .json_utils import TranslationParseResult, parse_json_translations_result
@@ -1639,7 +1640,10 @@ def analyze_contextual_note_with_openai(
         usage.cost_usd += estimate_cost("gpt", pt, ct)
     else:
         _warn_missing_usage("gpt")
-    return parse_contextual_explanation_response(content), usage
+    note = parse_contextual_explanation_response(content)
+    if lang == "ja":
+        note = ensure_japanese_furigana(note)
+    return note, usage
 
 
 def build_contextual_notes(

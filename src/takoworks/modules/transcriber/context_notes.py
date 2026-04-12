@@ -1,6 +1,11 @@
 import json
 import re
-from typing import List, Tuple
+from functools import lru_cache
+from typing import Callable, List, Optional, Tuple
+
+
+KANJI_RE = re.compile(r"[\u3400-\u4DBF\u4E00-\u9FFF々〆ヵヶ]")
+JAPANESE_SPAN_RE = re.compile(r"[\u3400-\u4DBF\u4E00-\u9FFF々〆ヵヶぁ-ゖゝゞァ-ヶヽヾー]+")
 
 
 def _normalize_context_line(text: str) -> str:
@@ -23,6 +28,78 @@ def get_context_window(lines: List[str], index: int) -> Tuple[str, str, str, str
     )
 
 
+def _contains_kanji(text: str) -> bool:
+    return bool(KANJI_RE.search(text or ""))
+
+
+@lru_cache(maxsize=1)
+def _get_default_reading_provider() -> Optional[Callable[[str], str]]:
+    try:
+        from pykakasi import kakasi
+    except Exception:
+        return None
+
+    kks = kakasi()
+
+    def _provider(span: str) -> str:
+        try:
+            parts = kks.convert(span)
+        except Exception:
+            return ""
+        reading = "".join(
+            (
+                item.get("hira")
+                or item.get("kana")
+                or item.get("orig")
+                or ""
+            )
+            if isinstance(item, dict) else str(item)
+            for item in parts
+        )
+        return (reading or "").strip()
+
+    return _provider
+
+
+def ensure_japanese_furigana(
+    text: str,
+    reading_provider: Optional[Callable[[str], str]] = None,
+) -> str:
+    raw = text or ""
+    if not raw or not _contains_kanji(raw):
+        return raw
+
+    provider = reading_provider or _get_default_reading_provider()
+    if provider is None:
+        return raw
+
+    out: List[str] = []
+    last = 0
+
+    for match in JAPANESE_SPAN_RE.finditer(raw):
+        start, end = match.span()
+        span = match.group(0)
+
+        if not _contains_kanji(span):
+            continue
+        if end < len(raw) and raw[end] in ("(", "（"):
+            continue
+
+        reading = (provider(span) or "").strip()
+        if not reading:
+            continue
+
+        out.append(raw[last:start])
+        out.append(f"{span}({reading})")
+        last = end
+
+    if last == 0:
+        return raw
+
+    out.append(raw[last:])
+    return "".join(out)
+
+
 def build_contextual_explanation_prompt(lang: str, lines: List[str], index: int) -> str:
     line_minus_2, line_minus_1, target_line, line_plus_1, line_plus_2 = get_context_window(lines, index)
     language_name = "japones" if lang == "ja" else "chino"
@@ -31,7 +108,9 @@ def build_contextual_explanation_prompt(lang: str, lines: List[str], index: int)
 
     if lang == "ja":
         reading_rules = (
-            "- Si citas o analizas una palabra o expresion japonesa que contenga kanji, anade siempre su lectura en hiragana justo despues, entre parentesis y sin espacios, con este patron exacto: 言葉(ことば), 気を付けて(きをつけて).\n"
+            "- En cualquier termino o fragmento japones que contenga kanji, anade SIEMPRE su lectura completa en hiragana justo despues, entre parentesis y sin espacios.\n"
+            "- Hazlo en cada aparicion, no solo en algunos ejemplos o terminos clave.\n"
+            "- Usa este patron exacto: 言葉(ことば), 気を付けて(きをつけて).\n"
             "- No hace falta anadir lectura a palabras escritas solo en kana.\n"
             "- No uses romaji para indicar lecturas japonesas."
         )
