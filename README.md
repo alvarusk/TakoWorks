@@ -1,4 +1,4 @@
-# TakoWorks (v1.78.0)
+# TakoWorks (v1.79.0)
 
 Toolkit para transcribir, romanizar y traducir guiones/ASS de japonés y chino. Genera ASS por modelo, HTML resumen y registra costes (opcional Supabase).
 
@@ -51,7 +51,7 @@ python -m takoworks.modules.transcriber.core input.ass --skip-asr --do-roman-mor
 - HTML opcional con columnas: original, romaji/pinyin, glosas, GPT, Claude, Gemini, DeepSeek.
 
 ## Modelos y manejo de errores
-- Modelos soportados: GPT-5 (OpenAI), Claude, Gemini 2.5 Flash, DeepSeek.
+- Modelos soportados: GPT-5.5 (OpenAI), Claude Opus 4.7, Gemini 3 Flash, DeepSeek V4 Flash.
 - Si falta clave o falla la inicialización de un modelo, se omite y el pipeline sigue con los demás; se informa en consola y no se genera su archivo de salida.
 - Costes: se calculan si el SDK devuelve uso; si Supabase está configurado, se guardan los costes en la tabla indicada.
 

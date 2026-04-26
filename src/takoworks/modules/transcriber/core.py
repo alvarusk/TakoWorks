@@ -57,10 +57,10 @@ ProgressCallback = Optional[Callable[[str, int, int, str], None]]
 #  CONFIGURACIÓN: MODELOS, CLAVES API Y DICCIONARIOS
 # ============================================================
 
-OPENAI_MODEL   = "gpt-5.1"                  # OpenAI (ajusta si hace falta)
-CLAUDE_MODEL   = "claude-opus-4-5-20251101" # Anthropic (ajusta si hace falta)
-GEMINI_MODEL   = "gemini-2.5-flash"         # Gemini 2.5 Flash
-DEEPSEEK_MODEL = "deepseek-chat"            # DeepSeek (OpenAI-like)
+OPENAI_MODEL   = "gpt-5.5"                  # OpenAI (ajusta si hace falta)
+CLAUDE_MODEL   = "claude-opus-4-7"          # Anthropic (ajusta si hace falta)
+GEMINI_MODEL   = "gemini-3-flash-preview"   # Gemini 3 Flash Preview
+DEEPSEEK_MODEL = "deepseek-v4-flash"        # DeepSeek (OpenAI-like)
 OPENAI_TIMEOUT_S = 180
 OPENAI_MAX_RETRIES = 2
 OPENAI_BLOCK_ATTEMPTS = 3
@@ -100,34 +100,41 @@ YOMI_ZH_DIR = os.getenv("YOMI_ZH_DIR", r"C:\Transcriber\cndict")
 
 # Nombres que quieres ver en la GUI / logs / HTML
 DISPLAY_NAMES = {
-    "gpt": "GPT-5",
-    "claude": "Claude",
-    "gemini": "Gemini 2.5 Flash",
-    "deepseek": "DeepSeek",
+    "gpt": "GPT-5.5",
+    "claude": "Claude Opus 4.7",
+    "gemini": "Gemini 3 Flash",
+    "deepseek": "DeepSeek V4 Flash",
 }
 
 # Alias aceptados en --models (CLI/GUI). Se normalizan a claves internas:
 MODEL_ALIASES = {
+    "gpt-5.5": "gpt",
     "gpt-5": "gpt",
     "gpt5": "gpt",
     "gpt": "gpt",
     "openai": "gpt",
     "chatgpt": "gpt",
 
+    "claude opus 4.7": "claude",
+    "claude-opus-4-7": "claude",
     "claude": "claude",
     "anthropic": "claude",
 
+    "gemini 3 flash": "gemini",
+    "gemini-3-flash-preview": "gemini",
     "gemini 2.5 flash": "gemini",
     "gemini-2.5-flash": "gemini",
     "gemini": "gemini",
 
+    "deepseek v4 flash": "deepseek",
+    "deepseek-v4-flash": "deepseek",
     "deepseek": "deepseek",
     "deepseek-chat": "deepseek",
 }
 
 def normalize_models_arg(models_str: str) -> Set[str]:
     """
-    Acepta tanto: 'gpt,claude' como 'GPT-5,Claude,Gemini 2.5 Flash,DeepSeek'
+    Acepta tanto: 'gpt,claude' como 'GPT-5.5,Claude Opus 4.7,Gemini 3 Flash,DeepSeek V4 Flash'
     y devuelve el set interno: {'gpt','claude','gemini','deepseek'}.
     """
     if models_str is None:
@@ -1731,13 +1738,13 @@ def translate_with_openai(
     debug_dir: Optional[str] = None,
 ) -> Tuple[List[str], ApiUsage, Optional[str]]:
     if not OPENAI_API_KEY:
-        print("[GPT-5] Se omite GPT porque falta OPENAI_API_KEY (env o config.local.json).")
+        print("[GPT-5.5] Se omite GPT porque falta OPENAI_API_KEY (env o config.local.json).")
         return src_lines, ApiUsage(engine="gpt", model_name=OPENAI_MODEL), "missing_key"
 
     try:
         client = get_openai_client()
     except Exception as e:
-        print(f"[GPT-5] No se puede inicializar el cliente: {e}. Se omite GPT.")
+        print(f"[GPT-5.5] No se puede inicializar el cliente: {e}. Se omite GPT.")
         return src_lines, ApiUsage(engine="gpt", model_name=OPENAI_MODEL), "client_error"
 
     system_prompt = build_system_prompt(lang, series_name, source_type)
@@ -1761,7 +1768,7 @@ def translate_with_openai(
             block_started_at = time.time()
             user_prompt = _build_retry_user_prompt(base_user_prompt, len(chunk), attempt)
             print(
-                f"[GPT-5] Solicitud bloque {start + 1}-{end_line}, "
+                f"[GPT-5.5] Solicitud bloque {start + 1}-{end_line}, "
                 f"intento {attempt}/{OPENAI_BLOCK_ATTEMPTS}..."
             )
             try:
@@ -1780,7 +1787,7 @@ def translate_with_openai(
                 content = (response.choices[0].message.content or "").strip()
                 elapsed = time.time() - block_started_at
                 print(
-                    f"[GPT-5] Bloque {start + 1}-{end_line} completado "
+                    f"[GPT-5.5] Bloque {start + 1}-{end_line} completado "
                     f"en {elapsed:.1f} s."
                 )
                 parse_result = parse_json_translations_result(content, fallback_lines=chunk)
@@ -1802,7 +1809,7 @@ def translate_with_openai(
                 if attempt < OPENAI_BLOCK_ATTEMPTS:
                     wait_s = min(12, 3 * attempt)
                     print(
-                        f"[GPT-5] Reintentando bloque {start + 1}-{end_line} en {wait_s} s "
+                        f"[GPT-5.5] Reintentando bloque {start + 1}-{end_line} en {wait_s} s "
                         "porque el número de traducciones no coincide..."
                     )
                     time.sleep(wait_s)
@@ -1814,7 +1821,7 @@ def translate_with_openai(
                 if use_response_format and "response_format" in err_text.lower():
                     use_response_format = False
                     print(
-                        f"[GPT-5] El modelo/SDK rechazó response_format en bloque "
+                        f"[GPT-5.5] El modelo/SDK rechazó response_format en bloque "
                         f"{start + 1}-{end_line}; se reintenta sin JSON schema."
                     )
                     if attempt < OPENAI_BLOCK_ATTEMPTS:
@@ -1822,14 +1829,14 @@ def translate_with_openai(
                 if attempt < OPENAI_BLOCK_ATTEMPTS:
                     wait_s = min(12, 3 * attempt)
                     print(
-                        f"[GPT-5] Error/transitorio o timeout en bloque "
+                        f"[GPT-5.5] Error/transitorio o timeout en bloque "
                         f"{start + 1}-{end_line} tras {elapsed:.1f} s: {e}. "
                         f"Reintentando en {wait_s} s..."
                     )
                     time.sleep(wait_s)
                 else:
                     print(
-                        f"[GPT-5] Error al traducir; se omite GPT en este bloque. "
+                        f"[GPT-5.5] Error al traducir; se omite GPT en este bloque. "
                         f"Detalle: {e}"
                     )
 
@@ -2009,18 +2016,20 @@ def translate_with_claude(
         for attempt in range(1, MODEL_BLOCK_ATTEMPTS + 1):
             user_prompt = _build_retry_user_prompt(base_user_prompt, len(chunk), attempt)
             try:
-                message = client.messages.create(
-                    model=CLAUDE_MODEL,
-                    max_tokens=4096,
-                    temperature=0.1,
-                    system=system_prompt,
-                    messages=[
+                request_kwargs = {
+                    "model": CLAUDE_MODEL,
+                    "max_tokens": 4096,
+                    "system": system_prompt,
+                    "messages": [
                         {
                             "role": "user",
                             "content": user_prompt,
                         }
                     ],
-                )
+                }
+                if CLAUDE_MODEL != "claude-opus-4-7":
+                    request_kwargs["temperature"] = 0.1
+                message = client.messages.create(**request_kwargs)
             except Exception as e:
                 if attempt < MODEL_BLOCK_ATTEMPTS:
                     wait_s = min(9, 2 * attempt)
@@ -2115,13 +2124,13 @@ def translate_with_gemini(
     debug_dir: Optional[str] = None,
 ) -> Tuple[List[str], ApiUsage, Optional[str]]:
     """
-    Usa Gemini 2.5 Flash, con bloques más pequeños y max_output_tokens
+    Usa Gemini 3 Flash, con bloques más pequeños y max_output_tokens
     limitado para ir algo más rápido/estable.
     """
     try:
         model = get_gemini_model(lang, series_name, source_type)
     except Exception as e:
-        print(f"[Gemini 2.5 Flash] Se omite Gemini (cliente no inicializado): {e}")
+        print(f"[Gemini 3 Flash] Se omite Gemini (cliente no inicializado): {e}")
         return src_lines, ApiUsage(engine="gemini", model_name=GEMINI_MODEL), "client_error"
     all_translations: List[str] = []
     total = len(src_lines)
@@ -2132,7 +2141,7 @@ def translate_with_gemini(
         chunk = src_lines[start:start + GEMINI_CHUNK]
         base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
         end_line = min(start + GEMINI_CHUNK, total)
-        print(f"[Gemini 2.5 Flash] Líneas {start + 1}-{end_line} de {total}...")
+        print(f"[Gemini 3 Flash] Líneas {start + 1}-{end_line} de {total}...")
 
         response = None
         raw = ""
@@ -2590,10 +2599,10 @@ def main():
         "--models",
         help=(
             "Lista de modelos a ejecutar, separados por comas. "
-            "Opciones: GPT-5, Claude, Gemini 2.5 Flash, DeepSeek (o también gpt, claude, gemini, deepseek). "
+            "Opciones: GPT-5.5, Claude Opus 4.7, Gemini 3 Flash, DeepSeek V4 Flash (o también gpt, claude, gemini, deepseek). "
             "Por defecto: gpt,claude,gemini,deepseek"
         ),
-        default="GPT-5,Claude,Gemini 2.5 Flash,DeepSeek",
+        default="GPT-5.5,Claude Opus 4.7,Gemini 3 Flash,DeepSeek V4 Flash",
     )
     parser.add_argument(
         "--pad-ms",
