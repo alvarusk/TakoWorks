@@ -59,12 +59,20 @@ ProgressCallback = Optional[Callable[[str, int, int, str], None]]
 
 OPENAI_MODEL   = "gpt-5.5"                  # OpenAI (ajusta si hace falta)
 CLAUDE_MODEL   = "claude-opus-4-7"          # Anthropic (ajusta si hace falta)
+CONTEXT_NOTE_MODEL = "claude-sonnet-4-6"    # Prompt Explicativo / nota contextual
 GEMINI_MODEL   = "gemini-3-flash-preview"   # Gemini 3 Flash Preview
 DEEPSEEK_MODEL = "deepseek-v4-flash"        # DeepSeek (OpenAI-like)
 OPENAI_TIMEOUT_S = 180
 OPENAI_MAX_RETRIES = 2
 OPENAI_BLOCK_ATTEMPTS = 3
 MODEL_BLOCK_ATTEMPTS = 3
+CONTEXT_NOTE_MAX_TOKENS = 800
+
+
+def _add_openai_temperature(request_kwargs: Dict[str, object], temperature: float) -> None:
+    if OPENAI_MODEL != "gpt-5.5":
+        request_kwargs["temperature"] = temperature
+
 
 def _read_api_key(key: str, env_name: str) -> str:
     env_val = os.getenv(env_name)
@@ -102,6 +110,7 @@ YOMI_ZH_DIR = os.getenv("YOMI_ZH_DIR", r"C:\Transcriber\cndict")
 DISPLAY_NAMES = {
     "gpt": "GPT-5.5",
     "claude": "Claude Opus 4.7",
+    "context_note": "Prompt Explicativo (Claude Sonnet 4.6)",
     "gemini": "Gemini 3 Flash",
     "deepseek": "DeepSeek V4 Flash",
 }
@@ -199,10 +208,11 @@ def _read_price(model_key: str, kind: str, default: float) -> float:
 
 
 DEFAULT_PRICE_PER_1K: Dict[str, Dict[str, float]] = {
-    "gpt": {"input": 0.0, "output": 0.0},
-    "claude": {"input": 0.0, "output": 0.0},
-    "gemini": {"input": 0.0, "output": 0.0},
-    "deepseek": {"input": 0.0, "output": 0.0},
+    "gpt": {"input": 0.005, "output": 0.03},
+    "claude": {"input": 0.005, "output": 0.025},
+    "context_note": {"input": 0.0015, "output": 0.0075},
+    "gemini": {"input": 0.0005, "output": 0.003},
+    "deepseek": {"input": 0.00014, "output": 0.00028},
 }
 
 
@@ -1282,7 +1292,7 @@ def transcribe_ass(
     Carga un .ass, transcribe audio, pule la puntuación con modelos libres
     y opcionalmente añade:
       - romaji/pinyin
-      - nota contextual con ChatGPT
+      - nota contextual con Claude Sonnet
     en líneas adicionales (separadas con \\N).
     Además, imprime progreso por línea para que la GUI
     pueda mostrar en qué línea va y el % completado.
@@ -1461,7 +1471,7 @@ def add_roman_morph_to_subs(
             if romaji:
                 lines.append("{" + _ass_sanitize_braces(romaji) + "}")
 
-            # Nota contextual JA con ChatGPT
+            # Nota contextual JA con Claude Sonnet
             context_note = context_notes[i - 1] if i - 1 < len(context_notes) else ""
             if context_note:
                 lines.append(_ass_hide(context_note))
@@ -1472,7 +1482,7 @@ def add_roman_morph_to_subs(
             if pinyin:
                 lines.append("{" + _ass_sanitize_braces(pinyin) + "}")
 
-            # Nota contextual ZH con ChatGPT
+            # Nota contextual ZH con Claude Sonnet
             context_note = context_notes[i - 1] if i - 1 < len(context_notes) else ""
             if context_note:
                 lines.append(_ass_hide(context_note))
@@ -1613,40 +1623,43 @@ def get_openai_client() -> OpenAI:
     )
 
 
-def analyze_contextual_note_with_openai(
-    client: OpenAI,
+def analyze_contextual_note_with_claude(
+    client: anthropic.Anthropic,
     lines: List[str],
     index: int,
     lang: str,
 ) -> Tuple[str, ApiUsage]:
     prompt = build_contextual_explanation_prompt(lang, lines, index)
-    response = client.chat.completions.create(
-        model=OPENAI_MODEL,
-        temperature=0.2,
-        max_completion_tokens=220,
-        timeout=OPENAI_TIMEOUT_S,
+    message = client.messages.create(
+        model=CONTEXT_NOTE_MODEL,
+        max_tokens=CONTEXT_NOTE_MAX_TOKENS,
+        system=(
+            "Sigue exactamente el formato solicitado y devuelve solo la nota pedida, "
+            "sin encabezados ni texto extra."
+        ),
         messages=[
             {
-                "role": "system",
-                "content": (
-                    "Sigue exactamente el formato solicitado y devuelve solo la nota pedida, "
-                    "sin encabezados ni texto extra."
-                ),
-            },
-            {"role": "user", "content": prompt},
+                "role": "user",
+                "content": prompt,
+            }
         ],
     )
-    content = (response.choices[0].message.content or "").strip()
-    usage = ApiUsage(engine="gpt", model_name=OPENAI_MODEL)
-    resp_usage = getattr(response, "usage", None)
-    if resp_usage:
-        pt = _safe_int(getattr(resp_usage, "prompt_tokens", 0))
-        ct = _safe_int(getattr(resp_usage, "completion_tokens", 0))
+    content = "".join(
+        block.text for block in message.content if getattr(block, "type", None) == "text"
+    ).strip()
+    if not content:
+        raise RuntimeError("Claude no devolvió texto para la nota contextual.")
+
+    usage = ApiUsage(engine="context_note", model_name=CONTEXT_NOTE_MODEL)
+    msg_usage = getattr(message, "usage", None)
+    if msg_usage:
+        pt = _safe_int(getattr(msg_usage, "input_tokens", 0))
+        ct = _safe_int(getattr(msg_usage, "output_tokens", 0))
         usage.prompt_tokens += pt
         usage.completion_tokens += ct
-        usage.cost_usd += estimate_cost("gpt", pt, ct)
+        usage.cost_usd += estimate_cost("context_note", pt, ct)
     else:
-        _warn_missing_usage("gpt")
+        _warn_missing_usage("context_note")
     note = parse_contextual_explanation_response(content)
     if lang == "ja":
         note = ensure_japanese_furigana(note)
@@ -1667,17 +1680,17 @@ def build_contextual_notes(
     if lang not in {"ja", "zh"}:
         return [""] * len(cleaned_lines)
 
-    if not OPENAI_API_KEY:
+    if not ANTHROPIC_API_KEY:
         if not _WARNED_CONTEXT_NOTE_MISSING_KEY:
-            print("[Nota contextual] Se omite porque falta OPENAI_API_KEY.")
+            print("[Nota contextual] Se omite porque falta ANTHROPIC_API_KEY.")
             _WARNED_CONTEXT_NOTE_MISSING_KEY = True
         return [""] * len(cleaned_lines)
 
     try:
-        client = get_openai_client()
+        client = get_claude_client()
     except Exception as e:
         if not _WARNED_CONTEXT_NOTE_CLIENT:
-            print(f"[Nota contextual] No se puede inicializar OpenAI: {e}")
+            print(f"[Nota contextual] No se puede inicializar Claude: {e}")
             _WARNED_CONTEXT_NOTE_CLIENT = True
         return [""] * len(cleaned_lines)
 
@@ -1692,7 +1705,7 @@ def build_contextual_notes(
 
         print(f"[Nota contextual {lang_label}] Línea {idx}/{total}...")
         try:
-            note, note_usage = analyze_contextual_note_with_openai(client, cleaned_lines, idx - 1, lang)
+            note, note_usage = analyze_contextual_note_with_claude(client, cleaned_lines, idx - 1, lang)
             if usage_accumulator is not None:
                 merge_api_usage(usage_accumulator, note_usage)
         except Exception as e:
@@ -1774,13 +1787,13 @@ def translate_with_openai(
             try:
                 request_kwargs: Dict[str, object] = {
                     "model": OPENAI_MODEL,
-                    "temperature": 0.1,
                     "timeout": OPENAI_TIMEOUT_S,
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
                 }
+                _add_openai_temperature(request_kwargs, 0.1)
                 if use_response_format:
                     request_kwargs["response_format"] = _build_translation_response_format(len(chunk))
                 response = client.chat.completions.create(**request_kwargs)
@@ -2574,7 +2587,7 @@ def main():
         description=(
             "Transcribe un .ass + vídeo a japonés o chino (Anime-Whisper / BELLE-2), "
             "pulido de puntuación con modelos libres, añade romaji/pinyin y una nota "
-            "contextual opcional con ChatGPT, y traduce con GPT, Claude, Gemini y DeepSeek. "
+            "contextual opcional con Claude Sonnet, y traduce con GPT, Claude, Gemini y DeepSeek. "
             "Cada .ass de salida puede tener:\n"
             "  - línea 1: japonés/chino\n"
             "  - línea 2: romaji/pinyin (si se activa)\n"
@@ -2630,7 +2643,7 @@ def main():
     parser.add_argument(
         "--do-roman-morph",
         action="store_true",
-        help="Añadir romaji/pinyin y nota contextual con ChatGPT en el ASS.",
+        help="Añadir romaji/pinyin y nota contextual con Claude Sonnet en el ASS.",
     )
     parser.add_argument(
         "--html",
@@ -2682,7 +2695,7 @@ def main():
     else:
         source_type = ask_source_type()
 
-    context_note_usage = ApiUsage(engine="gpt", model_name=OPENAI_MODEL)
+    context_note_usage = ApiUsage(engine="context_note", model_name=CONTEXT_NOTE_MODEL)
 
     # 1) Obtener subs de partida
     if args.skip_asr:
@@ -2731,12 +2744,15 @@ def main():
     )
 
     if context_note_usage.total_tokens > 0:
-        usage_by_model["gpt"] = merge_api_usage(
-            usage_by_model.get("gpt", ApiUsage(engine="gpt", model_name=OPENAI_MODEL)),
+        usage_by_model["context_note"] = merge_api_usage(
+            usage_by_model.get(
+                "context_note",
+                ApiUsage(engine="context_note", model_name=CONTEXT_NOTE_MODEL),
+            ),
             context_note_usage,
         )
         print(
-            f"[Costes] Nota contextual GPT: prompt={context_note_usage.prompt_tokens} "
+            f"[Costes] Prompt Explicativo Claude Sonnet 4.6: prompt={context_note_usage.prompt_tokens} "
             f"completion={context_note_usage.completion_tokens} "
             f"total={context_note_usage.total_tokens} cost_usd=${context_note_usage.cost_usd:.4f}"
         )
