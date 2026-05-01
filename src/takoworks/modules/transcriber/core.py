@@ -188,6 +188,153 @@ def merge_api_usage(base: ApiUsage, extra: Optional[ApiUsage]) -> ApiUsage:
     return base
 
 
+def _record_phase_time(phase_timings: Optional[Dict[str, float]], key: str, elapsed: float) -> None:
+    if phase_timings is None:
+        return
+    phase_timings[key] = phase_timings.get(key, 0.0) + max(0.0, elapsed)
+
+
+def _format_elapsed(seconds: float) -> str:
+    seconds = max(0.0, float(seconds or 0.0))
+    if seconds < 60:
+        return f"{seconds:.1f} s"
+    minutes = int(seconds // 60)
+    rem = seconds - (minutes * 60)
+    return f"{minutes} min {rem:.1f} s"
+
+
+def _format_cost(cost_usd: float) -> str:
+    return f"${float(cost_usd or 0.0):.4f}"
+
+
+def _split_ass_text_lines(text: str) -> List[str]:
+    raw = text or ""
+    lines: List[str] = []
+    buf: List[str] = []
+    brace_depth = 0
+    i = 0
+    while i < len(raw):
+        ch = raw[i]
+        if ch == "{":
+            brace_depth += 1
+            buf.append(ch)
+            i += 1
+            continue
+        if ch == "}":
+            if brace_depth > 0:
+                brace_depth -= 1
+            buf.append(ch)
+            i += 1
+            continue
+        if ch == "\\" and i + 1 < len(raw) and raw[i + 1] == "N" and brace_depth == 0:
+            lines.append("".join(buf))
+            buf = []
+            i += 2
+            continue
+        buf.append(ch)
+        i += 1
+    lines.append("".join(buf))
+    return lines
+
+
+def _extract_braced_text(raw: str) -> str:
+    txt = (raw or "").strip()
+    if txt.startswith("{") and txt.endswith("}"):
+        txt = txt[1:-1]
+    return _ass_unsanitize_braces(txt).replace("\\N", "\n")
+
+
+def _is_hidden_ass_line(line: str) -> bool:
+    txt = (line or "").strip()
+    return txt.startswith("{") and txt.endswith("}")
+
+
+def _normalize_dialogue_marker_line(line: str) -> str:
+    txt = (line or "").strip()
+    if txt.startswith("-"):
+        return txt
+    # Some source lines arrive as "！-texto"; the dialogue marker should own
+    # the start of the line so romaji/notes can keep both speakers grouped.
+    return re.sub(r"^[\s!！?？。．…]+(?=-)", "", txt)
+
+
+def _has_dialogue_marker(line: str) -> bool:
+    return _normalize_dialogue_marker_line(line).lstrip().startswith("-")
+
+
+def _strip_dialogue_marker(line: str) -> str:
+    txt = _normalize_dialogue_marker_line(line).lstrip()
+    if txt.startswith("-"):
+        return txt[1:].strip()
+    return txt.strip()
+
+
+def _dialogue_original_line_count(ev: pysubs2.SSAEvent, lines: List[str]) -> int:
+    actor = str(getattr(ev, "name", "") or "")
+    if ";" not in actor:
+        return 1
+
+    count = 0
+    for line in lines:
+        if _is_hidden_ass_line(line):
+            break
+        if not _has_dialogue_marker(line):
+            break
+        count += 1
+    return count if count >= 2 else 1
+
+
+def _split_event_original_and_extra(ev: pysubs2.SSAEvent) -> Tuple[List[str], List[str]]:
+    lines = _split_ass_text_lines(getattr(ev, "text", "") or "")
+    if not lines:
+        return [], []
+
+    original_count = _dialogue_original_line_count(ev, lines)
+    original_lines = lines[:original_count]
+    if original_count > 1:
+        original_lines = [_normalize_dialogue_marker_line(line) for line in original_lines]
+    return original_lines, lines[original_count:]
+
+
+def _event_source_text(ev: pysubs2.SSAEvent) -> str:
+    original_lines, _extra_lines = _split_event_original_and_extra(ev)
+    return "\\N".join(line.strip() for line in original_lines if line.strip()).strip()
+
+
+def _romanize_source_text(
+    text: str,
+    lang: str,
+    romaji_converter,
+    ja_tagger: Optional[Tagger],
+) -> str:
+    out_lines: List[str] = []
+    for raw_line in (text or "").split("\\N"):
+        line = _normalize_dialogue_marker_line(raw_line)
+        has_marker = _has_dialogue_marker(line)
+        source = _strip_dialogue_marker(line) if has_marker else line.strip()
+        if not source:
+            out_lines.append("-" if has_marker else "")
+            continue
+
+        if lang == "ja":
+            converted = ""
+            if romaji_converter is not None:
+                if ja_tagger is not None:
+                    converted = japanese_to_romaji_pretty(source, romaji_converter, ja_tagger)
+                else:
+                    converted = japanese_to_romaji_line(source, romaji_converter)
+        elif lang == "zh":
+            converted = text_to_pinyin(source)
+        else:
+            converted = ""
+
+        converted = (converted or "").strip()
+        if has_marker and converted:
+            converted = "- " + converted
+        out_lines.append(converted)
+    return "\\N".join(line for line in out_lines if line).strip()
+
+
 def _safe_int(val) -> int:
     try:
         return int(val or 0)
@@ -448,6 +595,40 @@ def log_cost_summary(run_id: str, usage_by_model: Dict[str, ApiUsage], series_na
     total_tokens = sum(u.total_tokens for u in usage_by_model.values())
     total_cost = sum(u.cost_usd for u in usage_by_model.values())
     print(f"[Costes] TOTAL: tokens={total_tokens} cost_usd=${total_cost:.4f}")
+
+
+def log_time_cost_breakdown(
+    phase_timings: Dict[str, float],
+    context_note_usage: ApiUsage,
+    model_timings: Dict[str, float],
+    usage_by_model: Dict[str, ApiUsage],
+    total_elapsed: float,
+) -> None:
+    print("[Tiempo/coste] Desglose final:")
+
+    context_seconds = phase_timings.get("context_note", 0.0)
+    roman_seconds = phase_timings.get("romanization", 0.0)
+    displayed_seconds = context_seconds + roman_seconds
+    displayed_cost = context_note_usage.cost_usd
+
+    print(f"Prompts explicativos: {_format_elapsed(context_seconds)}; {_format_cost(context_note_usage.cost_usd)}")
+    print(f"Romanización: {_format_elapsed(roman_seconds)}; {_format_cost(0.0)}")
+
+    for key in ("gpt", "claude", "gemini", "deepseek"):
+        if key not in model_timings and key not in usage_by_model:
+            continue
+        usage = usage_by_model.get(key, ApiUsage(engine=key, model_name=""))
+        seconds = model_timings.get(key, 0.0)
+        displayed_seconds += seconds
+        displayed_cost += usage.cost_usd
+        print(f"{DISPLAY_NAMES.get(key, key)}: {_format_elapsed(seconds)}; {_format_cost(usage.cost_usd)}")
+
+    other_seconds = max(0.0, total_elapsed - displayed_seconds)
+    if other_seconds >= 0.05:
+        displayed_seconds += other_seconds
+        print(f"Otros pasos: {_format_elapsed(other_seconds)}; {_format_cost(0.0)}")
+
+    print(f"Total: {_format_elapsed(displayed_seconds)}; {_format_cost(displayed_cost)}")
 
 
 def persist_costs_to_supabase(
@@ -1287,6 +1468,7 @@ def transcribe_ass(
     lang: str,
     do_roman_morph: bool,
     context_note_usage: Optional[ApiUsage] = None,
+    phase_timings: Optional[Dict[str, float]] = None,
 ) -> pysubs2.SSAFile:
     """
     Carga un .ass, transcribe audio, pule la puntuación con modelos libres
@@ -1364,10 +1546,11 @@ def transcribe_ass(
 
         romaji_converter = build_romaji_converter() if (lang == "ja" and do_roman_morph) else None
         ja_tagger = _ensure_ja_tagger() if (lang == "ja" and do_roman_morph) else None
-        context_notes = (
-            build_contextual_notes(refined_lines, lang, usage_accumulator=context_note_usage)
-            if do_roman_morph else []
-        )
+        context_notes: List[str] = []
+        if do_roman_morph:
+            note_started_at = time.time()
+            context_notes = build_contextual_notes(refined_lines, lang, usage_accumulator=context_note_usage)
+            _record_phase_time(phase_timings, "context_note", time.time() - note_started_at)
 
         for i, (ev, text) in enumerate(zip(events, refined_lines), start=1):
             base_text = (text or "").strip()
@@ -1377,13 +1560,9 @@ def transcribe_ass(
             lines = [base_text]
 
             if do_roman_morph:
+                roman_line_started_at = time.time()
                 if lang == "ja":
-                    romaji = ""
-                    if romaji_converter is not None:
-                        if ja_tagger is not None:
-                            romaji = japanese_to_romaji_pretty(base_text, romaji_converter, ja_tagger)
-                        else:
-                            romaji = japanese_to_romaji_line(base_text, romaji_converter)
+                    romaji = _romanize_source_text(base_text, lang, romaji_converter, ja_tagger)
                     if romaji:
                         lines.append("{" + _ass_sanitize_braces(romaji) + "}")
 
@@ -1392,12 +1571,13 @@ def transcribe_ass(
                         lines.append(_ass_hide(context_note))
 
                 elif lang == "zh":
-                    pinyin = text_to_pinyin(base_text)
+                    pinyin = _romanize_source_text(base_text, lang, None, None)
                     if pinyin:
                         lines.append("{" + _ass_sanitize_braces(pinyin) + "}")
                     context_note = context_notes[i - 1] if i - 1 < len(context_notes) else ""
                     if context_note:
                         lines.append(_ass_hide(context_note))
+                _record_phase_time(phase_timings, "romanization", time.time() - roman_line_started_at)
 
             ev.text = "\\N".join(lines)
             snippet = base_text.replace("\n", " ")[:60]
@@ -1411,6 +1591,7 @@ def add_roman_morph_to_subs(
     subs: pysubs2.SSAFile,
     lang: str,
     context_note_usage: Optional[ApiUsage] = None,
+    phase_timings: Optional[Dict[str, float]] = None,
 ) -> pysubs2.SSAFile:
     """
     Añade romaji/pinyin + nota contextual a un ASS que YA tiene el guion
@@ -1442,32 +1623,28 @@ def add_roman_morph_to_subs(
         romaji_converter = build_romaji_converter()
         ja_tagger = _ensure_ja_tagger()
 
-    base_texts = [((ev.text or "").split("\\N")[0] or "").strip() for ev in events]
+    base_texts = [_event_source_text(ev) for ev in events]
+    note_started_at = time.time()
     context_notes = build_contextual_notes(base_texts, lang, usage_accumulator=context_note_usage)
+    _record_phase_time(phase_timings, "context_note", time.time() - note_started_at)
 
     for i, ev in enumerate(events, start=1):
-        raw_text = (ev.text or "")
-        parts = raw_text.split("\\N")
+        original_lines, extra_lines = _split_event_original_and_extra(ev)
 
         # Primera línea = texto base en JA/ZH
-        base_text = (parts[0] or "").strip()
+        base_text = "\\N".join(line.strip() for line in original_lines if line.strip()).strip()
         if not base_text:
             continue
 
         # Líneas extra ya existentes (por si ya tenías traducción debajo)
-        extra_lines = parts[1:]
 
         # Reconstruimos las líneas del evento
-        lines = [base_text]
+        lines = original_lines
+        roman_started_at = time.time()
 
         if lang == "ja":
             # Romaji "bonito"
-            romaji = ""
-            if romaji_converter is not None:
-                if ja_tagger is not None:
-                    romaji = japanese_to_romaji_pretty(base_text, romaji_converter, ja_tagger)
-                else:
-                    romaji = japanese_to_romaji_line(base_text, romaji_converter)
+            romaji = _romanize_source_text(base_text, lang, romaji_converter, ja_tagger)
             if romaji:
                 lines.append("{" + _ass_sanitize_braces(romaji) + "}")
 
@@ -1478,7 +1655,7 @@ def add_roman_morph_to_subs(
 
         elif lang == "zh":
             # Pinyin
-            pinyin = text_to_pinyin(base_text)
+            pinyin = _romanize_source_text(base_text, lang, None, None)
             if pinyin:
                 lines.append("{" + _ass_sanitize_braces(pinyin) + "}")
 
@@ -1488,6 +1665,7 @@ def add_roman_morph_to_subs(
                 lines.append(_ass_hide(context_note))
 
         # Conservamos cualquier línea extra ya existente
+        _record_phase_time(phase_timings, "romanization", time.time() - roman_started_at)
         lines.extend(extra_lines)
 
         ev.text = "\\N".join(lines)
@@ -2390,12 +2568,6 @@ def generate_html(
     def safe_get(lst: List[str], idx: int) -> str:
         return lst[idx].strip() if idx < len(lst) else ""
 
-    def extract_braced(raw: str) -> str:
-        txt = (raw or "").strip()
-        if txt.startswith("{") and txt.endswith("}"):
-            txt = txt[1:-1]
-        return _ass_unsanitize_braces(txt)
-
     with open(output_path, "w", encoding="utf-8") as f:
         f.write("<!DOCTYPE html><html><head><meta charset='utf-8'>")
         f.write("<title>Resumen de subtítulos</title>")
@@ -2426,10 +2598,11 @@ def generate_html(
         f.write("</tr></thead><tbody>")
 
         for i, ev in enumerate(events):
-            parts = (ev.text or "").split("\\N")
-            original = parts[0].strip() if parts else ""
-            roman   = extract_braced(parts[1]) if len(parts) > 1 else ""
-            morph   = extract_braced(parts[2]) if len(parts) > 2 else ""
+            original_lines, extra_lines = _split_event_original_and_extra(ev)
+            hidden_lines = [line for line in extra_lines if _is_hidden_ass_line(line)]
+            original = "\n".join(line.strip() for line in original_lines if line.strip())
+            roman = _extract_braced_text(hidden_lines[0]) if len(hidden_lines) > 0 else ""
+            morph = _extract_braced_text(hidden_lines[1]) if len(hidden_lines) > 1 else ""
 
             row_vals = [
                 original,
@@ -2467,7 +2640,7 @@ def process_all_models_with_subs(
     base_name: str,
     models: Set[str],
     out_dir: str,
-) -> Tuple[Dict[str, List[str]], Dict[str, ApiUsage]]:
+) -> Tuple[Dict[str, List[str]], Dict[str, ApiUsage], Dict[str, float]]:
     def _should_write_output(reason: Optional[str]) -> bool:
         return reason not in {"missing_key", "client_error", "auth_error"}
 
@@ -2482,9 +2655,7 @@ def process_all_models_with_subs(
     events = [ev for ev in subs if not getattr(ev, "is_comment", False)]
     src_lines: List[str] = []
     for ev in events:
-        text = ev.text or ""
-        src = text.split("\\N", 1)[0].strip()
-        src_lines.append(src)
+        src_lines.append(_event_source_text(ev))
 
     total = len(src_lines)
     print(f"Hay {total} líneas de diálogo para traducir.")
@@ -2492,13 +2663,14 @@ def process_all_models_with_subs(
         print("[Modelos] Ejecutando:", ", ".join(DISPLAY_NAMES[m] for m in sorted(models)))
     else:
         print("[Modelos] Ninguno seleccionado; se omite la traducción.")
-        return {}, {}
+        return {}, {}, {}
 
     os.makedirs(out_dir, exist_ok=True)
     debug_dir = os.path.join(out_dir, "_debug", base_name)
 
     translations_by_model: Dict[str, List[str]] = {}
     usage_by_model: Dict[str, ApiUsage] = {}
+    model_timings: Dict[str, float] = {}
     skipped: Dict[str, str] = {}
 
     if "gpt" in models:
@@ -2508,6 +2680,7 @@ def process_all_models_with_subs(
             src_lines, lang, series_name, source_type, debug_dir=debug_dir
         )
         elapsed = time.time() - start
+        model_timings["gpt"] = elapsed
         translations_by_model["gpt"] = gpt_trans
         usage_by_model["gpt"] = gpt_usage
         if gpt_skip:
@@ -2526,6 +2699,7 @@ def process_all_models_with_subs(
             src_lines, lang, series_name, source_type, debug_dir=debug_dir
         )
         elapsed = time.time() - start
+        model_timings["claude"] = elapsed
         translations_by_model["claude"] = claude_trans
         usage_by_model["claude"] = claude_usage
         if claude_skip:
@@ -2544,6 +2718,7 @@ def process_all_models_with_subs(
             src_lines, lang, series_name, source_type, debug_dir=debug_dir
         )
         elapsed = time.time() - start
+        model_timings["gemini"] = elapsed
         translations_by_model["gemini"] = gemini_trans
         usage_by_model["gemini"] = gemini_usage
         if gemini_skip:
@@ -2562,6 +2737,7 @@ def process_all_models_with_subs(
             src_lines, lang, series_name, source_type, debug_dir=debug_dir
         )
         elapsed = time.time() - start
+        model_timings["deepseek"] = elapsed
         translations_by_model["deepseek"] = deepseek_trans
         usage_by_model["deepseek"] = deepseek_usage
         if deepseek_skip:
@@ -2576,13 +2752,21 @@ def process_all_models_with_subs(
     if skipped:
         print("[Modelos] Saltados parcial/total:", ", ".join(f"{DISPLAY_NAMES[k]} ({v})" for k, v in skipped.items()))
 
-    return translations_by_model, usage_by_model
+    return translations_by_model, usage_by_model, model_timings
 
 # ============================================================
 #  MAIN
 # ============================================================
 
-def main():
+def main(argv: Optional[List[str]] = None):
+    run_started_at = time.time()
+    run_started_override = os.getenv("TAKOWORKS_TRANSCRIBER_RUN_STARTED_AT", "").strip()
+    if run_started_override:
+        try:
+            run_started_at = float(run_started_override)
+        except Exception:
+            pass
+    phase_timings: Dict[str, float] = {}
     parser = argparse.ArgumentParser(
         description=(
             "Transcribe un .ass + vídeo a japonés o chino (Anime-Whisper / BELLE-2), "
@@ -2661,7 +2845,7 @@ def main():
         ),
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     # Normalizamos rutas y carpeta de salida
     ass_in = os.path.abspath(args.ass_in)
@@ -2704,7 +2888,12 @@ def main():
 
         if args.do_roman_morph:
             print("[+] Añadiendo romaji/pinyin y nota contextual sobre el guion existente.")
-            subs = add_roman_morph_to_subs(subs, lang, context_note_usage=context_note_usage)
+            subs = add_roman_morph_to_subs(
+                subs,
+                lang,
+                context_note_usage=context_note_usage,
+                phase_timings=phase_timings,
+            )
         else:
             print("[+] --do-roman-morph NO está activado: se usará el guion tal cual para la traducción.")
 
@@ -2723,6 +2912,7 @@ def main():
             lang=lang,
             do_roman_morph=args.do_roman_morph,
             context_note_usage=context_note_usage,
+            phase_timings=phase_timings,
         )
 
         # Guardamos ASS intermedio (asr)
@@ -2733,7 +2923,7 @@ def main():
 
     # 2) Traducir
     models = normalize_models_arg(args.models)
-    translations_by_model, usage_by_model = process_all_models_with_subs(
+    translations_by_model, usage_by_model, model_timings = process_all_models_with_subs(
         subs,
         lang,
         series_name,
@@ -2760,6 +2950,14 @@ def main():
     if usage_by_model:
         log_cost_summary(run_id, usage_by_model, series_name, base_name)
         persist_costs_to_supabase(run_id, series_name, base_name, lang, usage_by_model)
+
+    log_time_cost_breakdown(
+        phase_timings,
+        context_note_usage,
+        model_timings,
+        usage_by_model,
+        time.time() - run_started_at,
+    )
 
     # 3) HTML opcional
     if args.html:

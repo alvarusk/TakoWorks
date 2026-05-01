@@ -4,6 +4,7 @@ import inspect
 import io
 import os
 import sys
+import time
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
@@ -43,9 +44,9 @@ class TranscriberPanel(ttk.Frame):
 
         self.lang_var = tk.StringVar(value="ja")
         self.series_var = tk.StringVar(value="")
-        self.source_var = tk.StringVar(value="nada")
+        self.source_var = tk.StringVar(value="Nada")
 
-        self.v_skip_asr = tk.BooleanVar(value=False)
+        self.v_skip_asr = tk.BooleanVar(value=True)
         self.v_do_roman = tk.BooleanVar(value=True)
         self.v_html = tk.BooleanVar(value=False)
 
@@ -120,8 +121,7 @@ class TranscriberPanel(ttk.Frame):
         p = filedialog.askopenfilename(filetypes=[("ASS files", "*.ass")])
         if p:
             self.ass_var.set(p)
-            if not self.out_var.get().strip():
-                self.out_var.set(os.path.dirname(p))
+            self.out_var.set(os.path.dirname(p))
 
     def _pick_video(self):
         p = filedialog.askopenfilename(filetypes=[("Video", "*.mkv *.mp4 *.avi *.mov *.ts"), ("All files", "*.*")])
@@ -162,9 +162,11 @@ class TranscriberPanel(ttk.Frame):
         self.cfg["last"]["out_dir"] = out_dir
         save_config(self.cfg)
 
-        def job(cancel_event, log):
-            from . import core
+        run_started_at = time.time()
 
+        def job(cancel_event, log):
+            old_run_started_at = os.environ.get("TAKOWORKS_TRANSCRIBER_RUN_STARTED_AT")
+            os.environ["TAKOWORKS_TRANSCRIBER_RUN_STARTED_AT"] = str(run_started_at)
             argv = [ass_in]
             # Si tu transcriber core aún exige video posicional, ponemos algo “dummy”
             argv.append(video_in if video_in else ass_in)
@@ -191,6 +193,8 @@ class TranscriberPanel(ttk.Frame):
             sys.stdout = _LogWriter(log)
             sys.stderr = _LogWriter(log)
             try:
+                from . import core
+
                 # Si has cambiado main(argv=None), esto lo usará.
                 if "argv" in inspect.signature(core.main).parameters:
                     core.main(argv)
@@ -198,6 +202,10 @@ class TranscriberPanel(ttk.Frame):
                     sys.argv = ["transcriber"] + argv
                     core.main()
             finally:
+                if old_run_started_at is None:
+                    os.environ.pop("TAKOWORKS_TRANSCRIBER_RUN_STARTED_AT", None)
+                else:
+                    os.environ["TAKOWORKS_TRANSCRIBER_RUN_STARTED_AT"] = old_run_started_at
                 sys.stdout.flush()
                 sys.stderr.flush()
                 sys.stdout, sys.stderr = old_out, old_err
