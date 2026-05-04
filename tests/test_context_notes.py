@@ -6,10 +6,46 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from takoworks.modules.transcriber.context_notes import (  # type: ignore
     build_contextual_explanation_prompt,
+    build_contextual_explanation_repair_prompt,
+    contains_japanese_script,
     ensure_japanese_furigana,
     get_context_window,
     parse_contextual_explanation_response,
 )
+from takoworks.modules.transcriber.core import analyze_contextual_note_with_claude  # type: ignore
+
+
+class _DummyBlock:
+    def __init__(self, text: str):
+        self.type = "text"
+        self.text = text
+
+
+class _DummyUsage:
+    def __init__(self, input_tokens: int, output_tokens: int):
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+
+
+class _DummyMessage:
+    def __init__(self, text: str, input_tokens: int = 10, output_tokens: int = 6):
+        self.content = [_DummyBlock(text)]
+        self.usage = _DummyUsage(input_tokens, output_tokens)
+
+
+class _DummyMessages:
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.calls = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        return self._responses[len(self.calls) - 1]
+
+
+class _DummyClient:
+    def __init__(self, responses):
+        self.messages = _DummyMessages(responses)
 
 
 def test_get_context_window_pads_missing_neighbors():
@@ -27,13 +63,42 @@ def test_prompt_includes_target_and_neighbors():
     assert "Linea +2: E" in prompt
 
 
-def test_prompt_requests_hiragana_readings_for_japanese_terms():
+def test_prompt_forces_spanish_only_output():
     prompt = build_contextual_explanation_prompt("ja", ["A"], 0)
-    assert "SIEMPRE" in prompt
-    assert "cada aparicion" in prompt
-    assert "sin espacios" in prompt
-    assert "言葉(ことば)" in prompt
-    assert "No uses romaji para indicar lecturas japonesas." in prompt
+    assert "Escribe siempre en espanol de Espana" in prompt
+    assert "No escribas ninguna parte de la explicacion en japones" in prompt
+    assert "anade SIEMPRE su lectura completa en hiragana" not in prompt
+    assert "No uses romaji" not in prompt
+
+
+def test_repair_prompt_explicitly_rewrites_to_spanish():
+    prompt = build_contextual_explanation_repair_prompt("ja", ["A"], 0, "日本語の説明")
+    assert "Reescribe la siguiente nota contextual al espanol de Espana." in prompt
+    assert "no incluir japones" in prompt
+    assert "NOTA A CORREGIR" in prompt
+
+
+def test_contains_japanese_script_detects_kana_and_kanji():
+    assert contains_japanese_script("これは日本語です")
+    assert contains_japanese_script("かな")
+    assert not contains_japanese_script("Esto es solo espanol.")
+
+
+def test_context_note_analysis_repairs_japanese_output():
+    client = _DummyClient(
+        [
+            _DummyMessage("これは日本語の説明です。"),
+            _DummyMessage("La linea se entiende por el contexto y suena coloquial."),
+        ]
+    )
+
+    note, usage = analyze_contextual_note_with_claude(client, ["a", "b", "c"], 1, "ja")
+
+    assert note == "La linea se entiende por el contexto y suena coloquial."
+    assert usage.prompt_tokens == 20
+    assert usage.completion_tokens == 12
+    assert len(client.messages.calls) == 2
+    assert "Reescribe la siguiente nota contextual" in client.messages.calls[1]["messages"][0]["content"]
 
 
 def test_ensure_japanese_furigana_adds_readings_to_every_kanji_span():

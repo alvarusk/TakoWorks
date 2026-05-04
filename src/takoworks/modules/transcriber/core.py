@@ -21,7 +21,8 @@ from .ass_utils import (
 )
 from .context_notes import (
     build_contextual_explanation_prompt,
-    ensure_japanese_furigana,
+    build_contextual_explanation_repair_prompt,
+    contains_japanese_script,
     parse_contextual_explanation_response,
 )
 from .json_utils import (
@@ -1787,8 +1788,47 @@ def analyze_contextual_note_with_claude(
     else:
         _warn_missing_usage("context_note")
     note = parse_contextual_explanation_response(content)
-    if lang == "ja":
-        note = ensure_japanese_furigana(note)
+    if contains_japanese_script(note):
+        repair_prompt = build_contextual_explanation_repair_prompt(lang, lines, index, note)
+        repair_message = client.messages.create(
+            model=CONTEXT_NOTE_MODEL,
+            max_tokens=CONTEXT_NOTE_MAX_TOKENS,
+            system=(
+                "Sigue exactamente el formato solicitado y devuelve solo la nota pedida, "
+                "sin encabezados ni texto extra."
+            ),
+            messages=[
+                {
+                    "role": "user",
+                    "content": repair_prompt,
+                }
+            ],
+        )
+        repair_content = "".join(
+            block.text for block in repair_message.content if getattr(block, "type", None) == "text"
+        ).strip()
+        if not repair_content:
+            raise RuntimeError("Claude no devolvió texto en la corrección de la nota contextual.")
+
+        repair_usage = getattr(repair_message, "usage", None)
+        if repair_usage:
+            pt = _safe_int(getattr(repair_usage, "input_tokens", 0))
+            ct = _safe_int(getattr(repair_usage, "output_tokens", 0))
+            usage.prompt_tokens += pt
+            usage.completion_tokens += ct
+            usage.cost_usd += estimate_cost("context_note", pt, ct)
+        else:
+            _warn_missing_usage("context_note")
+
+        repaired_note = parse_contextual_explanation_response(repair_content)
+        if contains_japanese_script(repaired_note):
+            if lang == "ja":
+                repaired_note = (
+                    "La linea depende del contexto y usa un matiz expresivo propio del japonés."
+                )
+            else:
+                repaired_note = "La linea depende del contexto y tiene un matiz propio del chino."
+        note = repaired_note or note
     return note, usage
 
 
