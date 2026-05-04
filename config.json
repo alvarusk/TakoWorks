@@ -1,6 +1,4 @@
 {
-  "jpdict_dir": "data\\jpdict",
-  "cndict_dir": "data\\cndict",
   "ffmpeg_dir": "bin\\ffmpeg",
   "yomitoku_dir": "bin\\yomitoku",
   "api_keys": {

@@ -11,7 +11,6 @@ from datetime import datetime
 from typing import List, Set, Dict, Optional, Tuple
 import html
 import re
-from collections import defaultdict
 from functools import lru_cache
 from ... import config as app_config
 from .ass_utils import (
@@ -25,7 +24,12 @@ from .context_notes import (
     ensure_japanese_furigana,
     parse_contextual_explanation_response,
 )
-from .json_utils import TranslationParseResult, parse_json_translations_result
+from .json_utils import (
+    RomanizationParseResult,
+    TranslationParseResult,
+    parse_json_romanizations_result,
+    parse_json_translations_result,
+)
 
 try:
     import requests  # type: ignore
@@ -38,7 +42,6 @@ from pykakasi import kakasi
 from pypinyin import lazy_pinyin, Style
 
 from fugashi import Tagger
-import jieba.posseg as pseg
 
 from openai import OpenAI          # OpenAI + DeepSeek (API compatible)
 import anthropic                   # Claude
@@ -67,6 +70,7 @@ OPENAI_MAX_RETRIES = 2
 OPENAI_BLOCK_ATTEMPTS = 3
 MODEL_BLOCK_ATTEMPTS = 3
 CONTEXT_NOTE_MAX_TOKENS = 800
+ROMANIZATION_MAX_TOKENS = 1200
 
 
 def _add_openai_temperature(request_kwargs: Dict[str, object], temperature: float) -> None:
@@ -96,12 +100,6 @@ DEEPSEEK_API_KEY  = _read_api_key("deepseek", "DEEPSEEK_API_KEY")
 CHUNK_SIZE   = 20  # tamaño de lote para GPT/Claude/DeepSeek
 GEMINI_CHUNK = 3  # bloques más pequeños para Gemini, más estable
 
-# Directorios por defecto para diccionarios Yomitan (puedes sobreescribir con env vars)
-YOMI_JA_DIR = os.getenv("YOMI_JA_DIR", r"C:\Transcriber\jpdict")
-YOMI_ZH_DIR = os.getenv("YOMI_ZH_DIR", r"C:\Transcriber\cndict")
-
-
-
 # ============================================================
 #  NOMBRES DE MODELOS (UI) Y NORMALIZACIÓN
 # ============================================================
@@ -113,6 +111,7 @@ DISPLAY_NAMES = {
     "context_note": "Prompt Explicativo (Claude Sonnet 4.6)",
     "gemini": "Gemini 3 Flash",
     "deepseek": "DeepSeek V4 Flash",
+    "romanization": "Romanizacion (DeepSeek V4 Flash)",
 }
 
 # Alias aceptados en --models (CLI/GUI). Se normalizan a claves internas:
@@ -631,6 +630,41 @@ def log_time_cost_breakdown(
     print(f"Total: {_format_elapsed(displayed_seconds)}; {_format_cost(displayed_cost)}")
 
 
+def log_time_cost_breakdown_v2(
+    phase_timings: Dict[str, float],
+    romanization_usage: ApiUsage,
+    context_note_usage: ApiUsage,
+    model_timings: Dict[str, float],
+    usage_by_model: Dict[str, ApiUsage],
+    total_elapsed: float,
+) -> None:
+    print("[Tiempo/coste] Desglose final:")
+
+    context_seconds = phase_timings.get("context_note", 0.0)
+    roman_seconds = phase_timings.get("romanization", 0.0)
+    displayed_seconds = context_seconds + roman_seconds
+    displayed_cost = context_note_usage.cost_usd + romanization_usage.cost_usd
+
+    print(f"Prompts explicativos: {_format_elapsed(context_seconds)}; {_format_cost(context_note_usage.cost_usd)}")
+    print(f"Romanizacion: {_format_elapsed(roman_seconds)}; {_format_cost(romanization_usage.cost_usd)}")
+
+    for key in ("gpt", "claude", "gemini", "deepseek"):
+        if key not in model_timings and key not in usage_by_model:
+            continue
+        usage = usage_by_model.get(key, ApiUsage(engine=key, model_name=""))
+        seconds = model_timings.get(key, 0.0)
+        displayed_seconds += seconds
+        displayed_cost += usage.cost_usd
+        print(f"{DISPLAY_NAMES.get(key, key)}: {_format_elapsed(seconds)}; {_format_cost(usage.cost_usd)}")
+
+    other_seconds = max(0.0, total_elapsed - displayed_seconds)
+    if other_seconds >= 0.05:
+        displayed_seconds += other_seconds
+        print(f"Otros pasos: {_format_elapsed(other_seconds)}; {_format_cost(0.0)}")
+
+    print(f"Total: {_format_elapsed(displayed_seconds)}; {_format_cost(displayed_cost)}")
+
+
 def persist_costs_to_supabase(
     run_id: str,
     series_name: str,
@@ -691,8 +725,6 @@ def persist_costs_to_supabase(
 # ============================================================
 
 _ja_tagger: Optional[Tagger]          = None
-_ja_dict_en: Optional[Dict[str, List[str]]] = None  # japonés → glosas EN
-_zh_dict_en: Optional[Dict[str, List[str]]] = None  # chino   → glosas EN
 
 
 def _ensure_ja_tagger() -> Optional[Tagger]:
@@ -719,141 +751,6 @@ def _ensure_ja_tagger() -> Optional[Tagger]:
 # ============================================================
 #  UTILIDADES: DICCIONARIO YOMITAN
 # ============================================================
-
-def load_yomitan_dict(dir_path: str) -> Dict[str, List[str]]:
-    """
-    Carga un diccionario Yomitan/Yomichan desde un directorio (recursivo) y construye un mapping:
-        forma (expression / reading) -> lista de glosas (strings EN).
-
-    Soporta árboles de diccionarios típicos (subcarpetas). Sirve tanto para JA como para ZH.
-    """
-    mapping: Dict[str, List[str]] = defaultdict(list)
-
-    if not os.path.isdir(dir_path):
-        print(f"[yomitan] Directorio no encontrado: {dir_path}")
-        return mapping
-
-    print(
-        "[yomitan] Cargando diccionario desde "
-        f"{dir_path} (term_bank_*, kanji_bank_*, hanzi_bank_*.json)..."
-    )
-
-    def collect_strings(obj) -> List[str]:
-        """Extrae todos los strings anidados en listas/dicts (Yomitan puede venir muy anidado)."""
-        if isinstance(obj, str):
-            return [obj]
-        if isinstance(obj, list):
-            res: List[str] = []
-            for x in obj:
-                res.extend(collect_strings(x))
-            return res
-        if isinstance(obj, dict):
-            res: List[str] = []
-            for v in obj.values():
-                res.extend(collect_strings(v))
-            return res
-        return []
-
-    prefixes = ("term_bank_", "kanji_bank_", "hanzi_bank_")
-
-    # Recursivo: muchos diccionarios vienen en subcarpetas
-    for root, _dirs, files in os.walk(dir_path):
-        for fname in files:
-            if not fname.endswith(".json") or not fname.startswith(prefixes):
-                continue
-
-            path = os.path.join(root, fname)
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    entries = json.load(f)
-            except Exception as e:
-                print(f"[yomitan] Error leyendo {path}: {e}")
-                continue
-
-            if not isinstance(entries, list):
-                continue
-
-            for entry in entries:
-                forms = set()
-                glosses: List[str] = []
-
-                if isinstance(entry, list):
-                    # 0: expresión (hanzi/kanji), 1: lectura
-                    if len(entry) >= 1 and isinstance(entry[0], str):
-                        forms.add(entry[0])
-                    if len(entry) >= 2 and isinstance(entry[1], str):
-                        forms.add(entry[1])
-
-                    specific_indices: List[int] = []
-                    if len(entry) > 4:
-                        specific_indices.append(4)
-                    if len(entry) > 5:
-                        specific_indices.append(5)
-
-                    cand: List[str] = []
-                    for idx in specific_indices:
-                        part = entry[idx]
-                        if isinstance(part, (list, dict)):
-                            cand = [s.strip() for s in collect_strings(part) if s and isinstance(s, str)]
-                            if cand:
-                                break
-
-                    if not cand:
-                        for it in entry:
-                            if isinstance(it, (list, dict)):
-                                cand = [s.strip() for s in collect_strings(it) if s and isinstance(s, str)]
-                                if cand:
-                                    break
-
-                    if cand:
-                        # preferimos glosas en inglés (letras latinas); si hay frases con espacios, mejor
-                        glosses = [s for s in cand if re.search(r"[A-Za-z]", s) and " " in s]
-                        if not glosses:
-                            glosses = [s for s in cand if re.search(r"[A-Za-z]", s)]
-                        if not glosses:
-                            glosses = cand
-
-                elif isinstance(entry, dict):
-                    term = entry.get("term") or entry.get("expression") or entry.get("kanji")
-                    reading = entry.get("reading")
-                    if isinstance(term, str):
-                        forms.add(term)
-                    if isinstance(reading, str):
-                        forms.add(reading)
-
-                    defs = (
-                        entry.get("glossary")
-                        or entry.get("glossaries")
-                        or entry.get("definition")
-                        or entry.get("meanings")
-                    )
-                    if defs is not None:
-                        cand = [s.strip() for s in collect_strings(defs) if s and isinstance(s, str)]
-                        if cand:
-                            glosses = [s for s in cand if re.search(r"[A-Za-z]", s) and " " in s]
-                            if not glosses:
-                                glosses = [s for s in cand if re.search(r"[A-Za-z]", s)]
-                            if not glosses:
-                                glosses = cand
-
-                if not forms or not glosses:
-                    continue
-
-                for form in forms:
-                    mapping[form].extend(glosses)
-
-    # Deduplicar glosas por forma
-    for k, v in list(mapping.items()):
-        seen = set()
-        deduped: List[str] = []
-        for g in v:
-            if g not in seen:
-                seen.add(g)
-                deduped.append(g)
-        mapping[k] = deduped
-
-    print(f"[yomitan] Entradas cargadas: {len(mapping)}")
-    return mapping
 
 # ============================================================
 #  PUNTUACIÓN (MODELOS LIBRES, SIN GPT)
@@ -1028,164 +925,6 @@ def refine_punctuation_free(lines: List[str], lang: str) -> List[str]:
 # ============================================================
 #  ASR + ROMAJI/PINYIN + ANÁLISIS TIPO DICCIONARIO
 # ============================================================
-def clean_gloss_list(glosses: List[str]) -> List[str]:
-    """
-    Limpia la lista de glosas que viene del diccionario Yomitan:
-    - Quita etiquetas técnicas (div, span, zh-Hant, etc.).
-    - Quita cadenas sin letras latinas (para quedarnos con glosas EN).
-    """
-    META_TOKENS = {
-        "structured-content",
-        "div",
-        "span",
-        "ul",
-        "li",
-        "zh",
-        "zh-Hans",
-        "zh-Hant",
-        "headword",
-        "headword-trad",
-        "headword-simp",
-        "definition",
-    }
-
-    cleaned: List[str] = []
-    for g in glosses:
-        s = (g or "").strip()
-        if not s:
-            continue
-
-        # etiquetas tipo div, span, zh-Hant, etc.
-        if s in META_TOKENS:
-            continue
-
-        # nos quedamos solo con cosas que parecen inglés
-        if not re.search(r"[A-Za-z]", s):
-            continue
-
-        cleaned.append(s)
-
-    return cleaned
-
-def analyze_japanese_morph(text: str) -> str:
-    """
-    Análisis tipo diccionario JA→EN usando SOLO diccionario Yomitan.
-    - Usa fugashi (UniDic) para segmentar.
-    - Mira en el diccionario Yomitan japonés-inglés (YOMI_JA_DIR).
-    - Si no encuentra glosas con letras inglesas, devuelve "" (sin fallback a GPT).
-    Formato de salida:
-      表層 (lemma, POS) -> short English gloss | ...
-    """
-    global _ja_tagger, _ja_dict_en
-
-    text = (text or "").strip()
-    if not text:
-        return ""
-
-    if not os.path.isdir(YOMI_JA_DIR):
-        print(f"[JA dict] Directorio no encontrado: {YOMI_JA_DIR}")
-        return ""
-
-    tagger = _ensure_ja_tagger()
-    if tagger is None:
-        return ""
-    if _ja_dict_en is None:
-        _ja_dict_en = load_yomitan_dict(YOMI_JA_DIR)
-    if _ja_dict_en is not None:
-        print(f"[JA dict] Entradas: {len(_ja_dict_en)}")
-
-    tokens_desc: List[str] = []
-    interesting_pos = {"名詞", "動詞", "形容詞", "副詞", "助詞"}
-
-    for word in tagger(text):
-        surface = word.surface
-        lemma = getattr(word.feature, "lemma", surface) or surface
-        # fugashi puede devolver POS con "-" (ipadic) o "," (unidic)
-        main_pos = re.split(r"[-,]", word.pos)[0]  # p.ej. 名詞-普通名詞-一般 / 名詞,普通名詞,一般
-
-        if main_pos not in interesting_pos:
-            continue
-
-        glosses: Optional[List[str]] = None
-        for key in (lemma, surface):
-            g = _ja_dict_en.get(key) if _ja_dict_en else None
-            if g:
-                glosses = clean_gloss_list(g)
-                if glosses:
-                    break
-
-        if not glosses:
-            continue
-
-        gloss_str = "; ".join(glosses)
-        # si quieres sin límite, no pongas ningún if aquí
-        #if len(gloss_str) > 140:
-        #    gloss_str = gloss_str[:137] + "..."
-
-        pos_label = {
-            "名詞": "n.",
-            "動詞": "v.",
-            "形容詞": "adj.",
-            "副詞": "adv.",
-            "助詞": "part.",
-        }.get(main_pos, main_pos)
-
-        tokens_desc.append(f"{surface} ({lemma}, {pos_label}) -> {gloss_str}")
-
-    return " | ".join(tokens_desc)
-
-
-def analyze_chinese_morph(text: str) -> str:
-    """
-    Análisis tipo diccionario ZH→EN usando SOLO diccionario Yomitan.
-    - Usa jieba.posseg para segmentar.
-    - Mira en el diccionario Yomitan chino-inglés (YOMI_ZH_DIR).
-    - Si no encuentra glosas con letras inglesas, devuelve "" (sin fallback a GPT).
-    Formato de salida:
-      词 (POS) -> short English gloss | ...
-    """
-    global _zh_dict_en
-
-    text = (text or "").strip()
-    if not text:
-        return ""
-
-    if not os.path.isdir(YOMI_ZH_DIR):
-        # No hay diccionario -> sin análisis
-        return ""
-
-    if _zh_dict_en is None:
-        _zh_dict_en = load_yomitan_dict(YOMI_ZH_DIR)
-    if _zh_dict_en is not None:
-        print(f"[ZH dict] Entradas: {len(_zh_dict_en)}")
-
-    tokens_desc: List[str] = []
-
-    content_pos_prefixes = ("n", "v", "a", "d")
-    particle_prefix = "u"
-
-    for w, flag in pseg.cut(text):
-        if not w.strip():
-            continue
-
-        # filtramos por categorías que suelen ser interesantes
-        if not (flag[0] in content_pos_prefixes or flag.startswith(particle_prefix)):
-            continue
-
-        glosses = _zh_dict_en.get(w) if _zh_dict_en else None
-        if not glosses:
-            continue
-
-        glosses = clean_gloss_list(glosses)
-        if not glosses:
-            continue
-
-        gloss_str = "; ".join(glosses)
-        tokens_desc.append(f"{w} ({flag}) -> {gloss_str}")
-
-
-    return " | ".join(tokens_desc)
-
 def clean_repetitions(text: str) -> str:
     """
     Reducir repeticiones absurdas de caracteres (ej.: たたたたたたたたた...).
@@ -1441,6 +1180,234 @@ def text_to_pinyin(text: str) -> str:
     return " ".join(syllables).strip()
 
 
+def _normalize_romanization_output(text: str, lang: str) -> str:
+    out = (text or "").strip()
+    if not out:
+        return ""
+
+    if lang == "ja":
+        return re.sub(r"\s+", "", out)
+
+    if lang == "zh":
+        out = re.sub(r"\s+", " ", out)
+        return out.strip()
+
+    return out
+
+
+def _romanize_locally(lines: List[str], lang: str) -> List[str]:
+    romaji_converter = build_romaji_converter() if lang == "ja" else None
+    ja_tagger = _ensure_ja_tagger() if lang == "ja" else None
+    out: List[str] = []
+    for line in lines:
+        romanized = _romanize_source_text(line, lang, romaji_converter, ja_tagger)
+        out.append(_normalize_romanization_output(romanized, lang))
+    return out
+
+
+def _build_romanization_system_prompt(lang: str) -> str:
+    language_name = "japones" if lang == "ja" else "chino"
+    output_name = "romaji" if lang == "ja" else "pinyin"
+    return (
+        f"Eres un motor de {output_name} para subtitulos en {language_name}.\n"
+        "Devuelve SOLO JSON valido, sin explicaciones, sin markdown y sin texto extra.\n"
+        "La salida debe tener exactamente la clave \"romanizations\" con el mismo numero "
+        "de elementos que la entrada.\n"
+        "Reglas:\n"
+        f"- Cada elemento de salida corresponde a la linea de entrada con el mismo indice.\n"
+        f"- Para {lang == 'ja' and 'japones' or 'chino'} debes conservar numeros, puntuacion y texto latin.\n"
+        "- Si una linea empieza por guion de dialogo, conserva el guion.\n"
+        "- Conserva los saltos de linea lógicos si la linea contiene \\N.\n"
+        "- Deja las lineas vacias como cadenas vacias.\n"
+        "- No apliques traduccion ni explicacion; solo romanizacion.\n"
+        + (
+            "- En japones, devuelve romaji estilo Hepburn, preferentemente en minusculas y sin espacios innecesarios.\n"
+            if lang == "ja"
+            else "- En chino, devuelve pinyin con tonos en diacriticos y espacios entre silabas.\n"
+        )
+    )
+
+
+def _build_romanization_user_prompt(lines: List[str], lang: str) -> str:
+    payload = json.dumps({"lines": lines}, ensure_ascii=False)
+    return (
+        f"Romaniza estas {len(lines)} lineas en {lang}.\n"
+        "Entrada JSON:\n"
+        f"{payload}\n\n"
+        "Devuelve un JSON con esta forma exacta:\n"
+        "{\"romanizations\": [\"...\", \"...\"]}\n"
+        "No incluyas nada mas."
+    )
+
+
+def _build_romanization_response_format(expected_count: int) -> Dict[str, object]:
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "subtitle_romanizations",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "romanizations": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": expected_count,
+                        "maxItems": expected_count,
+                    }
+                },
+                "required": ["romanizations"],
+            },
+        },
+    }
+
+
+def _log_romanization_count_issue(
+    start_line: int,
+    end_line: int,
+    parse_result: RomanizationParseResult,
+    chunk: Optional[List[str]] = None,
+) -> None:
+    detail = (
+        f"[DeepSeek romanization] Bloque {start_line}-{end_line}: "
+        f"esperadas {parse_result.expected_count}, recibidas {parse_result.raw_count} "
+        f"(parser={parse_result.parser})."
+    )
+    if parse_result.missing_indices:
+        missing_abs = [start_line + idx for idx in parse_result.missing_indices]
+        detail += f" Faltan posiciones/lineas: {missing_abs}."
+    if parse_result.extra_count:
+        detail += f" Sobran {parse_result.extra_count} romanizaciones."
+    if parse_result.error:
+        detail += f" Error: {parse_result.error}."
+    print(detail)
+
+    if parse_result.missing_indices and chunk:
+        print("[DeepSeek romanization] Lineas sin romanizar devueltas por el modelo:")
+        for idx in parse_result.missing_indices:
+            absolute_line = start_line + idx
+            source_text = chunk[idx].strip() if idx < len(chunk) else ""
+            print(f"  - linea {absolute_line}: {source_text}")
+
+
+def romanize_with_deepseek(
+    src_lines: List[str],
+    lang: str,
+) -> Tuple[List[str], ApiUsage, Optional[str]]:
+    if not src_lines:
+        return [], ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL), None
+
+    if not DEEPSEEK_API_KEY:
+        print("[Romanizacion] Se omite DeepSeek porque falta DEEPSEEK_API_KEY; se usa romanizacion local.")
+        return _romanize_locally(src_lines, lang), ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL), "missing_key"
+
+    try:
+        client = get_deepseek_client()
+    except Exception as e:
+        print(f"[Romanizacion] No se puede inicializar DeepSeek: {e}. Se usa romanizacion local.")
+        return _romanize_locally(src_lines, lang), ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL), "client_error"
+
+    system_prompt = _build_romanization_system_prompt(lang)
+    all_outputs: List[str] = []
+    total = len(src_lines)
+    usage = ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL)
+    skipped_reason: Optional[str] = None
+    use_response_format = True
+
+    for start in range(0, total, CHUNK_SIZE):
+        chunk = src_lines[start:start + CHUNK_SIZE]
+        base_user_prompt = _build_romanization_user_prompt(chunk, lang)
+        end_line = min(start + CHUNK_SIZE, total)
+        print(f"[DeepSeek romanization] Lineas {start + 1}-{end_line} de {total}...")
+
+        response = None
+        content = ""
+        parse_result: Optional[RomanizationParseResult] = None
+
+        for attempt in range(1, MODEL_BLOCK_ATTEMPTS + 1):
+            user_prompt = _build_retry_user_prompt(base_user_prompt, len(chunk), attempt)
+            try:
+                request_kwargs: Dict[str, object] = {
+                    "model": DEEPSEEK_MODEL,
+                    "temperature": 0.0,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                }
+                if use_response_format:
+                    request_kwargs["response_format"] = _build_romanization_response_format(len(chunk))
+
+                response = client.chat.completions.create(**request_kwargs)
+                content = (response.choices[0].message.content or "").strip()
+                parse_result = parse_json_romanizations_result(content, fallback_lines=chunk)
+                if parse_result.exact_match:
+                    break
+
+                _log_romanization_count_issue(start + 1, end_line, parse_result, chunk)
+                if attempt < MODEL_BLOCK_ATTEMPTS:
+                    wait_s = min(9, 2 * attempt)
+                    print(
+                        f"[DeepSeek romanization] Reintentando bloque {start + 1}-{end_line} en {wait_s} s "
+                        "porque el numero de romanizaciones no coincide..."
+                    )
+                    time.sleep(wait_s)
+                    continue
+                break
+            except Exception as e:
+                err_text = str(e)
+                if use_response_format and "response_format" in err_text.lower():
+                    use_response_format = False
+                    print(
+                        f"[DeepSeek romanization] El SDK/modelo rechazo response_format en el bloque "
+                        f"{start + 1}-{end_line}; se reintenta sin JSON schema."
+                    )
+                    if attempt < MODEL_BLOCK_ATTEMPTS:
+                        continue
+                if attempt < MODEL_BLOCK_ATTEMPTS:
+                    wait_s = min(9, 2 * attempt)
+                    print(
+                        f"[DeepSeek romanization] Error transitorio en bloque {start + 1}-{end_line}: {e}. "
+                        f"Reintentando en {wait_s} s..."
+                    )
+                    time.sleep(wait_s)
+                    continue
+                print(
+                    f"[DeepSeek romanization] Error al romanizar; se usa romanizacion local en este bloque. "
+                    f"Detalle: {e}"
+                )
+
+        if response is None:
+            skipped_reason = skipped_reason or "partial_error"
+            all_outputs.extend(_romanize_locally(chunk, lang))
+            continue
+
+        resp_usage = getattr(response, "usage", None)
+        if resp_usage:
+            pt = _safe_int(getattr(resp_usage, "prompt_tokens", 0))
+            ct = _safe_int(getattr(resp_usage, "completion_tokens", 0))
+            usage.prompt_tokens += pt
+            usage.completion_tokens += ct
+            usage.cost_usd += estimate_cost("deepseek", pt, ct)
+        else:
+            _warn_missing_usage("deepseek")
+
+        if parse_result is None:
+            parse_result = parse_json_romanizations_result(content, fallback_lines=chunk)
+        if not parse_result.exact_match:
+            skipped_reason = skipped_reason or "partial_error"
+            _log_romanization_count_issue(start + 1, end_line, parse_result, chunk)
+            all_outputs.extend(_romanize_locally(chunk, lang))
+            continue
+
+        all_outputs.extend(
+            [_normalize_romanization_output(text, lang) for text in parse_result.romanizations]
+        )
+
+    return all_outputs, usage, skipped_reason
+
+
 def extract_segment(video_path: str, start_ms: int, end_ms: int, out_wav: str, sample_rate: int = 16000):
     start_s = max(0.0, start_ms / 1000.0)
     dur_s = max(0.01, (end_ms - start_ms) / 1000.0)
@@ -1467,13 +1434,14 @@ def transcribe_ass(
     pad_ms: int,
     lang: str,
     do_roman_morph: bool,
+    romanization_usage: Optional[ApiUsage] = None,
     context_note_usage: Optional[ApiUsage] = None,
     phase_timings: Optional[Dict[str, float]] = None,
 ) -> pysubs2.SSAFile:
     """
     Carga un .ass, transcribe audio, pule la puntuación con modelos libres
     y opcionalmente añade:
-      - romaji/pinyin
+      - romaji/pinyin via DeepSeek
       - nota contextual con Claude Sonnet
     en líneas adicionales (separadas con \\N).
     Además, imprime progreso por línea para que la GUI
@@ -1544,10 +1512,17 @@ def transcribe_ass(
         print("[+] Refinando puntuación (modelos libres, sin GPT).")
         refined_lines = refine_punctuation_free(raw_lines, lang)
 
-        romaji_converter = build_romaji_converter() if (lang == "ja" and do_roman_morph) else None
-        ja_tagger = _ensure_ja_tagger() if (lang == "ja" and do_roman_morph) else None
+        romanized_lines: List[str] = []
         context_notes: List[str] = []
         if do_roman_morph:
+            roman_started_at = time.time()
+            romanized_lines, roman_usage, roman_skip = romanize_with_deepseek(refined_lines, lang)
+            if romanization_usage is not None:
+                merge_api_usage(romanization_usage, roman_usage)
+            _record_phase_time(phase_timings, "romanization", time.time() - roman_started_at)
+            if roman_skip:
+                print(f"[Romanizacion] Motivo de fallback parcial: {roman_skip}")
+
             note_started_at = time.time()
             context_notes = build_contextual_notes(refined_lines, lang, usage_accumulator=context_note_usage)
             _record_phase_time(phase_timings, "context_note", time.time() - note_started_at)
@@ -1560,24 +1535,13 @@ def transcribe_ass(
             lines = [base_text]
 
             if do_roman_morph:
-                roman_line_started_at = time.time()
-                if lang == "ja":
-                    romaji = _romanize_source_text(base_text, lang, romaji_converter, ja_tagger)
-                    if romaji:
-                        lines.append("{" + _ass_sanitize_braces(romaji) + "}")
+                romanized = romanized_lines[i - 1] if i - 1 < len(romanized_lines) else ""
+                if romanized:
+                    lines.append("{" + _ass_sanitize_braces(romanized) + "}")
 
-                    context_note = context_notes[i - 1] if i - 1 < len(context_notes) else ""
-                    if context_note:
-                        lines.append(_ass_hide(context_note))
-
-                elif lang == "zh":
-                    pinyin = _romanize_source_text(base_text, lang, None, None)
-                    if pinyin:
-                        lines.append("{" + _ass_sanitize_braces(pinyin) + "}")
-                    context_note = context_notes[i - 1] if i - 1 < len(context_notes) else ""
-                    if context_note:
-                        lines.append(_ass_hide(context_note))
-                _record_phase_time(phase_timings, "romanization", time.time() - roman_line_started_at)
+                context_note = context_notes[i - 1] if i - 1 < len(context_notes) else ""
+                if context_note:
+                    lines.append(_ass_hide(context_note))
 
             ev.text = "\\N".join(lines)
             snippet = base_text.replace("\n", " ")[:60]
@@ -1590,6 +1554,7 @@ def transcribe_ass(
 def add_roman_morph_to_subs(
     subs: pysubs2.SSAFile,
     lang: str,
+    romanization_usage: Optional[ApiUsage] = None,
     context_note_usage: Optional[ApiUsage] = None,
     phase_timings: Optional[Dict[str, float]] = None,
 ) -> pysubs2.SSAFile:
@@ -1616,14 +1581,15 @@ def add_roman_morph_to_subs(
 
     print(f"[Romaji/Pinyin] Hay {total} líneas de diálogo sobre las que trabajar.")
 
-    # Preparar recursos según el idioma
-    romaji_converter = None
-    ja_tagger = None
-    if lang == "ja":
-        romaji_converter = build_romaji_converter()
-        ja_tagger = _ensure_ja_tagger()
-
     base_texts = [_event_source_text(ev) for ev in events]
+    roman_started_at = time.time()
+    romanized_lines, roman_usage, roman_skip = romanize_with_deepseek(base_texts, lang)
+    if romanization_usage is not None:
+        merge_api_usage(romanization_usage, roman_usage)
+    _record_phase_time(phase_timings, "romanization", time.time() - roman_started_at)
+    if roman_skip:
+        print(f"[Romanizacion] Motivo de fallback parcial: {roman_skip}")
+
     note_started_at = time.time()
     context_notes = build_contextual_notes(base_texts, lang, usage_accumulator=context_note_usage)
     _record_phase_time(phase_timings, "context_note", time.time() - note_started_at)
@@ -1640,32 +1606,14 @@ def add_roman_morph_to_subs(
 
         # Reconstruimos las líneas del evento
         lines = original_lines
-        roman_started_at = time.time()
+        romanized = romanized_lines[i - 1] if i - 1 < len(romanized_lines) else ""
+        if romanized:
+            lines.append("{" + _ass_sanitize_braces(romanized) + "}")
 
-        if lang == "ja":
-            # Romaji "bonito"
-            romaji = _romanize_source_text(base_text, lang, romaji_converter, ja_tagger)
-            if romaji:
-                lines.append("{" + _ass_sanitize_braces(romaji) + "}")
+        context_note = context_notes[i - 1] if i - 1 < len(context_notes) else ""
+        if context_note:
+            lines.append(_ass_hide(context_note))
 
-            # Nota contextual JA con Claude Sonnet
-            context_note = context_notes[i - 1] if i - 1 < len(context_notes) else ""
-            if context_note:
-                lines.append(_ass_hide(context_note))
-
-        elif lang == "zh":
-            # Pinyin
-            pinyin = _romanize_source_text(base_text, lang, None, None)
-            if pinyin:
-                lines.append("{" + _ass_sanitize_braces(pinyin) + "}")
-
-            # Nota contextual ZH con Claude Sonnet
-            context_note = context_notes[i - 1] if i - 1 < len(context_notes) else ""
-            if context_note:
-                lines.append(_ass_hide(context_note))
-
-        # Conservamos cualquier línea extra ya existente
-        _record_phase_time(phase_timings, "romanization", time.time() - roman_started_at)
         lines.extend(extra_lines)
 
         ev.text = "\\N".join(lines)
@@ -2770,7 +2718,7 @@ def main(argv: Optional[List[str]] = None):
     parser = argparse.ArgumentParser(
         description=(
             "Transcribe un .ass + vídeo a japonés o chino (Anime-Whisper / BELLE-2), "
-            "pulido de puntuación con modelos libres, añade romaji/pinyin y una nota "
+            "pulido de puntuación con modelos libres, añade romaji/pinyin via DeepSeek y una nota "
             "contextual opcional con Claude Sonnet, y traduce con GPT, Claude, Gemini y DeepSeek. "
             "Cada .ass de salida puede tener:\n"
             "  - línea 1: japonés/chino\n"
@@ -2827,7 +2775,7 @@ def main(argv: Optional[List[str]] = None):
     parser.add_argument(
         "--do-roman-morph",
         action="store_true",
-        help="Añadir romaji/pinyin y nota contextual con Claude Sonnet en el ASS.",
+        help="Añadir romaji/pinyin via DeepSeek y nota contextual con Claude Sonnet en el ASS.",
     )
     parser.add_argument(
         "--html",
@@ -2840,7 +2788,7 @@ def main(argv: Optional[List[str]] = None):
         help=(
             "Omitir la transcripción de audio. Se asume que el .ass ya contiene la "
             "transcripción en japonés o chino en la primera línea de cada subtítulo. "
-            "Aun así se puede añadir romaji/pinyin y nota contextual (--do-roman-morph) "
+            "Aun así se puede añadir romaji/pinyin via DeepSeek y nota contextual (--do-roman-morph) "
             "y hacer las traducciones."
         ),
     )
@@ -2879,6 +2827,7 @@ def main(argv: Optional[List[str]] = None):
     else:
         source_type = ask_source_type()
 
+    romanization_usage = ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL)
     context_note_usage = ApiUsage(engine="context_note", model_name=CONTEXT_NOTE_MODEL)
 
     # 1) Obtener subs de partida
@@ -2891,6 +2840,7 @@ def main(argv: Optional[List[str]] = None):
             subs = add_roman_morph_to_subs(
                 subs,
                 lang,
+                romanization_usage=romanization_usage,
                 context_note_usage=context_note_usage,
                 phase_timings=phase_timings,
             )
@@ -2911,6 +2861,7 @@ def main(argv: Optional[List[str]] = None):
             pad_ms=args.pad_ms,
             lang=lang,
             do_roman_morph=args.do_roman_morph,
+            romanization_usage=romanization_usage,
             context_note_usage=context_note_usage,
             phase_timings=phase_timings,
         )
@@ -2933,6 +2884,20 @@ def main(argv: Optional[List[str]] = None):
         out_dir,
     )
 
+    if romanization_usage.total_tokens > 0:
+        usage_by_model["romanization"] = merge_api_usage(
+            usage_by_model.get(
+                "romanization",
+                ApiUsage(engine="romanization", model_name=DEEPSEEK_MODEL),
+            ),
+            romanization_usage,
+        )
+        print(
+            f"[Costes] Romanizacion DeepSeek V4 Flash: prompt={romanization_usage.prompt_tokens} "
+            f"completion={romanization_usage.completion_tokens} "
+            f"total={romanization_usage.total_tokens} cost_usd=${romanization_usage.cost_usd:.4f}"
+        )
+
     if context_note_usage.total_tokens > 0:
         usage_by_model["context_note"] = merge_api_usage(
             usage_by_model.get(
@@ -2951,8 +2916,9 @@ def main(argv: Optional[List[str]] = None):
         log_cost_summary(run_id, usage_by_model, series_name, base_name)
         persist_costs_to_supabase(run_id, series_name, base_name, lang, usage_by_model)
 
-    log_time_cost_breakdown(
+    log_time_cost_breakdown_v2(
         phase_timings,
+        romanization_usage,
         context_note_usage,
         model_timings,
         usage_by_model,

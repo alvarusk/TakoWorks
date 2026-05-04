@@ -2,7 +2,7 @@
 from PyInstaller.utils.hooks import collect_all, copy_metadata
 import os
 
-datas = [('data', 'data'), ('bin', 'bin'), ('assets', 'assets'), ('src\\takoworks\\modules\\transcriber\\weight', 'takoworks\\modules\\transcriber\\weight'), ('src\\takoworks\\modules\\transcriber\\weight', 'takoworks\\modules\\transcriber\\weight')]
+datas = [('bin', 'bin'), ('assets', 'assets'), ('src\\takoworks\\modules\\transcriber\\weight', 'takoworks\\modules\\transcriber\\weight')]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('pykakasi')

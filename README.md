@@ -1,11 +1,11 @@
-# TakoWorks (v1.81.0)
+# TakoWorks (v1.82.0)
 
 Toolkit para transcribir, romanizar y traducir guiones/ASS de japonés y chino. Genera ASS por modelo, HTML resumen y registra costes (opcional Supabase).
 
 ## Requisitos
 - Python 3.x
 - FFmpeg en `PATH`
-- Opcional: diccionarios Yomitan (`jpdict_dir` / `cndict_dir`), `zhpr` + `transformers` para puntuación zh.
+- Opcional: `zhpr` + `transformers` para puntuación zh.
 
 ## Configuración
 - Archivo principal: `config.json` (en la raíz del repo o junto al exe).
@@ -26,7 +26,7 @@ Toolkit para transcribir, romanizar y traducir guiones/ASS de japonés y chino. 
 }
 ```
 - Variables de entorno (tienen prioridad): `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`, `SUPABASE_COST_TABLE` (por defecto `voicex_api_costs`).
-- Rutas opcionales en `config.json`: `jpdict_dir`, `cndict_dir`, `ffmpeg_dir`, `yomitoku_dir`, costes por 1K tokens en `cost_per_1k`.
+- Rutas opcionales en `config.json`: `ffmpeg_dir`, `yomitoku_dir`, costes por 1K tokens en `cost_per_1k`.
 
 ## Versionado y releases
 - Versión fuente: `src/takoworks/__init__.py` (el encabezado de este README se actualiza con el bump).
@@ -40,7 +40,7 @@ Toolkit para transcribir, romanizar y traducir guiones/ASS de japonés y chino. 
 python -m takoworks.modules.transcriber.core input.ass input.mp4 --lang ja|zh \
   --models gpt,claude,gemini,deepseek [--do-roman-morph] [--html]
 ```
-- Añadir solo romaji/pinyin + diccionario a un ASS existente:
+- Añadir solo romaji/pinyin via DeepSeek a un ASS existente:
 ```
 python -m takoworks.modules.transcriber.core input.ass --skip-asr --do-roman-morph
 ```
@@ -51,7 +51,7 @@ python -m takoworks.modules.transcriber.core input.ass --skip-asr --do-roman-mor
 - HTML opcional con columnas: original, romaji/pinyin, glosas, GPT, Claude, Gemini, DeepSeek.
 
 ## Modelos y manejo de errores
-- Modelos soportados: GPT-5.5 (OpenAI), Claude Opus 4.7, Gemini 3 Flash, DeepSeek V4 Flash. La nota contextual/Prompt Explicativo usa Claude Sonnet 4.6.
+- Modelos soportados: GPT-5.5 (OpenAI), Claude Opus 4.7, Gemini 3 Flash, DeepSeek V4 Flash. La romanización/pinyin usa DeepSeek V4 Flash. La nota contextual/Prompt Explicativo usa Claude Sonnet 4.6.
 - Si falta clave o falla la inicialización de un modelo, se omite y el pipeline sigue con los demás; se informa en consola y no se genera su archivo de salida.
 - Costes: se calculan si el SDK devuelve uso; si Supabase está configurado, se guardan los costes en la tabla indicada.
 

@@ -7,7 +7,7 @@ from typing import Any, Dict
 
 from . import paths
 
-_REL_KEYS = {"jpdict_dir", "cndict_dir", "ffmpeg_dir", "yomitoku_dir"}
+_REL_KEYS = {"ffmpeg_dir", "yomitoku_dir"}
 
 def _to_portable_path(p: str) -> str:
     if not p:
@@ -29,8 +29,6 @@ def _from_portable_path(p: str) -> str:
     return str((paths.app_root() / pp).resolve())
 
 DEFAULT_CONFIG: Dict[str, Any] = {
-    "jpdict_dir": "",
-    "cndict_dir": "",
     "ffmpeg_dir": "",      # si lo embebes: bin/ffmpeg
     "yomitoku_dir": "",    # si lo embebes: bin/yomitoku
     "api_keys": {

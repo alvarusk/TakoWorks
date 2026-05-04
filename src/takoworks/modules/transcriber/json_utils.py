@@ -190,3 +190,102 @@ def parse_json_translations_result(raw_content: str, fallback_lines: List[str]) 
 
 def parse_json_translations(raw_content: str, fallback_lines: List[str]) -> List[str]:
     return parse_json_translations_result(raw_content, fallback_lines).translations
+
+
+@dataclass
+class RomanizationParseResult:
+    romanizations: List[str]
+    expected_count: int
+    raw_count: int
+    parser: str
+    exact_match: bool
+    normalized: bool
+    used_fallback: bool
+    error: Optional[str] = None
+
+    @property
+    def missing_indices(self) -> List[int]:
+        if self.raw_count >= self.expected_count:
+            return []
+        return list(range(self.raw_count, self.expected_count))
+
+    @property
+    def extra_count(self) -> int:
+        return max(0, self.raw_count - self.expected_count)
+
+
+def parse_json_romanizations_result(raw_content: str, fallback_lines: List[str]) -> RomanizationParseResult:
+    """
+    Extrae un array de romanizaciones desde un JSON con forma:
+      {"romanizations": ["...", "...", ...]}
+    o un JSON array simple.
+    """
+    expected_count = len(fallback_lines)
+    raw = (raw_content or "").strip()
+
+    def _result(
+        romanizations: List[str],
+        *,
+        parser: str,
+        error: Optional[str] = None,
+    ) -> RomanizationParseResult:
+        raw_count = len(romanizations)
+        cooked = [("" if t is None else str(t)) for t in romanizations]
+        exact_match = raw_count == expected_count
+        normalized = not exact_match
+        used_fallback = False
+
+        if normalized:
+            print("[AVISO] N\u00ba de romanizaciones != n\u00ba de lineas. Se ajusta al minimo en comun.")
+            if raw_count > expected_count:
+                cooked = cooked[:expected_count]
+            else:
+                cooked = cooked + fallback_lines[raw_count:]
+                used_fallback = True
+
+        return RomanizationParseResult(
+            romanizations=cooked,
+            expected_count=expected_count,
+            raw_count=raw_count,
+            parser=parser,
+            exact_match=exact_match,
+            normalized=normalized,
+            used_fallback=used_fallback or parser == "fallback",
+            error=error,
+        )
+
+    if not raw:
+        return _result(list(fallback_lines), parser="fallback", error="empty_response")
+
+    if raw.startswith("```"):
+        lines = raw.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].startswith("```"):
+            lines = lines[:-1]
+        raw = "\n".join(lines).strip()
+
+    first = raw.find("{")
+    last = raw.rfind("}")
+    candidate = raw[first:last + 1] if first != -1 and last != -1 and last > first else raw
+
+    try:
+        data = json.loads(candidate)
+        if isinstance(data, dict) and isinstance(data.get("romanizations"), list):
+            return _result(list(data["romanizations"]), parser="json_object")
+        if isinstance(data, list):
+            return _result(list(data), parser="json_array")
+    except Exception:
+        pass
+
+    decoder = json.JSONDecoder()
+    for m in re.finditer(r'"romanizations"\s*:', candidate):
+        start = m.end()
+        try:
+            arr, _ = decoder.raw_decode(candidate[start:].lstrip())
+        except Exception:
+            continue
+        if isinstance(arr, list):
+            return _result(list(arr), parser="decoder_array")
+
+    return _result(list(fallback_lines), parser="fallback", error="unparseable_response")
