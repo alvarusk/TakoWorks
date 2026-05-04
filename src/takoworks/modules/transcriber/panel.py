@@ -48,7 +48,7 @@ class TranscriberPanel(ttk.Frame):
 
         self.v_skip_asr = tk.BooleanVar(value=True)
         self.v_do_roman = tk.BooleanVar(value=True)
-        self.v_html = tk.BooleanVar(value=False)
+        self.v_html = tk.BooleanVar(value=True)
 
         self.v_gpt = tk.BooleanVar(value=True)
         self.v_claude = tk.BooleanVar(value=True)

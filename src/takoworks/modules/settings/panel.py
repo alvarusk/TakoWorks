@@ -53,7 +53,7 @@ class SettingsPanel(ttk.Frame):
 
         ttk.Label(frm, text="Paths (stored in config.json)").pack(anchor="w", pady=(0, 8))
 
-        self._row(frm, "FFMPEG Folder (ffmpeg.exe)", self.ffmpeg_var, self._pick_dir)
+        self._row(frm, "FFmpeg Folder (ffmpeg.exe)", self.ffmpeg_var, self._pick_dir)
 
         btns = ttk.Frame(frm)
         btns.pack(fill="x", pady=10)
@@ -66,15 +66,10 @@ class SettingsPanel(ttk.Frame):
         ttk.Label(frm, text="Notes:").pack(anchor="w")
         ttk.Label(
             frm,
-            text="- FFmpeg is applied to sub-processes via PATH.\n"
+            text="- FFmpeg is added to subprocesses via PATH.\n"
             "- The app also keeps its bundled tools on PATH when available.",
             justify="left",
         ).pack(anchor="w", pady=6)
-
-        ttk.Separator(frm).pack(fill="x", pady=10)
-
-        ttk.Label(frm, text=f"Updates (current v{__version__})").pack(anchor="w")
-        ttk.Button(frm, text="Actualizar (Actions)", command=self._check_updates).pack(anchor="w", pady=4)
 
     def _row(self, parent, label, var, browse_cmd):
         r = ttk.Frame(parent)
@@ -106,8 +101,8 @@ class SettingsPanel(ttk.Frame):
     def _check_updates(self):
         if not paths.is_frozen():
             messagebox.showinfo(
-                "Actualizar",
-                "Este boton es para la version empaquetada. En desarrollo, usa git pull.",
+                "Check for Updates",
+                "This button is for the packaged version. In development, use git pull.",
             )
             return
 
@@ -116,17 +111,17 @@ class SettingsPanel(ttk.Frame):
         try:
             remote_version = self._fetch_remote_version(token)
         except Exception as e:
-            messagebox.showerror("Actualizar", f"No pude leer la version remota.\n\n{e}")
+            messagebox.showerror("Check for Updates", f"Could not read the remote version.\n\n{e}")
             return
 
         if remote_version == __version__:
-            messagebox.showinfo("Actualizar", f"Ya estas al dia (v{__version__}).")
+            messagebox.showinfo("Check for Updates", f"You are up to date (v{__version__}).")
             return
 
         if not messagebox.askyesno(
-            "Actualizar",
-            f"Version nueva detectada (local v{__version__} -> remota v{remote_version}).\n\n"
-            "Descargar desde GitHub Actions e instalar ahora? Esto cerrara TakoWorks y lo relanzara.",
+            "Check for Updates",
+            f"New version detected (local v{__version__} -> remote v{remote_version}).\n\n"
+            "Download from GitHub Actions and install now? This will close TakoWorks and relaunch it.",
         ):
             return
 
@@ -134,22 +129,22 @@ class SettingsPanel(ttk.Frame):
             run_info = self._latest_actions_artifact(token)
         except Exception as e:
             messagebox.showerror(
-                "Actualizar",
-                "No pude localizar el build mas reciente en GitHub Actions.\n\n"
-                f"{e}\n\nComprueba que el workflow {WORKFLOW_FILE} haya pasado y usa GITHUB_TOKEN.",
+                "Check for Updates",
+                "Could not locate the latest build in GitHub Actions.\n\n"
+                f"{e}\n\nMake sure the {WORKFLOW_FILE} workflow has completed successfully and use GITHUB_TOKEN.",
             )
             return
 
         try:
             payload_dir, temp_root = self._download_artifact(run_info, token)
         except Exception as e:
-            messagebox.showerror("Actualizar", f"Fallo al descargar el artefacto.\n\n{e}")
+            messagebox.showerror("Check for Updates", f"Failed to download the artifact.\n\n{e}")
             return
 
         try:
             self._schedule_apply(payload_dir, temp_root, run_info, remote_version)
         except Exception as e:
-            messagebox.showerror("Actualizar", f"Fallo al preparar la actualizacion.\n\n{e}")
+            messagebox.showerror("Check for Updates", f"Failed to prepare the update.\n\n{e}")
 
     def _headers(self, token: str | None = None) -> dict:
         headers = {"User-Agent": USER_AGENT}
@@ -161,11 +156,11 @@ class SettingsPanel(ttk.Frame):
         req = urllib.request.Request(RAW_VERSION_URL, headers=self._headers(token))
         with urllib.request.urlopen(req, timeout=30) as resp:
             if resp.status >= 400:
-                raise RuntimeError(f"HTTP {resp.status} al leer la version remota.")
+                raise RuntimeError(f"HTTP {resp.status} while reading the remote version.")
             text = resp.read().decode("utf-8")
         match = re.search(r'__version__\\s*=\\s*"([^"]+)"', text)
         if not match:
-            raise RuntimeError("No encontre __version__ en main.")
+            raise RuntimeError("Could not find __version__ in main.")
         return match.group(1)
 
     def _latest_actions_artifact(self, token: str | None) -> dict:
@@ -178,7 +173,7 @@ class SettingsPanel(ttk.Frame):
             data = json.loads(resp.read().decode("utf-8"))
         runs = data.get("workflow_runs") or []
         if not runs:
-            raise RuntimeError("No hay runs exitosos del workflow.")
+            raise RuntimeError("No successful workflow runs were found.")
         run = runs[0]
         run_id = run.get("id")
         run_number = run.get("run_number")
@@ -191,11 +186,11 @@ class SettingsPanel(ttk.Frame):
             art_data = json.loads(resp.read().decode("utf-8"))
         artifacts = art_data.get("artifacts") or []
         if not artifacts:
-            raise RuntimeError("No hay artefactos en el ultimo run.")
+            raise RuntimeError("No artifacts were found in the latest run.")
         artifact = next((a for a in artifacts if a.get("name") == ARTIFACT_NAME), artifacts[0])
         download_url = artifact.get("archive_download_url")
         if not download_url:
-            raise RuntimeError("No encontre archive_download_url.")
+            raise RuntimeError("Could not find archive_download_url.")
         return {
             "run_id": run_id,
             "run_number": run_number,
@@ -213,7 +208,7 @@ class SettingsPanel(ttk.Frame):
         except urllib.error.HTTPError as e:
             msg = f"HTTP {e.code}"
             if e.code == 404:
-                msg = "404 (necesitas GITHUB_TOKEN para bajar artefactos)"
+                msg = "404 (you need GITHUB_TOKEN to download artifacts)"
             raise RuntimeError(msg)
 
         with zipfile.ZipFile(artifact_zip) as zf:
@@ -225,7 +220,7 @@ class SettingsPanel(ttk.Frame):
                 inner_zip = candidate
                 break
         if not inner_zip:
-            raise RuntimeError(f"No encontre {ARTIFACT_ZIP} dentro del artefacto.")
+            raise RuntimeError(f"Could not find {ARTIFACT_ZIP} inside the artifact.")
 
         payload_dir = temp_root / "payload"
         payload_dir.mkdir(parents=True, exist_ok=True)
@@ -233,7 +228,7 @@ class SettingsPanel(ttk.Frame):
             zf.extractall(payload_dir)
 
         self.runner._console_write(
-            f"[Update] Descargado run #{run_info.get('run_number')} (id {run_info.get('run_id')}) a {payload_dir}"
+            f"[Update] Downloaded run #{run_info.get('run_number')} (id {run_info.get('run_id')}) to {payload_dir}"
         )
         return payload_dir, temp_root
 
@@ -284,7 +279,7 @@ Start-Process (Join-Path $InstallDir 'TakoWorks.exe')
         self.cfg.setdefault("updates", {})["pending_version"] = remote_version
         save_config(self.cfg)
         messagebox.showinfo(
-            "Actualizar",
-            "Descarga completada. Se cerrara TakoWorks para aplicar la actualizacion y se relanzara.",
+            "Check for Updates",
+            "Download complete. TakoWorks will close to apply the update and then relaunch.",
         )
         self.winfo_toplevel().after(300, self.winfo_toplevel().destroy)

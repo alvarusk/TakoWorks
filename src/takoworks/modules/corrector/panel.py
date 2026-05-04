@@ -47,16 +47,16 @@ class CorrectorPanel(ttk.Frame):
         row = ttk.Frame(frm); row.pack(fill="x", pady=(0, 6))
         ttk.Label(row, text="Input (.ass/.ssa):").pack(anchor="w")
         ent = ttk.Entry(row, textvariable=self.inp_var); ent.pack(fill="x", pady=2)
-        ttk.Button(row, text="Browse…", command=self._browse_in).pack(anchor="e")
+        ttk.Button(row, text="Browse...", command=self._browse_in).pack(anchor="e")
 
         row2 = ttk.Frame(frm); row2.pack(fill="x", pady=(0, 8))
         ttk.Label(row2, text="Settings (optional):").pack(anchor="w")
         ent2 = ttk.Entry(row2, textvariable=self.settings_var); ent2.pack(fill="x", pady=2)
-        ttk.Button(row2, text="Browse…", command=self._browse_settings).pack(anchor="e")
+        ttk.Button(row2, text="Browse...", command=self._browse_settings).pack(anchor="e")
 
         box = ttk.Labelframe(frm, text="Options"); box.pack(fill="x", pady=8)
-        ttk.Checkbutton(box, text="Corrector (con diccionario)", variable=self.v_serve).pack(anchor="w", padx=8, pady=2)
-        ttk.Checkbutton(box, text="No abrir HTML al terminar", variable=self.v_no_open).pack(anchor="w", padx=8, pady=2)
+        ttk.Checkbutton(box, text="Corrector (with dictionary)", variable=self.v_serve).pack(anchor="w", padx=8, pady=2)
+        ttk.Checkbutton(box, text="Do not open HTML when finished", variable=self.v_no_open).pack(anchor="w", padx=8, pady=2)
         ttk.Checkbutton(box, text="Keep intermediate files", variable=self.v_keep).pack(anchor="w", padx=8, pady=2)
 
         btns = ttk.Frame(frm); btns.pack(fill="x", pady=10)
@@ -79,7 +79,7 @@ class CorrectorPanel(ttk.Frame):
     def _on_run(self):
         inp = self.inp_var.get().strip()
         if not inp:
-            messagebox.showerror("Error", "Selecciona un .ass/.ssa.")
+            messagebox.showerror("Error", "Select a .ass/.ssa file.")
             return
 
         # Save config

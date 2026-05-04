@@ -62,7 +62,7 @@ class UnworderPanel(ttk.Frame):
         box.pack(fill="x", pady=8)
         ttk.Checkbutton(
             box,
-            text="Aplicar Stylizer to output ASS (using the last stored options in Stylizer)",
+            text="Apply Stylizer to the output ASS (using the last saved options in Stylizer)",
             variable=self.v_apply_stylizer
         ).pack(anchor="w", padx=8, pady=4)
 
@@ -73,7 +73,7 @@ class UnworderPanel(ttk.Frame):
         self.cancel_btn.pack(side="left", padx=6)
 
     def _pick_word(self):
-        p = filedialog.askopenfilename(filetypes=[("Word/Texto", "*.docx *.txt"), ("All files", "*.*")])
+        p = filedialog.askopenfilename(filetypes=[("Word/Text", "*.docx *.txt"), ("All files", "*.*")])
         if p:
             self.word_var.set(p)
             if not self.out_var.get().strip():
@@ -112,15 +112,15 @@ class UnworderPanel(ttk.Frame):
             log(f"Input: {inp}")
             lines = core.read_lines_from_doc(inp, adapter)
             if not lines:
-                raise RuntimeError("No valid lines found (Actor: Texto).")
+                raise RuntimeError("No valid lines found (Actor: Text).")
 
             ass_content = core.build_ass_content(lines)
             with open(out_ass, "w", encoding="utf-8-sig", errors="replace") as f:
                 f.write(ass_content)
-            log(f"[OK] ASS generado: {out_ass}")
+            log(f"[OK] ASS generated: {out_ass}")
 
             if self.v_apply_stylizer.get():
-                # Aplicar exactamente lo mismo que Stylizer (últimas opciones guardadas)
+                # Apply exactly the same options as Stylizer (last saved options).
                 from ..stylizer import core as styl_core
                 opts = self.cfg.get("stylizer_options", {})
                 base2 = os.path.splitext(os.path.basename(out_ass))[0]

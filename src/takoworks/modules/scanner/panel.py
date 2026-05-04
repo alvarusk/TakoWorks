@@ -65,11 +65,11 @@ class _SelectionState:
 
 class _PreviewWindow(tk.Toplevel):
     """
-    Vista previa del PDF para borrar zonas y marcar recortes rectangulares.
+    PDF preview for erasing regions and defining rectangular crops.
     """
     def __init__(self, master, pdf_path: Path, selection: _SelectionState):
         super().__init__(master)
-        self.title(f"Vista previa - {pdf_path.name}")
+        self.title(f"Preview - {pdf_path.name}")
         self.pdf_path = pdf_path
         self.selection = selection
 
@@ -117,18 +117,18 @@ class _PreviewWindow(tk.Toplevel):
 
         actions = ttk.Frame(top)
         actions.grid(row=0, column=3, padx=(10, 0))
-        ttk.Button(actions, text="Borrar zona", command=self._set_erase_mode).pack(side="left", padx=(0, 4))
-        ttk.Label(actions, text="Pincel").pack(side="left", padx=(6, 2))
+        ttk.Button(actions, text="Erase area", command=self._set_erase_mode).pack(side="left", padx=(0, 4))
+        ttk.Label(actions, text="Brush").pack(side="left", padx=(6, 2))
         ttk.Scale(actions, from_=5, to=80, orient="horizontal", variable=self.brush_var, command=self._on_brush_change).pack(side="left")
-        ttk.Button(actions, text="Recorte", command=self._set_crop_mode).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text="Corte vertical", command=self._set_vcut_mode).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text="Deshacer", command=self._undo_last).pack(side="left", padx=(0, 4))
-        ttk.Button(actions, text="Suprimir pagina", command=self._toggle_suppress_page).pack(side="left", padx=(6, 0))
-        ttk.Button(actions, text="Guardar", command=self._save_selection).pack(side="left", padx=(6, 0))
-        ttk.Button(actions, text="Cargar", command=self._load_selection).pack(side="left", padx=(6, 0))
-        ttk.Button(actions, text="Exportar PDF", command=self._export_pdf).pack(side="left", padx=(6, 0))
-        ttk.Button(top, text="Restablecer", command=self._reset_page).grid(row=0, column=4, padx=(10, 0))
-        ttk.Button(top, text="Cerrar", command=self._accept_and_close).grid(row=0, column=5, padx=(10, 0))
+        ttk.Button(actions, text="Crop", command=self._set_crop_mode).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text="Vertical cut", command=self._set_vcut_mode).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text="Undo", command=self._undo_last).pack(side="left", padx=(0, 4))
+        ttk.Button(actions, text="Suppress page", command=self._toggle_suppress_page).pack(side="left", padx=(6, 0))
+        ttk.Button(actions, text="Save", command=self._save_selection).pack(side="left", padx=(6, 0))
+        ttk.Button(actions, text="Load", command=self._load_selection).pack(side="left", padx=(6, 0))
+        ttk.Button(actions, text="Export PDF", command=self._export_pdf).pack(side="left", padx=(6, 0))
+        ttk.Button(top, text="Reset", command=self._reset_page).grid(row=0, column=4, padx=(10, 0))
+        ttk.Button(top, text="Close", command=self._accept_and_close).grid(row=0, column=5, padx=(10, 0))
 
         frame = ttk.Frame(self)
         frame.grid(row=1, column=0, sticky="nsew")
@@ -154,10 +154,10 @@ class _PreviewWindow(tk.Toplevel):
             self,
             text=(
                 "Arrastra para borrar con pincel (rojo). "
-                "Recorte: pulsa el boton y arrastra para crear un rectangulo. "
-                "Corte vertical: haz clic para crear una linea. "
-                "Pasa el raton por los lados para ajustar el recorte. "
-                "Teclas: Ctrl+Alt+Flecha izq/der paginas, Ctrl+Z deshacer."
+                "Crop: press the button and drag to create a rectangle. "
+                "Vertical cut: click to create a line. "
+                "Hover near the edges to adjust the crop. "
+                "Shortcuts: Ctrl+Alt+Left/Right page navigation, Ctrl+Z undo."
             )
         ).grid(row=2, column=0, sticky="w", padx=8, pady=(6, 8))
 
@@ -182,7 +182,7 @@ class _PreviewWindow(tk.Toplevel):
         if ok:
             self.preview_png.write_bytes(buf.tobytes())
         else:
-            raise RuntimeError("No pude renderizar vista previa.")
+            raise RuntimeError("Could not render preview.")
 
         self.photo = tk.PhotoImage(file=str(self.preview_png))
         self.img_w = self.photo.width()
@@ -258,14 +258,14 @@ class _PreviewWindow(tk.Toplevel):
     def _update_label(self):
         poly_count = len(self.selection.skip_polys_by_page.get(self._current_page(), []))
         circle_count = len(self.selection.skip_circles_by_page.get(self._current_page(), []))
-        suppressed = " | SUPRIMIDA" if self._current_page() in self.selection.suppress_pages else ""
-        crop_note = " | crop=pagina" if self._current_page() in self.selection.crop_rect_by_page else ""
+        suppressed = " | SUPPRESSED" if self._current_page() in self.selection.suppress_pages else ""
+        crop_note = " | crop=page" if self._current_page() in self.selection.crop_rect_by_page else ""
         cut_count = len(self._active_vertical_cuts())
-        cut_note = f" | cortes={cut_count}" if cut_count else ""
+        cut_note = f" | cuts={cut_count}" if cut_count else ""
         self.lbl.config(
             text=(
-                f"Pagina {self.page_index+1}/{len(self.doc)} | "
-                f"borrados={poly_count + circle_count}{suppressed}{crop_note}{cut_note}"
+                f"Page {self.page_index+1}/{len(self.doc)} | "
+                f"erased={poly_count + circle_count}{suppressed}{crop_note}{cut_note}"
             )
         )
 
@@ -565,7 +565,7 @@ class _PreviewWindow(tk.Toplevel):
         try:
             data = json.loads(Path(p).read_text(encoding="utf-8"))
         except Exception:
-            messagebox.showerror("Error", "No se pudo leer el archivo de seleccion.")
+            messagebox.showerror("Error", "Could not read the selection file.")
             return
 
         def _norm_dict(d):
@@ -605,14 +605,14 @@ class _PreviewWindow(tk.Toplevel):
             return
         out_path = Path(p)
         if out_path.resolve() == self.pdf_path.resolve():
-            messagebox.showerror("Exportar PDF", "Elige otro nombre para no sobrescribir el original.")
+            messagebox.showerror("Export PDF", "Choose another name so the original is not overwritten.")
             return
         try:
             self._export_pdf_with_selection(out_path)
         except Exception as exc:
-            messagebox.showerror("Exportar PDF", str(exc))
+            messagebox.showerror("Export PDF", str(exc))
             return
-        messagebox.showinfo("Exportar PDF", f"PDF exportado: {p}")
+        messagebox.showinfo("Export PDF", f"PDF exported: {p}")
 
     def _export_pdf_with_selection(self, out_path: Path) -> None:
         from . import core as scan_core
@@ -645,7 +645,7 @@ class _PreviewWindow(tk.Toplevel):
 
                 ok, buf = cv2.imencode(".png", bgr)
                 if not ok:
-                    raise RuntimeError(f"No pude codificar pagina {page_num}.")
+                    raise RuntimeError(f"Could not encode page {page_num}.")
 
                 h, w = bgr.shape[:2]
                 page_w = w * 72.0 / dpi
@@ -654,7 +654,7 @@ class _PreviewWindow(tk.Toplevel):
                 new_page.insert_image(fitz.Rect(0, 0, page_w, page_h), stream=buf.tobytes())
 
             if out_doc.page_count == 0:
-                raise RuntimeError("No hay paginas para exportar.")
+                raise RuntimeError("There are no pages to export.")
 
             out_doc.save(str(out_path), deflate=True, garbage=4)
         finally:
@@ -763,14 +763,14 @@ class ScannerPanel(ttk.Frame):
 
         # Output folder (same as input)
         r1 = ttk.Frame(frm); r1.pack(fill="x", pady=3)
-        ttk.Label(r1, text="Output (misma carpeta)").pack(side="left")
+        ttk.Label(r1, text="Output (same folder)").pack(side="left")
         ttk.Entry(r1, textvariable=self.out_var, state="readonly").pack(side="left", fill="x", expand=True, padx=6)
 
         # Cropping / viewer
-        sel_frame = ttk.LabelFrame(frm, text="Cropping (visor PDF)")
+        sel_frame = ttk.LabelFrame(frm, text="Cropping (PDF viewer)")
         sel_frame.pack(fill="x", pady=8)
         rr = ttk.Frame(sel_frame); rr.pack(fill="x", padx=8, pady=6)
-        ttk.Button(rr, text="Abrir visor", command=self._open_preview).pack(side="left")
+        ttk.Button(rr, text="Open viewer", command=self._open_preview).pack(side="left")
         self.sel_label = ttk.Label(rr, text=self._selection_label_text())
         self.sel_label.pack(side="left", padx=(10, 0))
 
@@ -780,11 +780,11 @@ class ScannerPanel(ttk.Frame):
         roo = ttk.Frame(outs); roo.pack(fill="x", padx=8, pady=6)
         ttk.Checkbutton(roo, text="Excel", variable=self.out_excel_var).pack(side="left", padx=(0, 10))
         ttk.Checkbutton(roo, text="TXT", variable=self.out_txt_var).pack(side="left", padx=(0, 10))
-        ttk.Checkbutton(roo, text="OCR bruto", variable=self.out_raw_var).pack(side="left", padx=(0, 10))
+        ttk.Checkbutton(roo, text="Raw OCR", variable=self.out_raw_var).pack(side="left", padx=(0, 10))
 
         # Buttons
         btns = ttk.Frame(frm); btns.pack(fill="x", pady=10)
-        self.btn_run = ttk.Button(btns, text="Ejecutar Scanner", command=self._run_scanner)
+        self.btn_run = ttk.Button(btns, text="Run Scanner", command=self._run_scanner)
         self.btn_run.pack(side="left")
 
         self.btn_cancel = ttk.Button(btns, text="Cancel", command=self.runner.cancel, state="disabled")
@@ -796,8 +796,8 @@ class ScannerPanel(ttk.Frame):
         crop_pages = len(self.selection.crop_rect_by_page)
         cut_pages = len(self.selection.vertical_cuts_by_page)
         return (
-            f"Zonas borradas: {skip_pages} pags | Suprimidas: {sup_pages} | "
-            f"Crop paginas: {crop_pages} | Cortes: {cut_pages}"
+            f"Erased regions: {skip_pages} pages | Suppressed: {sup_pages} | "
+            f"Crop pages: {crop_pages} | Cuts: {cut_pages}"
         )
 
     def _sync_ratio_entries(self):
@@ -806,11 +806,11 @@ class ScannerPanel(ttk.Frame):
     def _open_preview(self):
         path = Path(self.input_var.get().strip())
         if not path.exists():
-            messagebox.showwarning("Aviso", "Selecciona un PDF primero.")
+            messagebox.showwarning("Warning", "Select a PDF first.")
             return
 
         if path.is_dir():
-            messagebox.showwarning("Aviso", "Selecciona un PDF, no una carpeta.")
+            messagebox.showwarning("Warning", "Select a PDF, not a folder.")
             return
         else:
             pdf_path = path
@@ -849,17 +849,17 @@ class ScannerPanel(ttk.Frame):
 
         inp = self.input_var.get().strip()
         if not inp:
-            messagebox.showerror("Error", "Selecciona un PDF.")
+            messagebox.showerror("Error", "Select a PDF.")
             return
         if not os.path.isfile(inp):
-            messagebox.showerror("Error", "Ruta de entrada no valida.")
+            messagebox.showerror("Error", "Invalid input path.")
             return
 
         out_dir = os.path.dirname(inp)
         self.out_var.set(out_dir)
 
         if not (self.out_excel_var.get() or self.out_txt_var.get() or self.out_raw_var.get()):
-            messagebox.showwarning("Aviso", "Selecciona al menos una salida (Excel/TXT/OCR bruto).")
+            messagebox.showwarning("Warning", "Select at least one output (Excel/TXT/Raw OCR).")
             return
 
         # persist config

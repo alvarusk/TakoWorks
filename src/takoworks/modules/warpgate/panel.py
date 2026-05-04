@@ -346,13 +346,13 @@ class WarpGatePanel(ttk.Frame):
 
         r1 = ttk.Frame(loaders)
         r1.grid(row=1, column=0, columnspan=3, sticky="ew", pady=2)
-        ttk.Label(r1, text="Archivo A (con tiempos)").pack(side="left")
+        ttk.Label(r1, text="File A (timed)").pack(side="left")
         ttk.Entry(r1, textvariable=self.ass_a_var).pack(side="left", fill="x", expand=True, padx=6)
         ttk.Button(r1, text="Browse", command=self._pick_ass_a).pack(side="left")
 
         r2 = ttk.Frame(loaders)
         r2.grid(row=2, column=0, columnspan=3, sticky="ew", pady=2)
-        ttk.Label(r2, text="Archivo B (sin tiempos)").pack(side="left")
+        ttk.Label(r2, text="File B (untimed)").pack(side="left")
         ttk.Entry(r2, textvariable=self.ass_b_var).pack(side="left", fill="x", expand=True, padx=6)
         ttk.Button(r2, text="Browse", command=self._pick_ass_b).pack(side="left")
 
@@ -427,8 +427,8 @@ class WarpGatePanel(ttk.Frame):
         bottom.columnconfigure(1, weight=1)
         bottom.rowconfigure(1, weight=1)
 
-        ttk.Label(bottom, text="Archivo A").grid(row=0, column=0, sticky="w")
-        ttk.Label(bottom, text="Archivo B").grid(row=0, column=1, sticky="w")
+        ttk.Label(bottom, text="File A").grid(row=0, column=0, sticky="w")
+        ttk.Label(bottom, text="File B").grid(row=0, column=1, sticky="w")
 
         self.list_a = tk.Listbox(bottom, selectmode=tk.EXTENDED)
         self.list_b = tk.Listbox(bottom, selectmode=tk.EXTENDED)
@@ -553,30 +553,30 @@ class WarpGatePanel(ttk.Frame):
         ass_b = self.ass_b_var.get().strip()
 
         if not video_path or not os.path.isfile(video_path):
-            messagebox.showerror("WarpGate", "Selecciona un video valido.")
+            messagebox.showerror("WarpGate", "Select a valid video.")
             return
         if not ass_a or not os.path.isfile(ass_a):
-            messagebox.showerror("WarpGate", "Selecciona un Archivo A valido.")
+            messagebox.showerror("WarpGate", "Select a valid File A.")
             return
         if not ass_b or not os.path.isfile(ass_b):
-            messagebox.showerror("WarpGate", "Selecciona un Archivo B valido.")
+            messagebox.showerror("WarpGate", "Select a valid File B.")
             return
 
         try:
             self.doc_a = AssDocument.load(ass_a)
         except Exception as exc:
-            messagebox.showerror("WarpGate", f"No se pudo leer Archivo A: {exc}")
+            messagebox.showerror("WarpGate", f"Could not read File A: {exc}")
             return
         try:
             self.doc_b = AssDocument.load(ass_b)
         except Exception as exc:
-            messagebox.showerror("WarpGate", f"No se pudo leer Archivo B: {exc}")
+            messagebox.showerror("WarpGate", f"Could not read File B: {exc}")
             return
 
         if not self.doc_a.events:
-            messagebox.showwarning("WarpGate", "Archivo A no tiene eventos en [Events].")
+            messagebox.showwarning("WarpGate", "File A has no events in [Events].")
         if not self.doc_b.events:
-            messagebox.showwarning("WarpGate", "Archivo B no tiene eventos en [Events].")
+            messagebox.showwarning("WarpGate", "File B has no events in [Events].")
 
         self._load_video(video_path)
         self._refresh_lists()
@@ -592,13 +592,13 @@ class WarpGatePanel(ttk.Frame):
             return
         detail = self.vlc_error.strip()
         if detail:
-            messagebox.showerror("WarpGate", f"No se pudo iniciar VLC. El preview requiere VLC.\n\nDetalle: {detail}")
+            messagebox.showerror("WarpGate", f"Could not start VLC. Preview requires VLC.\n\nDetails: {detail}")
             return
-        messagebox.showerror("WarpGate", "No se pudo iniciar VLC. El preview requiere VLC.")
+        messagebox.showerror("WarpGate", "Could not start VLC. Preview requires VLC.")
 
     def _load_video_vlc(self, path: str) -> bool:
         if vlc is None:
-            self.vlc_error = _vlc_import_error or "No se pudo importar python-vlc."
+            self.vlc_error = _vlc_import_error or "Could not import python-vlc."
             return False
         if not self._init_vlc_player():
             return False
@@ -1081,10 +1081,10 @@ class WarpGatePanel(ttk.Frame):
         sel_a = [int(x) for x in self.list_a.curselection()]
         sel_b = [int(x) for x in self.list_b.curselection()]
         if not sel_a or not sel_b:
-            messagebox.showerror("WarpGate", "Selecciona lineas en ambos archivos.")
+            messagebox.showerror("WarpGate", "Select lines in both files.")
             return
         if len(sel_a) != len(sel_b):
-            messagebox.showerror("WarpGate", "Selecciona el mismo numero de lineas en A y B.")
+            messagebox.showerror("WarpGate", "Select the same number of lines in A and B.")
             return
         mode = self._ask_warp_mode()
         if mode is None:
@@ -1110,10 +1110,10 @@ class WarpGatePanel(ttk.Frame):
         win.grab_set()
         choice = tk.StringVar(value="both")
 
-        ttk.Label(win, text="Transferir:").pack(padx=12, pady=(12, 4), anchor="w")
-        ttk.Radiobutton(win, text="Texto", variable=choice, value="text").pack(anchor="w", padx=12)
+        ttk.Label(win, text="Transfer:").pack(padx=12, pady=(12, 4), anchor="w")
+        ttk.Radiobutton(win, text="Text", variable=choice, value="text").pack(anchor="w", padx=12)
         ttk.Radiobutton(win, text="Actor", variable=choice, value="actor").pack(anchor="w", padx=12)
-        ttk.Radiobutton(win, text="Texto + Actor", variable=choice, value="both").pack(anchor="w", padx=12)
+        ttk.Radiobutton(win, text="Text + Actor", variable=choice, value="both").pack(anchor="w", padx=12)
 
         result: List[Optional[str]] = [None]
 
@@ -1144,9 +1144,9 @@ class WarpGatePanel(ttk.Frame):
             with open(out_path, "w", encoding="utf-8-sig", errors="replace") as f:
                 f.write(self.doc_a.to_string())
         except Exception as exc:
-            messagebox.showerror("WarpGate", f"No se pudo exportar: {exc}")
+            messagebox.showerror("WarpGate", f"Could not export: {exc}")
             return
-        messagebox.showinfo("WarpGate", f"Exportado: {out_path}")
+        messagebox.showinfo("WarpGate", f"Exported: {out_path}")
 
     def _clone_event(self, doc: AssDocument, template: AssEvent) -> AssEvent:
         fields = list(template.fields)

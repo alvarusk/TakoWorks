@@ -36,14 +36,16 @@ class MainWindow(ttk.Frame):
 
         self.runner = TaskRunner(parent, self.console.write)
 
-        self.notebook.add(SettingsPanel(self.notebook, self.runner, self.cfg), text="Settings")
         self.notebook.add(TranscriberPanel(self.notebook, self.runner, self.cfg), text="Transcriber")
         self.notebook.add(ScannerPanel(self.notebook, self.runner, self.cfg), text="Scanner")
+        self.notebook.add(SettingsPanel(self.notebook, self.runner, self.cfg), text="Settings")
+        self.notebook.select(self.notebook.tabs()[0])
 
     def _restore_splitter(self):
-        # Si hay valor guardado, úsalo; si no, un 70% para tabs
+        # Si hay valor guardado, úsalo; si no, dejamos más espacio para las pestañas.
+        self.winfo_toplevel().update_idletasks()
         saved = int(self.cfg.get("last", {}).get("splitter_pos", 0) or 0)
-        h = max(300, self.winfo_toplevel().winfo_height())
+        h = max(300, self.winfo_toplevel().winfo_height(), self.winfo_toplevel().winfo_reqheight())
         pos = saved if saved > 0 else int(h * 0.70)
 
         try:

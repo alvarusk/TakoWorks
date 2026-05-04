@@ -76,9 +76,9 @@ def read_lines_from_doc(path: str, console):
     if ext == ".docx":
         if not HAS_DOCX:
             raise RuntimeError(
-                "Falta la librería 'python-docx'. Instálala con: pip install python-docx"
+                "Missing the 'python-docx' library. Install it with: pip install python-docx"
             )
-        log("Leyendo .docx…", console)
+        log("Reading .docx...", console)
         doc = Document(path)
         raw_lines = []
         for p in doc.paragraphs:
@@ -87,7 +87,7 @@ def read_lines_from_doc(path: str, console):
                 for sub_line in p.text.splitlines():
                     raw_lines.append(sub_line)
     else:
-        log("Leyendo archivo de texto…", console)
+        log("Reading text file...", console)
         with open(path, "r", encoding="utf-8") as f:
             raw_lines = f.read().splitlines()
 
@@ -157,36 +157,36 @@ def build_ass_content(lines):
 
 def convert_word_to_ass(word_path: str, console):
     if not word_path:
-        messagebox.showerror("Error", "Selecciona primero un archivo de entrada.")
+        messagebox.showerror("Error", "Select an input file first.")
         return
 
     if not os.path.isfile(word_path):
-        messagebox.showerror("Error", "La ruta del archivo no es válida.")
+        messagebox.showerror("Error", "The file path is not valid.")
         return
 
     base, _ = os.path.splitext(word_path)
     ass_path = base + ".ass"
 
     try:
-        log(f"Archivo de entrada: {word_path}", console)
+        log(f"Input file: {word_path}", console)
         lines = read_lines_from_doc(word_path, console)
 
         if not lines:
             messagebox.showwarning(
-                "Aviso",
-                "No se han encontrado líneas válidas (Actor: Texto)."
+                "Warning",
+                "No valid lines were found (Actor: Text)."
             )
             return
 
-        log(f"Líneas encontradas: {len(lines)}", console)
+        log(f"Lines found: {len(lines)}", console)
 
         ass_content = build_ass_content(lines)
 
         with open(ass_path, "w", encoding="utf-8") as f:
             f.write(ass_content)
 
-        log(f"ASS generado: {ass_path}", console)
-        messagebox.showinfo("Listo", f"ASS generado:\n{ass_path}")
+        log(f"ASS generated: {ass_path}", console)
+        messagebox.showinfo("Done", f"ASS generated:\n{ass_path}")
 
     except Exception as e:
         log(f"ERROR: {e}", console)
@@ -195,21 +195,21 @@ def convert_word_to_ass(word_path: str, console):
 
 def select_word_file(entry_var, console):
     file_path = filedialog.askopenfilename(
-        title="Seleccionar archivo Word o TXT",
+        title="Select Word or TXT file",
         filetypes=(
-            ("Archivos de Word", "*.docx"),
-            ("Archivos de texto", "*.txt"),
-            ("Todos los archivos", "*.*"),
+            ("Word files", "*.docx"),
+            ("Text files", "*.txt"),
+            ("All files", "*.*"),
         ),
     )
     if file_path:
         entry_var.set(file_path)
-        log(f"Seleccionado: {file_path}", console)
+        log(f"Selected: {file_path}", console)
 
 
 def main():
     root = tk.Tk()
-    root.title("Word → ASS (Actor → Name)")
+    root.title("Word -> ASS (Actor -> Name)")
 
     # Marco principal
     frame = tk.Frame(root, padx=10, pady=10)
@@ -218,7 +218,7 @@ def main():
     # Selector de archivo Word
     word_var = tk.StringVar()
 
-    lbl_word = tk.Label(frame, text="Archivo Word / TXT:")
+    lbl_word = tk.Label(frame, text="Word / TXT file:")
     lbl_word.grid(row=0, column=0, sticky="w")
 
     entry_word = tk.Entry(frame, textvariable=word_var, width=60)
@@ -226,20 +226,20 @@ def main():
 
     btn_word = tk.Button(
         frame,
-        text="Buscar…",
+        text="Browse...",
         command=lambda: select_word_file(word_var, console),
     )
     btn_word.grid(row=1, column=1, pady=5, sticky="e")
 
-    # Botón convertir
+    # Convert button
     btn_convert = tk.Button(
         frame,
-        text="Convertir a ASS",
+        text="Convert to ASS",
         command=lambda: convert_word_to_ass(word_var.get(), console),
     )
     btn_convert.grid(row=2, column=0, columnspan=2, pady=(5, 10))
 
-    # Consola de mensajes
+    # Message console
     lbl_console = tk.Label(frame, text="Console:")
     lbl_console.grid(row=3, column=0, sticky="w")
 
@@ -250,7 +250,7 @@ def main():
     frame.columnconfigure(0, weight=1)
     frame.rowconfigure(4, weight=1)
 
-    log("Listo. Selecciona un Word o TXT y pulsa 'Convertir a ASS'.", console)
+    log("Ready. Select a Word or TXT file and click 'Convert to ASS'.", console)
 
     root.mainloop()
 

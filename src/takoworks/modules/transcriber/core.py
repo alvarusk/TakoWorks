@@ -112,7 +112,7 @@ DISPLAY_NAMES = {
     "context_note": "Prompt Explicativo (Claude Sonnet 4.6)",
     "gemini": "Gemini 3 Flash",
     "deepseek": "DeepSeek V4 Flash",
-    "romanization": "Romanizacion (DeepSeek V4 Flash)",
+    "romanization": "Romanization (DeepSeek V4 Flash)",
 }
 
 # Alias aceptados en --models (CLI/GUI). Se normalizan a claves internas:
@@ -533,28 +533,28 @@ def _log_translation_count_issue(
     )
     if parse_result.missing_indices:
         missing_abs = [start_line + idx for idx in parse_result.missing_indices]
-        detail += f" Faltan posiciones/lineas: {missing_abs}."
+        detail += f" Missing positions/lines: {missing_abs}."
     if parse_result.extra_count:
-        detail += f" Sobran {parse_result.extra_count} traducciones."
+        detail += f" {parse_result.extra_count} extra translations."
     if parse_result.error:
         detail += f" Error: {parse_result.error}."
     print(detail)
 
     if parse_result.missing_indices and chunk:
-        print(f"[{DISPLAY_NAMES.get(model_key, model_key)}] Líneas sin traducción devuelta por el modelo:")
+        print(f"[{DISPLAY_NAMES.get(model_key, model_key)}] Source lines returned without translation by the model:")
         for idx in parse_result.missing_indices:
             absolute_line = start_line + idx
             source_text = chunk[idx].strip() if idx < len(chunk) else ""
-            print(f"  - línea {absolute_line}: {source_text}")
+            print(f"  - line {absolute_line}: {source_text}")
 
     if parse_result.extra_count and chunk:
         preview_count = min(3, len(chunk))
         if preview_count:
-            print(f"[{DISPLAY_NAMES.get(model_key, model_key)}] Contexto del bloque con exceso de traducciones:")
+            print(f"[{DISPLAY_NAMES.get(model_key, model_key)}] Context for the block with extra translations:")
             for rel_idx in range(preview_count):
                 absolute_line = start_line + rel_idx
                 source_text = chunk[rel_idx].strip()
-                print(f"  - línea {absolute_line}: {source_text}")
+                print(f"  - line {absolute_line}: {source_text}")
 
 
 def _read_supabase_value(field: str, env_names) -> str:
@@ -647,7 +647,7 @@ def log_time_cost_breakdown_v2(
     displayed_cost = context_note_usage.cost_usd + romanization_usage.cost_usd
 
     print(f"Prompts explicativos: {_format_elapsed(context_seconds)}; {_format_cost(context_note_usage.cost_usd)}")
-    print(f"Romanizacion: {_format_elapsed(roman_seconds)}; {_format_cost(romanization_usage.cost_usd)}")
+    print(f"Romanization: {_format_elapsed(roman_seconds)}; {_format_cost(romanization_usage.cost_usd)}")
 
     for key in ("gpt", "claude", "gemini", "deepseek"):
         if key not in model_timings and key not in usage_by_model:
@@ -798,7 +798,7 @@ def refine_japanese_punctuation_free(lines: List[str]) -> List[str]:
             fixed = process_long_text(cleaned)
             out.append(fixed)
         except Exception as e:
-            print(f"[Puntuación ja] Error al procesar línea, se mantiene original: {e}")
+            print(f"[JA punctuation] Error processing line, keeping original: {e}")
             out.append(t)
 
     return out
@@ -899,7 +899,7 @@ def refine_chinese_punctuation_free(lines: List[str]) -> List[str]:
         try:
             out.append(_restore_zh_line(t))
         except Exception as e:
-            print(f"[Puntuación zh] Error al procesar línea, se mantiene original: {e}")
+            print(f"[ZH punctuation] Error processing line, keeping original: {e}")
             out.append(t)
     return out
 
@@ -994,7 +994,7 @@ def build_asr_pipeline(lang: str):
     pipeline = _get_transformers_pipeline()
 
     if lang == "ja":
-        print("[+] Idioma seleccionado: japonés (Anime-Whisper)")
+        print("[+] Selected language: Japanese (Anime-Whisper)")
         model_name = "litagin/anime-whisper"
 
         asr = pipeline(
@@ -1007,7 +1007,7 @@ def build_asr_pipeline(lang: str):
         )
 
     elif lang == "zh":
-        print("[+] Idioma seleccionado: chino (BELLE-2/Belle-whisper-large-v3-zh)")
+        print("[+] Selected language: Chinese (BELLE-2/Belle-whisper-large-v3-zh)")
         model_name = "BELLE-2/Belle-whisper-large-v3-zh"
 
         asr = pipeline(
@@ -1285,7 +1285,7 @@ def _log_romanization_count_issue(
     print(detail)
 
     if parse_result.missing_indices and chunk:
-        print("[DeepSeek romanization] Lineas sin romanizar devueltas por el modelo:")
+        print("[DeepSeek romanization] Source lines returned without romanization by the model:")
         for idx in parse_result.missing_indices:
             absolute_line = start_line + idx
             source_text = chunk[idx].strip() if idx < len(chunk) else ""
@@ -1300,13 +1300,13 @@ def romanize_with_deepseek(
         return [], ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL), None
 
     if not DEEPSEEK_API_KEY:
-        print("[Romanizacion] Se omite DeepSeek porque falta DEEPSEEK_API_KEY; se usa romanizacion local.")
+        print("[Romanization] DeepSeek is skipped because DEEPSEEK_API_KEY is missing; using local romanization.")
         return _romanize_locally(src_lines, lang), ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL), "missing_key"
 
     try:
         client = get_deepseek_client()
     except Exception as e:
-        print(f"[Romanizacion] No se puede inicializar DeepSeek: {e}. Se usa romanizacion local.")
+        print(f"[Romanization] DeepSeek cannot be initialized: {e}. Using local romanization.")
         return _romanize_locally(src_lines, lang), ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL), "client_error"
 
     system_prompt = _build_romanization_system_prompt(lang)
@@ -1320,7 +1320,7 @@ def romanize_with_deepseek(
         chunk = src_lines[start:start + CHUNK_SIZE]
         base_user_prompt = _build_romanization_user_prompt(chunk, lang)
         end_line = min(start + CHUNK_SIZE, total)
-        print(f"[DeepSeek romanization] Lineas {start + 1}-{end_line} de {total}...")
+        print(f"[DeepSeek romanization] Lines {start + 1}-{end_line} of {total}...")
 
         response = None
         content = ""
@@ -1350,7 +1350,7 @@ def romanize_with_deepseek(
                 if attempt < MODEL_BLOCK_ATTEMPTS:
                     wait_s = min(9, 2 * attempt)
                     print(
-                        f"[DeepSeek romanization] Reintentando bloque {start + 1}-{end_line} en {wait_s} s "
+                        f"[DeepSeek romanization] Retrying block {start + 1}-{end_line} in {wait_s} s "
                         "porque el numero de romanizaciones no coincide..."
                     )
                     time.sleep(wait_s)
@@ -1361,7 +1361,7 @@ def romanize_with_deepseek(
                 if use_response_format and "response_format" in err_text.lower():
                     use_response_format = False
                     print(
-                        f"[DeepSeek romanization] El SDK/modelo rechazo response_format en el bloque "
+                        f"[DeepSeek romanization] The SDK/model rejected response_format for block "
                         f"{start + 1}-{end_line}; se reintenta sin JSON schema."
                     )
                     if attempt < MODEL_BLOCK_ATTEMPTS:
@@ -1369,13 +1369,13 @@ def romanize_with_deepseek(
                 if attempt < MODEL_BLOCK_ATTEMPTS:
                     wait_s = min(9, 2 * attempt)
                     print(
-                        f"[DeepSeek romanization] Error transitorio en bloque {start + 1}-{end_line}: {e}. "
-                        f"Reintentando en {wait_s} s..."
+                        f"[DeepSeek romanization] Transient error in block {start + 1}-{end_line}: {e}. "
+                        f"Retrying in {wait_s} s..."
                     )
                     time.sleep(wait_s)
                     continue
                 print(
-                    f"[DeepSeek romanization] Error al romanizar; se usa romanizacion local en este bloque. "
+                    f"[DeepSeek romanization] Romanization failed; using local romanization for this block. "
                     f"Detalle: {e}"
                 )
 
@@ -1450,14 +1450,14 @@ def transcribe_ass(
     """
     global _ja_tagger
 
-    print("[+] Cargando ASS para transcripción.")
+    print("[+] Loading ASS for transcription.")
     subs = pysubs2.load(ass_path, encoding="utf-8")
 
     events: List[pysubs2.SSAEvent] = []
     audio_paths: List[str] = []
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        print("[+] Preparando segmentos de audio con ffmpeg.")
+        print("[+] Preparing audio segments with ffmpeg.")
 
         for idx, ev in enumerate(subs):
             if getattr(ev, "is_comment", False):
@@ -1473,22 +1473,22 @@ def transcribe_ass(
             try:
                 extract_segment(video_path, start_ms, end_ms, seg_path)
             except subprocess.CalledProcessError as e:
-                print(f"[!] ffmpeg falló en línea {idx} ({ev.start}–{ev.end} ms): {e}")
+                print(f"[!] ffmpeg failed on line {idx} ({ev.start}-{ev.end} ms): {e}")
                 continue
 
             events.append(ev)
             audio_paths.append(seg_path)
 
         if not audio_paths:
-            print("[!] No se generó ningún segmento de audio. Se devuelve el ASS sin cambios.")
+            print("[!] No audio segments were generated. Returning the ASS unchanged.")
             return subs
 
         total = len(events)
-        print(f"[+] Segmentos preparados: {total}")
-        print("[+] Cargando modelo de transcripción (puede tardar la primera vez).")
+        print(f"[+] Prepared segments: {total}")
+        print("[+] Loading transcription model (the first run may take a while).")
         asr = build_asr_pipeline(lang)
 
-        print("[+] Transcribiendo líneas.")
+        print("[+] Transcribing lines.")
         raw_lines: List[str] = []
 
         # ASR línea a línea con progreso
@@ -1500,7 +1500,7 @@ def transcribe_ass(
                 else:
                     txt = str(res).strip()
             except Exception as e:
-                print(f"[ASR] Error en línea {i}/{total}: {e}")
+                print(f"[ASR] Error on line {i}/{total}: {e}")
                 txt = ""
 
             # 🔹 Limpiar repeticiones absurdas tipo 痛たたたたたたた....
@@ -1508,9 +1508,9 @@ def transcribe_ass(
 
             raw_lines.append(txt)
             snippet = txt.replace("\n", " ")[:60]
-            print(f"[Transcripción] Línea {i}/{total} → {snippet}")
+            print(f"[Transcription] Line {i}/{total} -> {snippet}")
 
-        print("[+] Refinando puntuación (modelos libres, sin GPT).")
+        print("[+] Refining punctuation (free models, no GPT).")
         refined_lines = refine_punctuation_free(raw_lines, lang)
 
         romanized_lines: List[str] = []
@@ -1522,7 +1522,7 @@ def transcribe_ass(
                 merge_api_usage(romanization_usage, roman_usage)
             _record_phase_time(phase_timings, "romanization", time.time() - roman_started_at)
             if roman_skip:
-                print(f"[Romanizacion] Motivo de fallback parcial: {roman_skip}")
+                print(f"[Romanization] Partial fallback reason: {roman_skip}")
 
             note_started_at = time.time()
             context_notes = build_contextual_notes(refined_lines, lang, usage_accumulator=context_note_usage)
@@ -1546,9 +1546,9 @@ def transcribe_ass(
 
             ev.text = "\\N".join(lines)
             snippet = base_text.replace("\n", " ")[:60]
-            print(f"[Romaji/Pinyin] Línea {i}/{total} → {snippet}")
+            print(f"[Romaji/Pinyin] Line {i}/{total} -> {snippet}")
 
-    print("[+] Transcripción completada.")
+    print("[+] Transcription completed.")
     return subs
 
 
@@ -1577,10 +1577,10 @@ def add_roman_morph_to_subs(
 
     total = len(events)
     if total == 0:
-        print("[Romaji/Pinyin] No hay líneas de diálogo sobre las que trabajar.")
+        print("[Romaji/Pinyin] No dialogue lines to process.")
         return subs
 
-    print(f"[Romaji/Pinyin] Hay {total} líneas de diálogo sobre las que trabajar.")
+    print(f"[Romaji/Pinyin] There are {total} dialogue lines to process.")
 
     base_texts = [_event_source_text(ev) for ev in events]
     roman_started_at = time.time()
@@ -1589,7 +1589,7 @@ def add_roman_morph_to_subs(
         merge_api_usage(romanization_usage, roman_usage)
     _record_phase_time(phase_timings, "romanization", time.time() - roman_started_at)
     if roman_skip:
-        print(f"[Romanizacion] Motivo de fallback parcial: {roman_skip}")
+                print(f"[Romanization] Partial fallback reason: {roman_skip}")
 
     note_started_at = time.time()
     context_notes = build_contextual_notes(base_texts, lang, usage_accumulator=context_note_usage)
@@ -1620,7 +1620,7 @@ def add_roman_morph_to_subs(
         ev.text = "\\N".join(lines)
 
         snippet = base_text.replace("\n", " ")[:60]
-        print(f"[Romaji/Pinyin] Línea {i}/{total} → {snippet}")
+        print(f"[Romaji/Pinyin] Line {i}/{total} -> {snippet}")
 
     return subs
 
@@ -1630,34 +1630,34 @@ def add_roman_morph_to_subs(
 
 def ask_language() -> str:
     while True:
-        print("Elige idioma para la transcripción:")
-        print("  [j] Japonés")
-        print("  [c] Chino (mandarín)")
-        choice = input("Opción (j/c): ").strip().lower()
+        print("Choose the transcription language:")
+        print("  [j] Japanese")
+        print("  [c] Chinese (Mandarin)")
+        choice = input("Choice (j/c): ").strip().lower()
 
         if choice in ("j", "ja", "jp", "japones", "japonés"):
             return "ja"
         if choice in ("c", "zh", "ch", "chino", "mandarin", "mandarín"):
             return "zh"
 
-        print("Entrada no válida. Por favor escribe 'j' o 'c'.\n")
+        print("Invalid input. Please type 'j' or 'c'.\n")
 
 
 def ask_series_name() -> str:
-    series = input("¿De qué serie se trata? (ej.: Dragon Raja): ").strip()
+    series = input("What series is this? (e.g. Dragon Raja): ").strip()
     if not series:
         series = "esta serie"
     return series
 
 
 def ask_source_type() -> str:
-    print("¿La serie tiene material original?")
+    print("Does the series have source material?")
     print("  [1] Manga")
     print("  [2] Manhwa")
-    print("  [3] Novela ligera")
-    print("  [4] Nada / no lo sé")
+    print("  [3] Light novel")
+    print("  [4] None / I don't know")
     while True:
-        choice = input("Opción (1/2/3/4): ").strip()
+        choice = input("Choice (1/2/3/4): ").strip()
         if choice == "1":
             return "Manga"
         if choice == "2":
@@ -1666,16 +1666,16 @@ def ask_source_type() -> str:
             return "Novela ligera"
         if choice == "4":
             return "Nada"
-        print("Entrada no válida. Escribe 1, 2, 3 o 4.\n")
+        print("Invalid input. Type 1, 2, 3, or 4.\n")
 
 
 def describe_source_type(source_type: str) -> str:
     if source_type == "Manga":
-        return "La serie está basada en un manga. Ten en cuenta la terminología y traducciones oficiales del manga cuando sea posible."
+        return "The series is based on a manga. Prefer official manga terminology and translations when possible."
     if source_type == "Manhwa":
-        return "La serie está basada en un manhwa. Ten en cuenta la terminología y traducciones oficiales del manhwa cuando sea posible."
+        return "The series is based on a manhwa. Prefer official manhwa terminology and translations when possible."
     if source_type == "Novela ligera":
-        return "La serie está basada en una novela ligera. Ten en cuenta la terminología y traducciones oficiales de la novela ligera cuando sea posible."
+        return "The series is based on a light novel. Prefer official light novel terminology and translations when possible."
     return "No hay material original claramente definido o no es relevante; prioriza la coherencia interna de la serie."
 
 
@@ -1848,7 +1848,7 @@ def build_contextual_notes(
 
     if not ANTHROPIC_API_KEY:
         if not _WARNED_CONTEXT_NOTE_MISSING_KEY:
-            print("[Nota contextual] Se omite porque falta ANTHROPIC_API_KEY.")
+            print("[Context note] Skipping because ANTHROPIC_API_KEY is missing.")
             _WARNED_CONTEXT_NOTE_MISSING_KEY = True
         return [""] * len(cleaned_lines)
 
@@ -1856,7 +1856,7 @@ def build_contextual_notes(
         client = get_claude_client()
     except Exception as e:
         if not _WARNED_CONTEXT_NOTE_CLIENT:
-            print(f"[Nota contextual] No se puede inicializar Claude: {e}")
+            print(f"[Context note] Claude cannot be initialized: {e}")
             _WARNED_CONTEXT_NOTE_CLIENT = True
         return [""] * len(cleaned_lines)
 
@@ -1869,13 +1869,13 @@ def build_contextual_notes(
             notes.append("")
             continue
 
-        print(f"[Nota contextual {lang_label}] Línea {idx}/{total}...")
+        print(f"[Context note {lang_label}] Line {idx}/{total}...")
         try:
             note, note_usage = analyze_contextual_note_with_claude(client, cleaned_lines, idx - 1, lang)
             if usage_accumulator is not None:
                 merge_api_usage(usage_accumulator, note_usage)
         except Exception as e:
-            print(f"[Nota contextual {lang_label}] Error en la línea {idx}: {e}")
+            print(f"[Context note {lang_label}] Error on line {idx}: {e}")
             note = ""
         notes.append(note)
 
@@ -1917,13 +1917,13 @@ def translate_with_openai(
     debug_dir: Optional[str] = None,
 ) -> Tuple[List[str], ApiUsage, Optional[str]]:
     if not OPENAI_API_KEY:
-        print("[GPT-5.5] Se omite GPT porque falta OPENAI_API_KEY (env o config.local.json).")
+        print("[GPT-5.5] GPT is skipped because OPENAI_API_KEY is missing (env or config.local.json).")
         return src_lines, ApiUsage(engine="gpt", model_name=OPENAI_MODEL), "missing_key"
 
     try:
         client = get_openai_client()
     except Exception as e:
-        print(f"[GPT-5.5] No se puede inicializar el cliente: {e}. Se omite GPT.")
+        print(f"[GPT-5.5] The client cannot be initialized: {e}. GPT will be skipped.")
         return src_lines, ApiUsage(engine="gpt", model_name=OPENAI_MODEL), "client_error"
 
     system_prompt = build_system_prompt(lang, series_name, source_type)
@@ -1936,7 +1936,7 @@ def translate_with_openai(
         chunk = src_lines[start:start + CHUNK_SIZE]
         base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
         end_line = min(start + CHUNK_SIZE, total)
-        print(f"[{DISPLAY_NAMES['gpt']}] Líneas {start + 1}-{end_line} de {total}...")
+        print(f"[{DISPLAY_NAMES['gpt']}] Lines {start + 1}-{end_line} of {total}...")
 
         response = None
         content = ""
@@ -1988,8 +1988,8 @@ def translate_with_openai(
                 if attempt < OPENAI_BLOCK_ATTEMPTS:
                     wait_s = min(12, 3 * attempt)
                     print(
-                        f"[GPT-5.5] Reintentando bloque {start + 1}-{end_line} en {wait_s} s "
-                        "porque el número de traducciones no coincide..."
+                        f"[GPT-5.5] Retrying block {start + 1}-{end_line} in {wait_s} s "
+                        "because the number of translations does not match..."
                     )
                     time.sleep(wait_s)
                     continue
@@ -2000,7 +2000,7 @@ def translate_with_openai(
                 if use_response_format and "response_format" in err_text.lower():
                     use_response_format = False
                     print(
-                        f"[GPT-5.5] El modelo/SDK rechazó response_format en bloque "
+                        f"[GPT-5.5] The model/SDK rejected response_format for block "
                         f"{start + 1}-{end_line}; se reintenta sin JSON schema."
                     )
                     if attempt < OPENAI_BLOCK_ATTEMPTS:
@@ -2065,7 +2065,7 @@ def translate_with_deepseek(
     try:
         client = get_deepseek_client()
     except Exception as e:
-        print(f"[DeepSeek] Se omite DeepSeek (cliente no inicializado): {e}")
+        print(f"[DeepSeek] DeepSeek is skipped (client not initialized): {e}")
         return src_lines, ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL), "client_error"
     system_prompt = build_system_prompt(lang, series_name, source_type)
     all_translations: List[str] = []
@@ -2077,7 +2077,7 @@ def translate_with_deepseek(
         chunk = src_lines[start:start + CHUNK_SIZE]
         base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
         end_line = min(start + CHUNK_SIZE, total)
-        print(f"[DeepSeek] Líneas {start + 1}-{end_line} de {total}...")
+        print(f"[DeepSeek] Lines {start + 1}-{end_line} of {total}...")
 
         response = None
         content = ""
@@ -2113,7 +2113,7 @@ def translate_with_deepseek(
                 )
                 if attempt < MODEL_BLOCK_ATTEMPTS:
                     wait_s = min(9, 2 * attempt)
-                    print(f"[DeepSeek] Reintentando bloque {start + 1}-{end_line} en {wait_s} s...")
+                    print(f"[DeepSeek] Retrying block {start + 1}-{end_line} in {wait_s} s...")
                     time.sleep(wait_s)
                     continue
                 break
@@ -2121,12 +2121,12 @@ def translate_with_deepseek(
                 if attempt < MODEL_BLOCK_ATTEMPTS:
                     wait_s = min(9, 2 * attempt)
                     print(
-                        f"[DeepSeek] Error en bloque {start + 1}-{end_line}: {e}. "
-                        f"Reintentando en {wait_s} s..."
+                        f"[DeepSeek] Error in block {start + 1}-{end_line}: {e}. "
+                        f"Retrying in {wait_s} s..."
                     )
                     time.sleep(wait_s)
                     continue
-                print(f"[DeepSeek] Error al traducir; se omite DeepSeek en este bloque. Detalle: {e}")
+                print(f"[DeepSeek] Translation failed; DeepSeek is skipped for this block. Details: {e}")
 
         if response is None:
             skipped_reason = skipped_reason or "partial_error"
@@ -2173,7 +2173,7 @@ def translate_with_claude(
     try:
         client = get_claude_client()
     except Exception as e:
-        print(f"[Claude] Se omite Claude (cliente no inicializado): {e}")
+        print(f"[Claude] Claude is skipped (client not initialized): {e}")
         return src_lines, ApiUsage(engine="claude", model_name=CLAUDE_MODEL), "client_error"
 
     system_prompt = build_system_prompt(lang, series_name, source_type)
@@ -2186,7 +2186,7 @@ def translate_with_claude(
         chunk = src_lines[start:start + CHUNK_SIZE]
         base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
         end_line = min(start + CHUNK_SIZE, total)
-        print(f"[Claude] Líneas {start + 1}-{end_line} de {total}...")
+        print(f"[Claude] Lines {start + 1}-{end_line} of {total}...")
 
         message = None
         content = ""
@@ -2213,12 +2213,12 @@ def translate_with_claude(
                 if attempt < MODEL_BLOCK_ATTEMPTS:
                     wait_s = min(9, 2 * attempt)
                     print(
-                        f"[Claude] Error en bloque {start + 1}-{end_line}: {e}. "
-                        f"Reintentando en {wait_s} s..."
+                        f"[Claude] Error in block {start + 1}-{end_line}: {e}. "
+                        f"Retrying in {wait_s} s..."
                     )
                     time.sleep(wait_s)
                     continue
-                print(f"[Claude] Error al traducir; se omite Claude en este bloque. Detalle: {e}")
+                print(f"[Claude] Translation failed; Claude is skipped for this block. Details: {e}")
                 break
 
             content = "".join(
@@ -2233,7 +2233,7 @@ def translate_with_claude(
                     )
                     time.sleep(wait_s)
                     continue
-                print("[Claude] Respuesta vacía, se devuelven líneas originales para este bloque.")
+                print("[Claude] Empty response, returning the original lines for this block.")
                 break
 
             parse_result = parse_json_translations_result(content, fallback_lines=chunk)
@@ -2254,7 +2254,7 @@ def translate_with_claude(
             )
             if attempt < MODEL_BLOCK_ATTEMPTS:
                 wait_s = min(9, 2 * attempt)
-                print(f"[Claude] Reintentando bloque {start + 1}-{end_line} en {wait_s} s...")
+                print(f"[Claude] Retrying block {start + 1}-{end_line} in {wait_s} s...")
                 time.sleep(wait_s)
                 continue
             break
@@ -2309,7 +2309,7 @@ def translate_with_gemini(
     try:
         model = get_gemini_model(lang, series_name, source_type)
     except Exception as e:
-        print(f"[Gemini 3 Flash] Se omite Gemini (cliente no inicializado): {e}")
+        print(f"[Gemini 3 Flash] Gemini is skipped (client not initialized): {e}")
         return src_lines, ApiUsage(engine="gemini", model_name=GEMINI_MODEL), "client_error"
     all_translations: List[str] = []
     total = len(src_lines)
@@ -2320,7 +2320,7 @@ def translate_with_gemini(
         chunk = src_lines[start:start + GEMINI_CHUNK]
         base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
         end_line = min(start + GEMINI_CHUNK, total)
-        print(f"[Gemini 3 Flash] Líneas {start + 1}-{end_line} de {total}...")
+        print(f"[Gemini 3 Flash] Lines {start + 1}-{end_line} of {total}...")
 
         response = None
         raw = ""
@@ -2340,13 +2340,13 @@ def translate_with_gemini(
                 if attempt < MODEL_BLOCK_ATTEMPTS:
                     wait_s = min(9, 2 * attempt)
                     print(
-                        f"[Gemini] Error de API en líneas {start + 1}-{end_line}: {e}. "
-                        f"Reintentando en {wait_s} s..."
+                        f"[Gemini] API error on lines {start + 1}-{end_line}: {e}. "
+                        f"Retrying in {wait_s} s..."
                     )
                     time.sleep(wait_s)
                     continue
-                print(f"[Gemini] Error de API en líneas {start + 1}-{end_line}: {e}. "
-                      "Se devuelven las líneas originales para este bloque.")
+                print(f"[Gemini] API error on lines {start + 1}-{end_line}: {e}. "
+                      "The original lines are returned for this block.")
                 break
 
             cand = response.candidates[0] if getattr(response, "candidates", None) else None
@@ -2360,14 +2360,14 @@ def translate_with_gemini(
                 if attempt < MODEL_BLOCK_ATTEMPTS:
                     wait_s = min(9, 2 * attempt)
                     print(
-                        f"[Gemini] Respuesta vacía o bloqueada (finish_reason={finish_reason}). "
-                        f"Reintentando en {wait_s} s..."
+                        f"[Gemini] Empty or blocked response (finish_reason={finish_reason}). "
+                        f"Retrying in {wait_s} s..."
                     )
                     print(f"[Gemini DEBUG] safety_ratings={safety}")
                     time.sleep(wait_s)
                     continue
-                print(f"[Gemini] Respuesta vacía o bloqueada (finish_reason={finish_reason}). "
-                      "Se devuelven las líneas originales para este bloque.")
+                print(f"[Gemini] Empty or blocked response (finish_reason={finish_reason}). "
+                      "The original lines are returned for this block.")
                 print(f"[Gemini DEBUG] safety_ratings={safety}")
                 break
 
@@ -2416,7 +2416,7 @@ def translate_with_gemini(
             )
             if attempt < MODEL_BLOCK_ATTEMPTS:
                 wait_s = min(9, 2 * attempt)
-                print(f"[Gemini] Reintentando bloque {start + 1}-{end_line} en {wait_s} s...")
+                print(f"[Gemini] Retrying block {start + 1}-{end_line} in {wait_s} s...")
                 time.sleep(wait_s)
                 continue
             break
@@ -2489,7 +2489,7 @@ def apply_translations_and_save_subs(
     events_out = [ev for ev in subs_out if not getattr(ev, "is_comment", False)]
 
     if len(translations) != len(events_out):
-        print("[AVISO] Nº de traducciones distinto del nº de líneas; se ajustará al mínimo en común.")
+        print("[WARNING] The number of translations differs from the number of lines; the minimum common length will be used.")
     n = min(len(translations), len(events_out))
 
     for i in range(n):
@@ -2501,7 +2501,7 @@ def apply_translations_and_save_subs(
         ev.text = trans
 
     subs_out.save(output_path, encoding="utf-8-sig")
-    print(f"Guardado: {output_path}")
+    print(f"Saved: {output_path}")
 
 def format_morph_cell_html(morph: str) -> str:
     """
@@ -2646,11 +2646,11 @@ def process_all_models_with_subs(
         src_lines.append(_event_source_text(ev))
 
     total = len(src_lines)
-    print(f"Hay {total} líneas de diálogo para traducir.")
+    print(f"There are {total} dialogue lines to translate.")
     if models:
-        print("[Modelos] Ejecutando:", ", ".join(DISPLAY_NAMES[m] for m in sorted(models)))
+        print("[Models] Running:", ", ".join(DISPLAY_NAMES[m] for m in sorted(models)))
     else:
-        print("[Modelos] Ninguno seleccionado; se omite la traducción.")
+        print("[Models] None selected; translation will be skipped.")
         return {}, {}, {}
 
     os.makedirs(out_dir, exist_ok=True)
@@ -2757,35 +2757,35 @@ def main(argv: Optional[List[str]] = None):
     phase_timings: Dict[str, float] = {}
     parser = argparse.ArgumentParser(
         description=(
-            "Transcribe un .ass + vídeo a japonés o chino (Anime-Whisper / BELLE-2), "
-            "pulido de puntuación con modelos libres, añade romaji/pinyin via DeepSeek y una nota "
-            "contextual opcional con Claude Sonnet, y traduce con GPT, Claude, Gemini y DeepSeek. "
-            "Cada .ass de salida puede tener:\n"
-            "  - línea 1: japonés/chino\n"
-            "  - línea 2: romaji/pinyin (si se activa)\n"
-            "  - línea 3: nota contextual (si se activa)\n"
-            "  - última línea: traducción."
+            "Transcribe an .ass + video to Japanese or Chinese (Anime-Whisper / BELLE-2), "
+            "refine punctuation with free models, add romaji/pinyin via DeepSeek and an optional "
+            "context note with Claude Sonnet, and translate with GPT, Claude, Gemini, and DeepSeek. "
+            "Each output .ass can contain:\n"
+            "  - line 1: Japanese/Chinese\n"
+            "  - line 2: romaji/pinyin (if enabled)\n"
+            "  - line 3: context note (if enabled)\n"
+            "  - last line: translation."
         )
     )
-    parser.add_argument("ass_in", help="Archivo .ass de entrada (con tiempos sincronizados).")
-    parser.add_argument("video_in", nargs="?", default="", help="Vídeo correspondiente (opcional si --skip-asr).")
+    parser.add_argument("ass_in", help="Input .ass file (with synced timing).")
+    parser.add_argument("video_in", nargs="?", default="", help="Matching video (optional if --skip-asr).")
     parser.add_argument(
         "--out-dir",
-        help="Carpeta donde guardar los archivos de salida (.ass, .html). "
-             "Por defecto, la carpeta del .ass de entrada.",
+        help="Folder where the output files (.ass, .html) will be saved. "
+             "Defaults to the input .ass folder.",
         default=None,
     )
     parser.add_argument(
         "--base-name",
-        help="Prefijo para los .ass de salida (por defecto, nombre base del .ass de entrada).",
+        help="Prefix for the output .ass files (defaults to the input .ass base name).",
         default=None,
     )
     parser.add_argument(
         "--models",
         help=(
-            "Lista de modelos a ejecutar, separados por comas. "
-            "Opciones: GPT-5.5, Claude Opus 4.7, Gemini 3 Flash, DeepSeek V4 Flash (o también gpt, claude, gemini, deepseek). "
-            "Por defecto: gpt,claude,gemini,deepseek"
+            "Comma-separated list of models to run. "
+            "Options: GPT-5.5, Claude Opus 4.7, Gemini 3 Flash, DeepSeek V4 Flash (or gpt, claude, gemini, deepseek). "
+            "Default: gpt,claude,gemini,deepseek"
         ),
         default="GPT-5.5,Claude Opus 4.7,Gemini 3 Flash,DeepSeek V4 Flash",
     )
@@ -2793,43 +2793,43 @@ def main(argv: Optional[List[str]] = None):
         "--pad-ms",
         type=int,
         default=0,
-        help="Padding en milisegundos al inicio y final de cada línea al recortar el audio.",
+        help="Padding in milliseconds at the start and end of each line when trimming audio.",
     )
     parser.add_argument(
         "--lang",
         choices=["ja", "zh"],
-        help="Idioma original del audio o del guion (ja = japonés, zh = chino mandarín). "
-             "Si no se indica, se preguntará por consola.",
+        help="Original language of the audio or script (ja = Japanese, zh = Chinese Mandarin). "
+             "If omitted, you will be prompted in the console.",
     )
     parser.add_argument(
         "--series",
-        help="Nombre de la serie (por ejemplo, 'Dragon Raja'). "
-             "Si no se indica, se preguntará por consola.",
+        help="Series name (for example, 'Dragon Raja'). "
+             "If omitted, you will be prompted in the console.",
     )
     parser.add_argument(
         "--source-type",
-        choices=["Manga", "Manhwa", "Novela ligera", "Nada"],
-        help="Tipo de material original (manga, manhwa, novela ligera, nada). "
-             "Si no se indica, se preguntará por consola.",
+        choices=["Manga", "Manhwa", "Light novel", "None"],
+        help="Source material type (manga, manhwa, light novel, none). "
+             "If omitted, you will be prompted in the console.",
     )
     parser.add_argument(
         "--do-roman-morph",
         action="store_true",
-        help="Añadir romaji/pinyin via DeepSeek y nota contextual con Claude Sonnet en el ASS.",
+        help="Add romaji/pinyin via DeepSeek and a context note with Claude Sonnet to the ASS.",
     )
     parser.add_argument(
         "--html",
         action="store_true",
-        help="Generar un HTML resumen con original, romanización, nota contextual y traducciones.",
+        help="Generate a summary HTML with original text, romanization, context notes, and translations.",
     )
     parser.add_argument(
         "--skip-asr",
         action="store_true",
         help=(
-            "Omitir la transcripción de audio. Se asume que el .ass ya contiene la "
-            "transcripción en japonés o chino en la primera línea de cada subtítulo. "
-            "Aun así se puede añadir romaji/pinyin via DeepSeek y nota contextual (--do-roman-morph) "
-            "y hacer las traducciones."
+            "Skip audio transcription. The .ass is assumed to already contain the "
+            "Japanese or Chinese transcription in the first line of each subtitle. "
+            "You can still add romaji/pinyin via DeepSeek and a context note (--do-roman-morph) "
+            "and perform translations."
         ),
     )
 
@@ -2872,11 +2872,11 @@ def main(argv: Optional[List[str]] = None):
 
     # 1) Obtener subs de partida
     if args.skip_asr:
-        print("[+] Omitiendo fase de transcripción de audio: se usará el texto ya presente en el .ass.")
+        print("[+] Skipping audio transcription phase: the text already present in the .ass will be used.")
         subs = pysubs2.load(ass_in, encoding="utf-8")
 
         if args.do_roman_morph:
-            print("[+] Añadiendo romaji/pinyin y nota contextual sobre el guion existente.")
+            print("[+] Adding romaji/pinyin and a context note on top of the existing script.")
             subs = add_roman_morph_to_subs(
                 subs,
                 lang,
@@ -2885,16 +2885,16 @@ def main(argv: Optional[List[str]] = None):
                 phase_timings=phase_timings,
             )
         else:
-            print("[+] --do-roman-morph NO está activado: se usará el guion tal cual para la traducción.")
+            print("[+] --do-roman-morph is NOT enabled: the script will be used as-is for translation.")
 
         # Guardamos un intermedio igualmente, para tener copia de trabajo
         asr_suffix = "_ja_asr" if lang == "ja" else "_zh_asr"
         asr_out = os.path.join(out_dir, f"{base_name}{asr_suffix}.ass")
         subs.save(asr_out, encoding="utf-8-sig")
-        print(f"[+] Archivo intermedio (sin ASR, solo romanización/nota contextual si procede): {asr_out}\n")
+        print(f"[+] Intermediate file (no ASR, only romanization/context note if applicable): {asr_out}\n")
 
     else:
-        print("[+] Ejecutando pipeline completo: ASR + puntuación + romaji/pinyin (si procede).")
+        print("[+] Running the full pipeline: ASR + punctuation + romaji/pinyin (if applicable).")
         subs = transcribe_ass(
             ass_in,
             video_in,
@@ -2910,7 +2910,7 @@ def main(argv: Optional[List[str]] = None):
         asr_suffix = "_ja_asr" if lang == "ja" else "_zh_asr"
         asr_out = os.path.join(out_dir, f"{base_name}{asr_suffix}.ass")
         subs.save(asr_out, encoding="utf-8-sig")
-        print(f"[+] Archivo intermedio (solo transcripción + puntuación + romanización/nota contextual): {asr_out}\n")
+        print(f"[+] Intermediate file (transcription + punctuation + romanization/context note only): {asr_out}\n")
 
     # 2) Traducir
     models = normalize_models_arg(args.models)
@@ -2933,7 +2933,7 @@ def main(argv: Optional[List[str]] = None):
             romanization_usage,
         )
         print(
-            f"[Costes] Romanizacion DeepSeek V4 Flash: prompt={romanization_usage.prompt_tokens} "
+            f"[Costs] DeepSeek V4 Flash romanization: prompt={romanization_usage.prompt_tokens} "
             f"completion={romanization_usage.completion_tokens} "
             f"total={romanization_usage.total_tokens} cost_usd=${romanization_usage.cost_usd:.4f}"
         )
@@ -2947,7 +2947,7 @@ def main(argv: Optional[List[str]] = None):
             context_note_usage,
         )
         print(
-            f"[Costes] Prompt Explicativo Claude Sonnet 4.6: prompt={context_note_usage.prompt_tokens} "
+            f"[Costs] Claude Sonnet 4.6 explanatory prompt: prompt={context_note_usage.prompt_tokens} "
             f"completion={context_note_usage.completion_tokens} "
             f"total={context_note_usage.total_tokens} cost_usd=${context_note_usage.cost_usd:.4f}"
         )

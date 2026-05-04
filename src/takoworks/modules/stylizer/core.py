@@ -107,7 +107,7 @@ def replace_styles_section(lines, console=None):
         line = lines[i]
         stripped = line.strip()
         if stripped.lower() == styles_header_lower:
-            log_console(console, "-> Encontrada sección [V4+ Styles]. Reemplazando estilos...")
+            log_console(console, "-> Found [V4+ Styles] section. Replacing styles...")
             # Insertar bloque completo
             new_lines.extend(styles_block_lines)
             styles_replaced = True
@@ -120,7 +120,7 @@ def replace_styles_section(lines, console=None):
         i += 1
 
     if not styles_replaced:
-        log_console(console, "-> No se encontró sección [V4+ Styles]. Insertando sección nueva al inicio de [Events]...")
+        log_console(console, "-> No [V4+ Styles] section found. Inserting a new section at the start of [Events]...")
         # Intentar insertar antes de [Events]
         inserted = False
         for idx, line in enumerate(new_lines):
@@ -129,7 +129,7 @@ def replace_styles_section(lines, console=None):
                 inserted = True
                 break
         if not inserted:
-            log_console(console, "-> Tampoco se encontró sección [Events]. Añadiendo sección de estilos al final del archivo.")
+            log_console(console, "-> No [Events] section found either. Appending the styles section to the end of the file.")
             new_lines.extend(["\n"] + styles_block_lines)
 
     return new_lines
@@ -178,7 +178,7 @@ def process_events(
             if style_idx is None or name_idx is None or text_idx is None:
                 log_console(
                     console,
-                    "ADVERTENCIA: No se encontraron columnas 'Style', 'Name' y/o 'Text' en la línea Format de [Events]."
+                    "WARNING: Could not find 'Style', 'Name' and/or 'Text' columns in the Format line of [Events]."
                 )
             new_lines.append(line)
             continue
@@ -238,26 +238,26 @@ def process_events(
             if remove_linebreaks and prefix.lower().startswith("dialogue") and text_idx is not None:
                 parts[text_idx] = _remove_linebreaks(parts[text_idx])
 
-            # 3) Limpiar carteles (DESPUÉS de transformar estilos)
+            # 3) Clean typesetting (after transforming styles)
             if clean_carteles and prefix.lower().startswith("dialogue"):
                 style_lower = style_val.lower()
                 name_lower = name_val.lower()
                 if ("cart" in style_lower) or ("cartel" in style_lower) or ("cart" in name_lower) or ("cartel" in name_lower):
-                    # Línea descartada
+                    # Discarded line
                     continue
 
-            # Reconstruir línea
+            # Rebuild line
             new_rest = ",".join(parts)
             new_line = f"{leading}{prefix}: {new_rest}{line_ending}"
             new_lines.append(new_line)
             continue
 
-        # Cualquier otra línea
+        # Any other line
         new_lines.append(line)
 
     # Informar estilos desconocidos
     if transform_styles and unknown_styles:
-        log_console(console, "Estilos encontrados que NO están en la lista del punto 5:")
+        log_console(console, "Styles found that are NOT in the point 5 list:")
         for st in sorted(unknown_styles):
             log_console(console, f"  - {st}")
 
@@ -284,7 +284,7 @@ def write_file(path, lines):
 class ASSGui(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Limpiador .ASS")
+        self.title("ASS Cleaner")
         self.geometry("800x600")
 
         self.input_path_var = tk.StringVar()
@@ -303,32 +303,32 @@ class ASSGui(tk.Tk):
         frame_top = tk.Frame(self)
         frame_top.pack(fill="x", padx=10, pady=10)
 
-        tk.Label(frame_top, text="Archivo .ASS (input):").grid(row=0, column=0, sticky="w")
+        tk.Label(frame_top, text="Input .ASS file:").grid(row=0, column=0, sticky="w")
         entry_input = tk.Entry(frame_top, textvariable=self.input_path_var, width=60)
         entry_input.grid(row=0, column=1, padx=5)
-        tk.Button(frame_top, text="Examinar...", command=self.browse_input).grid(row=0, column=2, padx=5)
+        tk.Button(frame_top, text="Browse...", command=self.browse_input).grid(row=0, column=2, padx=5)
 
-        tk.Label(frame_top, text="Carpeta de salida:").grid(row=1, column=0, sticky="w", pady=(5, 0))
+        tk.Label(frame_top, text="Output folder:").grid(row=1, column=0, sticky="w", pady=(5, 0))
         entry_output = tk.Entry(frame_top, textvariable=self.output_dir_var, width=60)
         entry_output.grid(row=1, column=1, padx=5, pady=(5, 0))
-        tk.Button(frame_top, text="Examinar...", command=self.browse_output).grid(row=1, column=2, padx=5, pady=(5, 0))
+        tk.Button(frame_top, text="Browse...", command=self.browse_output).grid(row=1, column=2, padx=5, pady=(5, 0))
 
         # Frame de opciones
-        frame_opts = tk.LabelFrame(self, text="Opciones")
+        frame_opts = tk.LabelFrame(self, text="Options")
         frame_opts.pack(fill="x", padx=10, pady=10)
 
-        tk.Checkbutton(frame_opts, text="Limpiar carteles", variable=self.var_clean_carteles).grid(row=0, column=0, sticky="w", padx=5, pady=2)
-        tk.Checkbutton(frame_opts, text="Limpiar comentarios", variable=self.var_clean_comments).grid(row=1, column=0, sticky="w", padx=5, pady=2)
-        tk.Checkbutton(frame_opts, text="Añadir estilos (reemplaza [V4+ Styles])", variable=self.var_add_styles).grid(row=0, column=1, sticky="w", padx=5, pady=2)
-        tk.Checkbutton(frame_opts, text="Transformar estilos (diálogos)", variable=self.var_transform_styles).grid(row=1, column=1, sticky="w", padx=5, pady=2)
-        tk.Checkbutton(frame_opts, text="Limpiar texto (vaciar columna Text)", variable=self.var_clean_text).grid(row=2, column=0, columnspan=2, sticky="w", padx=5, pady=2)
+        tk.Checkbutton(frame_opts, text="Clean typesetting", variable=self.var_clean_carteles).grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        tk.Checkbutton(frame_opts, text="Clean comments", variable=self.var_clean_comments).grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        tk.Checkbutton(frame_opts, text="Add styles (replace [V4+ Styles])", variable=self.var_add_styles).grid(row=0, column=1, sticky="w", padx=5, pady=2)
+        tk.Checkbutton(frame_opts, text="Transform styles (dialogues)", variable=self.var_transform_styles).grid(row=1, column=1, sticky="w", padx=5, pady=2)
+        tk.Checkbutton(frame_opts, text="Clean text (clear Text column)", variable=self.var_clean_text).grid(row=2, column=0, columnspan=2, sticky="w", padx=5, pady=2)
 
         # Botones de acción
         frame_actions = tk.Frame(self)
         frame_actions.pack(fill="x", padx=10, pady=(0, 10))
 
-        tk.Button(frame_actions, text="Procesar", command=self.process).pack(side="left")
-        tk.Button(frame_actions, text="Salir", command=self.destroy).pack(side="right")
+        tk.Button(frame_actions, text="Process", command=self.process).pack(side="left")
+        tk.Button(frame_actions, text="Exit", command=self.destroy).pack(side="right")
 
         # Consola
         frame_console = tk.LabelFrame(self, text="Console")
@@ -339,8 +339,8 @@ class ASSGui(tk.Tk):
 
     def browse_input(self):
         path = filedialog.askopenfilename(
-            title="Seleccionar archivo .ass",
-            filetypes=[("Archivos ASS", "*.ass"), ("Todos los archivos", "*.*")]
+            title="Select .ass file",
+            filetypes=[("ASS files", "*.ass"), ("All files", "*.*")]
         )
         if path:
             self.input_path_var.set(path)
@@ -349,7 +349,7 @@ class ASSGui(tk.Tk):
                 self.output_dir_var.set(os.path.dirname(path))
 
     def browse_output(self):
-        folder = filedialog.askdirectory(title="Seleccionar carpeta de salida")
+        folder = filedialog.askdirectory(title="Select output folder")
         if folder:
             self.output_dir_var.set(folder)
 
@@ -358,11 +358,11 @@ class ASSGui(tk.Tk):
         output_dir = self.output_dir_var.get().strip()
 
         if not input_path:
-            messagebox.showerror("Error", "Debe seleccionar un archivo .ASS de entrada.")
+            messagebox.showerror("Error", "Select an input .ASS file.")
             return
 
         if not os.path.isfile(input_path):
-            messagebox.showerror("Error", "El archivo de entrada no existe.")
+            messagebox.showerror("Error", "The input file does not exist.")
             return
 
         if not output_dir:
@@ -370,7 +370,7 @@ class ASSGui(tk.Tk):
             self.output_dir_var.set(output_dir)
 
         if not os.path.isdir(output_dir):
-            messagebox.showerror("Error", "La carpeta de salida no es válida.")
+            messagebox.showerror("Error", "The output folder is not valid.")
             return
 
         base_name = os.path.splitext(os.path.basename(input_path))[0]
@@ -381,12 +381,12 @@ class ASSGui(tk.Tk):
         self.console.delete("1.0", tk.END)
         self.console.configure(state="disabled")
 
-        log_console(self.console, f"Procesando: {input_path}")
-        log_console(self.console, f"Salida: {output_path}")
+        log_console(self.console, f"Processing: {input_path}")
+        log_console(self.console, f"Output: {output_path}")
 
         try:
             lines = read_file(input_path)
-            log_console(self.console, f"Líneas leídas: {len(lines)}")
+            log_console(self.console, f"Lines read: {len(lines)}")
 
             # Añadir estilos
             if self.var_add_styles.get():
@@ -403,13 +403,13 @@ class ASSGui(tk.Tk):
             )
 
             write_file(output_path, lines)
-            log_console(self.console, "Proceso completado.")
-            messagebox.showinfo("Listo", f"Archivo procesado y guardado como:\n{output_path}")
+            log_console(self.console, "Processing completed.")
+            messagebox.showinfo("Done", f"File processed and saved as:\n{output_path}")
         except Exception as e:
-            log_console(self.console, "ERROR durante el procesado:")
+            log_console(self.console, "ERROR during processing:")
             log_console(self.console, str(e))
             log_console(self.console, traceback.format_exc())
-            messagebox.showerror("Error", f"Ocurrió un error:\n{e}")
+            messagebox.showerror("Error", f"An error occurred:\n{e}")
 
 def main():
     app = ASSGui()
