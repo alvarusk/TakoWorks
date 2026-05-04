@@ -212,3 +212,4 @@
 [29/04/2026 21:11:18,69] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E3.0_KAASIM0003_351091_subtitle_edited_es-es.ass" --serve 
 [01/05/2026 15:20:36,10] "C:\Users\ajime\OneDrive\Documentos\PENDING\145 - TBATE S2\3 - Scripts esES\TheBeginningAft_S2E7_BGFSIM0019_350660_subtitle_edited_es-es.ass" --serve 
 [02/05/2026 15:11:31,07] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E4.0_KAASIM0004_351094_subtitle_edited_es-es.ass" --serve 
+[04/05/2026 18:59:30,88] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E3.0_KAASIM0003_351091_subtitle_edited_es-la.ass" --serve 

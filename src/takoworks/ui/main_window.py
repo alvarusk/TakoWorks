@@ -32,7 +32,7 @@ class MainWindow(ttk.Frame):
         # parent.after(50, lambda: self.paned.sashpos(0, int(parent.winfo_height() * 0.70)))
         
         self._restoring = True
-        parent.after(100, self._restore_splitter)
+        parent.after(300, self._restore_splitter)
 
         self.runner = TaskRunner(parent, self.console.write)
 
@@ -42,11 +42,19 @@ class MainWindow(ttk.Frame):
         self.notebook.select(self.notebook.tabs()[0])
 
     def _restore_splitter(self):
-        # Si hay valor guardado, úsalo; si no, dejamos más espacio para las pestañas.
+        if self.paned.winfo_height() < 200:
+            self.after(150, self._restore_splitter)
+            return
+
+        # En el arranque, dejamos la consola en ~1/3 de la ventana.
+        # Si el valor guardado es razonable, lo respetamos; si no, usamos el valor por defecto.
         self.winfo_toplevel().update_idletasks()
         saved = int(self.cfg.get("last", {}).get("splitter_pos", 0) or 0)
         h = max(300, self.winfo_toplevel().winfo_height(), self.winfo_toplevel().winfo_reqheight())
-        pos = saved if saved > 0 else int(h * 0.70)
+        default_pos = int(h * 0.67)
+        min_pos = int(h * 0.20)
+        max_pos = int(h * 0.85)
+        pos = saved if min_pos <= saved <= max_pos else default_pos
 
         try:
             self.paned.sashpos(0, pos)
