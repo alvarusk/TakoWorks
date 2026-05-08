@@ -11,6 +11,33 @@ from tkinter import ttk, filedialog, messagebox
 from ...config import save_config
 from .source_type import normalize_source_type
 
+SERIES_HISTORY_LIMIT = 25
+
+
+def _clean_series_history(values):
+    if not isinstance(values, list):
+        return []
+
+    history = []
+    seen = set()
+    for item in values:
+        text = str(item).strip()
+        if not text or text in seen:
+            continue
+        history.append(text)
+        seen.add(text)
+    return history
+
+
+def _prepend_series_history(values, series):
+    series = series.strip()
+    if not series:
+        return _clean_series_history(values)
+
+    history = [item for item in _clean_series_history(values) if item != series]
+    history.insert(0, series)
+    return history[:SERIES_HISTORY_LIMIT]
+
 
 class _LogWriter(io.TextIOBase):
     def __init__(self, log):
@@ -44,7 +71,9 @@ class TranscriberPanel(ttk.Frame):
         self.out_var = tk.StringVar(value=cfg["last"].get("out_dir", ""))
 
         self.lang_var = tk.StringVar(value="ja")
-        self.series_var = tk.StringVar(value="")
+        self.series_history = _clean_series_history(cfg.get("series_history", []))
+        initial_series = cfg["last"].get("series", "")
+        self.series_var = tk.StringVar(value=initial_series)
         self.source_var = tk.StringVar(value="None")
 
         self.v_skip_asr = tk.BooleanVar(value=True)
@@ -88,7 +117,8 @@ class TranscriberPanel(ttk.Frame):
         ttk.Label(rr, text="Source").pack(side="left", padx=(12, 0))
         ttk.Combobox(rr, textvariable=self.source_var, values=["Manga", "Manhwa", "Light novel", "None"], width=12, state="readonly").pack(side="left", padx=6)
         ttk.Label(rr, text="Series").pack(side="left", padx=(12, 0))
-        ttk.Entry(rr, textvariable=self.series_var).pack(side="left", fill="x", expand=True, padx=6)
+        self.series_combo = ttk.Combobox(rr, textvariable=self.series_var, values=self.series_history, width=40)
+        self.series_combo.pack(side="left", fill="x", expand=True, padx=6)
 
         opts = ttk.LabelFrame(frm, text="Options")
         opts.pack(fill="x", pady=8)
@@ -134,6 +164,12 @@ class TranscriberPanel(ttk.Frame):
         if p:
             self.out_var.set(p)
 
+    def _remember_series(self, series: str):
+        history = _prepend_series_history(self.cfg.get("series_history", []), series)
+        self.cfg["series_history"] = history
+        self.series_history = history
+        self.series_combo.configure(values=history)
+
     def _run(self):
         if self.runner.is_busy():
             return
@@ -158,6 +194,11 @@ class TranscriberPanel(ttk.Frame):
         if self.v_deepseek.get(): models.append("DeepSeek V4 Flash")
         models_str = ",".join(models)  # puede ser ""
 
+        series_name = self.series_var.get().strip()
+        self.cfg["last"]["series"] = series_name
+        if series_name:
+            self._remember_series(series_name)
+
         self.cfg["last"]["ass_in"] = ass_in
         self.cfg["last"]["video_in"] = video_in
         self.cfg["last"]["out_dir"] = out_dir
@@ -175,8 +216,8 @@ class TranscriberPanel(ttk.Frame):
             argv += ["--out-dir", out_dir]
             argv += ["--lang", self.lang_var.get()]
             argv += ["--source-type", normalize_source_type(self.source_var.get())]
-            if self.series_var.get().strip():
-                argv += ["--series", self.series_var.get().strip()]
+            if series_name:
+                argv += ["--series", series_name]
             if models_str != "":
                 argv += ["--models", models_str]
             else:

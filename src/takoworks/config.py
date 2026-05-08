@@ -72,8 +72,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "word_in": "",
         "pdf_in": "",
         "out_dir": "",
-        "splitter_pos":0,
-    }
+        "splitter_pos": 0,
+        "series": "",
+    },
+    "series_history": [],
 }
 
 
@@ -165,6 +167,19 @@ def load_config() -> Dict[str, Any]:
         cfg["supabase"].update(data["supabase"])
     if isinstance(local_data.get("supabase"), dict):
         cfg["supabase"].update(local_data["supabase"])
+
+    series_history = cfg.get("series_history", [])
+    if isinstance(series_history, list):
+        cleaned_history = []
+        seen = set()
+        for item in series_history:
+            text = str(item).strip()
+            if text and text not in seen:
+                cleaned_history.append(text)
+                seen.add(text)
+        cfg["series_history"] = cleaned_history
+    else:
+        cfg["series_history"] = []
 
     for k in _REL_KEYS:
         cfg[k] = _from_portable_path(cfg.get(k, ""))
