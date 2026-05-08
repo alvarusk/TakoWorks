@@ -1210,7 +1210,10 @@ def _normalize_romanization_output(text: str, lang: str) -> str:
         return ""
 
     if lang == "ja":
-        return re.sub(r"\s+", "", out)
+        # Preserve word boundaries for romaji output. We only collapse
+        # repeated whitespace so DeepSeek/local romanization keeps readable
+        # spacing between particles and words.
+        return re.sub(r"\s+", " ", out).strip()
 
     if lang == "zh":
         out = re.sub(r"\s+", " ", out)
@@ -1245,7 +1248,10 @@ def _build_romanization_system_prompt(lang: str) -> str:
         "- Deja las lineas vacias como cadenas vacias.\n"
         "- No apliques traduccion ni explicacion; solo romanizacion.\n"
         + (
-            "- En japones, devuelve romaji estilo Hepburn, preferentemente en minusculas y sin espacios innecesarios.\n"
+            "- En japones, devuelve romaji estilo Hepburn con palabras separadas por espacios simples, preferentemente en minusculas.\n"
+            "- Separa tambien las particulas y auxiliares como palabras independientes.\n"
+            "- Ejemplo: 俺たちのダンジョンが -> oretachi no danjon ga\n"
+            "- Ejemplo: 階層主を融合させやがったのか… -> kaisoushu wo yuugou saseyagatta no ka...\n"
             if lang == "ja"
             else "- En chino, devuelve pinyin con tonos en diacriticos y espacios entre silabas.\n"
         )
