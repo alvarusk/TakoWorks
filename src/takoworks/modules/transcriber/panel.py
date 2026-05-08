@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 from ...config import save_config
+from .source_type import normalize_source_type
 
 
 class _LogWriter(io.TextIOBase):
@@ -44,7 +45,7 @@ class TranscriberPanel(ttk.Frame):
 
         self.lang_var = tk.StringVar(value="ja")
         self.series_var = tk.StringVar(value="")
-        self.source_var = tk.StringVar(value="Nada")
+        self.source_var = tk.StringVar(value="None")
 
         self.v_skip_asr = tk.BooleanVar(value=True)
         self.v_do_roman = tk.BooleanVar(value=True)
@@ -85,7 +86,7 @@ class TranscriberPanel(ttk.Frame):
         ttk.Label(rr, text="Language").pack(side="left")
         ttk.Combobox(rr, textvariable=self.lang_var, values=["ja", "zh"], width=6, state="readonly").pack(side="left", padx=6)
         ttk.Label(rr, text="Source").pack(side="left", padx=(12, 0))
-        ttk.Combobox(rr, textvariable=self.source_var, values=["Manga", "Manhwa", "Novela ligera", "Nada"], width=12, state="readonly").pack(side="left", padx=6)
+        ttk.Combobox(rr, textvariable=self.source_var, values=["Manga", "Manhwa", "Light novel", "None"], width=12, state="readonly").pack(side="left", padx=6)
         ttk.Label(rr, text="Series").pack(side="left", padx=(12, 0))
         ttk.Entry(rr, textvariable=self.series_var).pack(side="left", fill="x", expand=True, padx=6)
 
@@ -173,7 +174,7 @@ class TranscriberPanel(ttk.Frame):
 
             argv += ["--out-dir", out_dir]
             argv += ["--lang", self.lang_var.get()]
-            argv += ["--source-type", self.source_var.get()]
+            argv += ["--source-type", normalize_source_type(self.source_var.get())]
             if self.series_var.get().strip():
                 argv += ["--series", self.series_var.get().strip()]
             if models_str != "":

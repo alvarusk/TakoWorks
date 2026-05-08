@@ -31,6 +31,7 @@ from .json_utils import (
     parse_json_romanizations_result,
     parse_json_translations_result,
 )
+from .source_type import describe_source_type, normalize_source_type
 
 try:
     import requests  # type: ignore
@@ -46,7 +47,17 @@ from fugashi import Tagger
 
 from openai import OpenAI          # OpenAI + DeepSeek (API compatible)
 import anthropic                   # Claude
-import google.generativeai as genai  # Gemini
+try:
+    from google import genai as google_genai  # Gemini SDK nuevo
+    from google.genai import types as google_genai_types
+    legacy_genai = None
+except Exception:  # pragma: no cover - fallback para entornos antiguos
+    google_genai = None
+    google_genai_types = None
+    try:
+        import google.generativeai as legacy_genai  # Gemini SDK antiguo
+    except Exception:  # pragma: no cover - fallback opcional
+        legacy_genai = None
 
 from typing import Callable, Optional, List
 
@@ -606,11 +617,17 @@ def log_time_cost_breakdown(
 ) -> None:
     print("[Tiempo/coste] Desglose final:")
 
+    asr_seconds = phase_timings.get("asr", 0.0)
+    punctuation_seconds = phase_timings.get("punctuation", 0.0)
+    embedding_seconds = phase_timings.get("embedding", 0.0)
     context_seconds = phase_timings.get("context_note", 0.0)
     roman_seconds = phase_timings.get("romanization", 0.0)
-    displayed_seconds = context_seconds + roman_seconds
+    displayed_seconds = asr_seconds + punctuation_seconds + embedding_seconds + context_seconds + roman_seconds
     displayed_cost = context_note_usage.cost_usd
 
+    print(f"ASR: {_format_elapsed(asr_seconds)}; {_format_cost(0.0)}")
+    print(f"Puntuación: {_format_elapsed(punctuation_seconds)}; {_format_cost(0.0)}")
+    print(f"Embedding ASS: {_format_elapsed(embedding_seconds)}; {_format_cost(0.0)}")
     print(f"Prompts explicativos: {_format_elapsed(context_seconds)}; {_format_cost(context_note_usage.cost_usd)}")
     print(f"Romanización: {_format_elapsed(roman_seconds)}; {_format_cost(0.0)}")
 
@@ -641,11 +658,17 @@ def log_time_cost_breakdown_v2(
 ) -> None:
     print("[Tiempo/coste] Desglose final:")
 
+    asr_seconds = phase_timings.get("asr", 0.0)
+    punctuation_seconds = phase_timings.get("punctuation", 0.0)
+    embedding_seconds = phase_timings.get("embedding", 0.0)
     context_seconds = phase_timings.get("context_note", 0.0)
     roman_seconds = phase_timings.get("romanization", 0.0)
-    displayed_seconds = context_seconds + roman_seconds
+    displayed_seconds = asr_seconds + punctuation_seconds + embedding_seconds + context_seconds + roman_seconds
     displayed_cost = context_note_usage.cost_usd + romanization_usage.cost_usd
 
+    print(f"ASR: {_format_elapsed(asr_seconds)}; {_format_cost(0.0)}")
+    print(f"Puntuación: {_format_elapsed(punctuation_seconds)}; {_format_cost(0.0)}")
+    print(f"Embedding ASS: {_format_elapsed(embedding_seconds)}; {_format_cost(0.0)}")
     print(f"Prompts explicativos: {_format_elapsed(context_seconds)}; {_format_cost(context_note_usage.cost_usd)}")
     print(f"Romanization: {_format_elapsed(roman_seconds)}; {_format_cost(romanization_usage.cost_usd)}")
 
@@ -1314,7 +1337,6 @@ def romanize_with_deepseek(
     total = len(src_lines)
     usage = ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL)
     skipped_reason: Optional[str] = None
-    use_response_format = True
 
     for start in range(0, total, CHUNK_SIZE):
         chunk = src_lines[start:start + CHUNK_SIZE]
@@ -1337,8 +1359,6 @@ def romanize_with_deepseek(
                         {"role": "user", "content": user_prompt},
                     ],
                 }
-                if use_response_format:
-                    request_kwargs["response_format"] = _build_romanization_response_format(len(chunk))
 
                 response = client.chat.completions.create(**request_kwargs)
                 content = (response.choices[0].message.content or "").strip()
@@ -1357,15 +1377,6 @@ def romanize_with_deepseek(
                     continue
                 break
             except Exception as e:
-                err_text = str(e)
-                if use_response_format and "response_format" in err_text.lower():
-                    use_response_format = False
-                    print(
-                        f"[DeepSeek romanization] The SDK/model rejected response_format for block "
-                        f"{start + 1}-{end_line}; se reintenta sin JSON schema."
-                    )
-                    if attempt < MODEL_BLOCK_ATTEMPTS:
-                        continue
                 if attempt < MODEL_BLOCK_ATTEMPTS:
                     wait_s = min(9, 2 * attempt)
                     print(
@@ -1486,6 +1497,7 @@ def transcribe_ass(
         total = len(events)
         print(f"[+] Prepared segments: {total}")
         print("[+] Loading transcription model (the first run may take a while).")
+        asr_started_at = time.time()
         asr = build_asr_pipeline(lang)
 
         print("[+] Transcribing lines.")
@@ -1509,9 +1521,12 @@ def transcribe_ass(
             raw_lines.append(txt)
             snippet = txt.replace("\n", " ")[:60]
             print(f"[Transcription] Line {i}/{total} -> {snippet}")
+        _record_phase_time(phase_timings, "asr", time.time() - asr_started_at)
 
         print("[+] Refining punctuation (free models, no GPT).")
+        punctuation_started_at = time.time()
         refined_lines = refine_punctuation_free(raw_lines, lang)
+        _record_phase_time(phase_timings, "punctuation", time.time() - punctuation_started_at)
 
         romanized_lines: List[str] = []
         context_notes: List[str] = []
@@ -1527,7 +1542,9 @@ def transcribe_ass(
             note_started_at = time.time()
             context_notes = build_contextual_notes(refined_lines, lang, usage_accumulator=context_note_usage)
             _record_phase_time(phase_timings, "context_note", time.time() - note_started_at)
+            print("[+] Embedding romaji/pinyin and contextual notes into the ASS.")
 
+        embedding_started_at = time.time()
         for i, (ev, text) in enumerate(zip(events, refined_lines), start=1):
             base_text = (text or "").strip()
             if not base_text:
@@ -1546,7 +1563,8 @@ def transcribe_ass(
 
             ev.text = "\\N".join(lines)
             snippet = base_text.replace("\n", " ")[:60]
-            print(f"[Romaji/Pinyin] Line {i}/{total} -> {snippet}")
+            print(f"[ASS] Line {i}/{total} -> {snippet}")
+        _record_phase_time(phase_timings, "embedding", time.time() - embedding_started_at)
 
     print("[+] Transcription completed.")
     return subs
@@ -1594,7 +1612,9 @@ def add_roman_morph_to_subs(
     note_started_at = time.time()
     context_notes = build_contextual_notes(base_texts, lang, usage_accumulator=context_note_usage)
     _record_phase_time(phase_timings, "context_note", time.time() - note_started_at)
+    print("[+] Embedding romaji/pinyin and contextual notes into the ASS.")
 
+    embedding_started_at = time.time()
     for i, ev in enumerate(events, start=1):
         original_lines, extra_lines = _split_event_original_and_extra(ev)
 
@@ -1620,7 +1640,8 @@ def add_roman_morph_to_subs(
         ev.text = "\\N".join(lines)
 
         snippet = base_text.replace("\n", " ")[:60]
-        print(f"[Romaji/Pinyin] Line {i}/{total} -> {snippet}")
+        print(f"[ASS] Line {i}/{total} -> {snippet}")
+    _record_phase_time(phase_timings, "embedding", time.time() - embedding_started_at)
 
     return subs
 
@@ -1663,20 +1684,10 @@ def ask_source_type() -> str:
         if choice == "2":
             return "Manhwa"
         if choice == "3":
-            return "Novela ligera"
+            return "Light novel"
         if choice == "4":
-            return "Nada"
+            return "None"
         print("Invalid input. Type 1, 2, 3, or 4.\n")
-
-
-def describe_source_type(source_type: str) -> str:
-    if source_type == "Manga":
-        return "The series is based on a manga. Prefer official manga terminology and translations when possible."
-    if source_type == "Manhwa":
-        return "The series is based on a manhwa. Prefer official manhwa terminology and translations when possible."
-    if source_type == "Novela ligera":
-        return "The series is based on a light novel. Prefer official light novel terminology and translations when possible."
-    return "No hay material original claramente definido o no es relevante; prioriza la coherencia interna de la serie."
 
 
 def build_system_prompt(lang: str, series_name: str, source_type: str) -> str:
@@ -1897,12 +1908,17 @@ def get_claude_client() -> anthropic.Anthropic:
 def get_gemini_model(lang: str, series_name: str, source_type: str):
     if not GEMINI_API_KEY:
         raise RuntimeError("Falta GEMINI_API_KEY. Define la variable de entorno.")
-    genai.configure(api_key=GEMINI_API_KEY)
     system_prompt = build_system_prompt(lang, series_name, source_type)
-    return genai.GenerativeModel(
-        model_name=GEMINI_MODEL,
-        system_instruction=system_prompt,
-    )
+    if google_genai is not None:
+        client = google_genai.Client(api_key=GEMINI_API_KEY)
+        return "google-genai", client, system_prompt
+    if legacy_genai is not None:
+        legacy_genai.configure(api_key=GEMINI_API_KEY)
+        return "google-generativeai", legacy_genai.GenerativeModel(
+            model_name=GEMINI_MODEL,
+            system_instruction=system_prompt,
+        ), system_prompt
+    raise RuntimeError("No Gemini SDK available. Install google-genai or google-generativeai.")
 
 
 # ============================================================
@@ -2307,7 +2323,7 @@ def translate_with_gemini(
     limitado para ir algo más rápido/estable.
     """
     try:
-        model = get_gemini_model(lang, series_name, source_type)
+        gemini_sdk, model, system_prompt = get_gemini_model(lang, series_name, source_type)
     except Exception as e:
         print(f"[Gemini 3 Flash] Gemini is skipped (client not initialized): {e}")
         return src_lines, ApiUsage(engine="gemini", model_name=GEMINI_MODEL), "client_error"
@@ -2329,13 +2345,24 @@ def translate_with_gemini(
         for attempt in range(1, MODEL_BLOCK_ATTEMPTS + 1):
             user_prompt = _build_retry_user_prompt(base_user_prompt, len(chunk), attempt)
             try:
-                response = model.generate_content(
-                    user_prompt,
-                    generation_config={
-                        "temperature": 0.1,
-                        "max_output_tokens": 2000,
-                    },
-                )
+                if gemini_sdk == "google-genai":
+                    response = model.models.generate_content(
+                        model=GEMINI_MODEL,
+                        contents=user_prompt,
+                        config=google_genai_types.GenerateContentConfig(
+                            system_instruction=system_prompt,
+                            temperature=0.1,
+                            max_output_tokens=2000,
+                        ),
+                    )
+                else:
+                    response = model.generate_content(
+                        user_prompt,
+                        generation_config={
+                            "temperature": 0.1,
+                            "max_output_tokens": 2000,
+                        },
+                    )
             except Exception as e:
                 if attempt < MODEL_BLOCK_ATTEMPTS:
                     wait_s = min(9, 2 * attempt)
@@ -2863,7 +2890,7 @@ def main(argv: Optional[List[str]] = None):
         series_name = ask_series_name()
 
     if args.source_type:
-        source_type = args.source_type
+        source_type = normalize_source_type(args.source_type)
     else:
         source_type = ask_source_type()
 
