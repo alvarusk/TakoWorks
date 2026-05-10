@@ -215,3 +215,8 @@
 [04/05/2026 18:59:30,88] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E3.0_KAASIM0003_351091_subtitle_edited_es-la.ass" --serve 
 [05/05/2026  6:12:15,74] "C:\Users\ajime\OneDrive\Documentos\PENDING\145 - TBATE S2\3 - Scripts esES\TheBeginningAft_S2E7_BGFSIM0019_350660_subtitle_edited_es-la.ass" --serve 
 [05/05/2026  7:53:35,12] "C:\Users\ajime\OneDrive\Documentos\PENDING\146 - Vending Machine S3\3 - Scripts esES\RebornAsAVendin_S3E7_RVMSIM0031_354772_subtitle_edited_es-es.ass" --serve 
+[09/05/2026 10:00:21,26] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E4.0_KAASIM0004_351094_subtitle_edited_es-la.ass" --serve 
+[09/05/2026 10:00:50,34] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E4.0_KAASIM0004_351094_subtitle_edited_es-la.ass" --serve 
+[09/05/2026 10:07:11,37] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E4.0_KAASIM0004_351094_subtitle_edited_es-la.ass" --serve 
+[09/05/2026 10:15:34,07] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E4.0_KAASIM0004_351094_subtitle_edited_es-la.ass" --serve 
+[10/05/2026  7:19:03,43] "C:\Users\ajime\OneDrive\Documentos\PENDING\145 - TBATE S2\3 - Scripts esES\TheBeginningAft_S2E8_BGFSIM0020_350663_subtitle_edited_es-es.ass" --serve 

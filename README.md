@@ -1,15 +1,15 @@
-# TakoWorks (v1.89.0)
+# TakoWorks (v1.90.0)
 
-Toolkit para transcribir, romanizar y traducir guiones/ASS de japonés y chino. Genera ASS por modelo, HTML resumen y registra costes (opcional Supabase).
+Toolkit for transcribing, romanizing, translating, and reviewing ASS subtitle files for Japanese and Chinese. Generates per-model ASS files, summary HTML, and optionally logs costs to Supabase.
 
-## Requisitos
+## Requirements
 - Python 3.x
-- FFmpeg en `PATH`
-- Opcional: `zhpr` + `transformers` para puntuación zh.
+- FFmpeg in `PATH`
+- Optional: `zhpr` + `transformers` for Chinese punctuation restoration
 
-## Configuración
-- Archivo principal: `config.json` (en la raíz del repo o junto al exe).
-- Secretos/no versionado: `%APPDATA%/TakoWorks/config.local.json` (Windows) o `~/.config/TakoWorks/config.local.json`:
+## Configuration
+- Main config file: `config.json` (in the repo root or next to the executable)
+- Secrets / non-versioned config: `%APPDATA%/TakoWorks/config.local.json` on Windows or `~/.config/TakoWorks/config.local.json`
 ```json
 {
   "api_keys": {
@@ -25,44 +25,44 @@ Toolkit para transcribir, romanizar y traducir guiones/ASS de japonés y chino. 
   }
 }
 ```
-- Variables de entorno (tienen prioridad): `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`/`SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_ANON_KEY`, `SUPABASE_COST_TABLE` (por defecto `voicex_api_costs`).
-- Rutas opcionales en `config.json`: `ffmpeg_dir`, `yomitoku_dir`, costes por 1K tokens en `cost_per_1k`.
+- Environment variables take priority: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `DEEPSEEK_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` / `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_ANON_KEY`, `SUPABASE_COST_TABLE` (default: `voicex_api_costs`)
+- Optional `config.json` paths: `ffmpeg_dir`, `yomitoku_dir`, and per-1K token costs in `cost_per_1k`
 
-## Versionado y releases
-- Versión fuente: `src/takoworks/__init__.py` (el encabezado de este README se actualiza con el bump).
-- Script de bump: `python bin/bump_version.py --mode auto|minor|patch` (auto: `minor` en main, `patch` en ramas).
-- Releases: publica tag/release en GitHub con la versión (ej. v1.7.1) para que Actions genere `TakoWorks_win64.zip`.
-- MS Store: usa versión semver sin sufijos; al empaquetar MSIX fija la versión del manifest (ej. 1.7.1.0) alineada con `__version__`.
+## Versioning and Releases
+- Source version: `src/takoworks/__init__.py` (the README header is updated when bumping)
+- Version bump script: `python bin/bump_version.py --mode auto|minor|patch` (`auto`: `minor` on main, `patch` on branches)
+- Releases: publish a GitHub tag/release with the version number, e.g. `v1.7.1`, so Actions can generate `TakoWorks_win64.zip`
+- MS Store: use a semver version without suffixes; when packaging MSIX, align the manifest version, e.g. `1.7.1.0`, with `__version__`
 
-## Uso rápido
-- Transcribir + traducir:
-```
+## Quick Start
+- Transcribe + translate:
+```bash
 python -m takoworks.modules.transcriber.core input.ass input.mp4 --lang ja|zh \
   --models gpt,claude,gemini,deepseek [--do-roman-morph] [--html]
 ```
-- Añadir solo romaji/pinyin via DeepSeek a un ASS existente:
-```
+- Add only romaji/pinyin via DeepSeek to an existing ASS file:
+```bash
 python -m takoworks.modules.transcriber.core input.ass --skip-asr --do-roman-morph
 ```
-- Flags útiles: `--out-dir`, `--base-name`, `--pad-ms`, `--source-type`, `--series`.
+- Useful transcriber flags: `--out-dir`, `--base-name`, `--pad-ms`, `--source-type`, `--series`
 
-## Salidas
-- ASS por modelo: línea original, `{romaji/pinyin}`, `{glosas}` y traducción (no oculta líneas de origen en traducciones).
-- HTML opcional con columnas: original, romaji/pinyin, glosas, GPT, Claude, Gemini, DeepSeek.
+## Outputs
+- Per-model ASS files: original line, `{romaji/pinyin}`, `{glosses}`, and translation
+- Optional HTML summary with columns for original, romaji/pinyin, glosses, GPT, Claude, Gemini, and DeepSeek
 
-## Modelos y manejo de errores
-- Modelos soportados: GPT-5.5 (OpenAI), Claude Opus 4.7, Gemini 3 Flash, DeepSeek V4 Flash. La romanización/pinyin usa DeepSeek V4 Flash. La nota contextual/Prompt Explicativo usa Claude Sonnet 4.6.
-- Si falta clave o falla la inicialización de un modelo, se omite y el pipeline sigue con los demás; se informa en consola y no se genera su archivo de salida.
-- Costes: se calculan si el SDK devuelve uso; si Supabase está configurado, se guardan los costes en la tabla indicada.
+## Models and Error Handling
+- Supported models: GPT-5.5 (OpenAI), Claude Opus 4.7, Gemini 3 Flash, and DeepSeek V4 Flash. Romaji/pinyin uses DeepSeek V4 Flash. Context notes use Claude Sonnet 4.6.
+- If a key is missing or a model fails to initialize, the pipeline skips it and continues with the rest. The user is informed in the console and no output file is generated for that model.
+- Costs are calculated when the SDK returns usage data. If Supabase is configured, costs are written to the configured table.
 
-## Supabase (costes)
-- Define `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` (o en `config.local.json`) para registrar costes.
-- Tabla por defecto: `voicex_api_costs` (configurable con `SUPABASE_COST_TABLE`).
+## Supabase Costs
+- Define `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` (or use `config.local.json`) to record costs
+- Default table: `voicex_api_costs` (configurable with `SUPABASE_COST_TABLE`)
 
 ## Tests
-- Requiere `pytest`. Ejecuta: `pytest -q`
-- Cobertura actual: helpers ASS y `parse_json_translations`.
+- Requires `pytest`. Run: `pytest -q`
+- Current coverage: ASS helpers and `parse_json_translations`
 
-## Notas
-- El formato de líneas con romanización/glosas usa llaves `{}` y sanitización para no romper ASS (helpers en `ass_utils.py`).
-- La puntuación libre en zh requiere `zhpr`; si falta, el pipeline continúa con texto original.
+## Notes
+- The line format for romanization/glosses uses braces `{}` and sanitization to avoid breaking ASS (helpers in `ass_utils.py`)
+- Free Chinese punctuation restoration requires `zhpr`; if it is missing, the pipeline continues with the original text
