@@ -220,3 +220,33 @@
 [09/05/2026 10:07:11,37] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E4.0_KAASIM0004_351094_subtitle_edited_es-la.ass" --serve 
 [09/05/2026 10:15:34,07] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E4.0_KAASIM0004_351094_subtitle_edited_es-la.ass" --serve 
 [10/05/2026  7:19:03,43] "C:\Users\ajime\OneDrive\Documentos\PENDING\145 - TBATE S2\3 - Scripts esES\TheBeginningAft_S2E8_BGFSIM0020_350663_subtitle_edited_es-es.ass" --serve 
+[11/05/2026  9:10:29,39] "C:\Users\ajime\OneDrive\Documentos\PENDING\146 - Vending Machine S3\3 - Scripts esES\RebornAsAVendin_S3E8_RVMSIM0032_354774_subtitle_edited_es-es.ass" --serve 
+[12/05/2026  7:01:20,79] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E5.0_KAASIM0005_351097_subtitle_edited_es-es.ass" --serve 
+[13/05/2026  6:36:34,56] "C:\Users\ajime\OneDrive\Documentos\PENDING\145 - TBATE S2\3 - Scripts esES\TheBeginningAft_S2E8_BGFSIM0020_350663_subtitle_edited_es-la.ass" --serve 
+[15/05/2026 21:30:29,32] "C:\Users\ajime\OneDrive\Documentos\PENDING\146 - Vending Machine S3\3 - Scripts esES\RebornAsAVendin_S3E9_RVMSIM0033_354776_subtitle_edited_es-es.ass" --serve 
+[16/05/2026 12:51:09,62] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E6.0_KAASIM0006_351100_subtitle_edited_es-us.ass" --serve 
+[16/05/2026 18:40:45,46] "C:\Users\ajime\OneDrive\Documentos\PENDING\146 - Vending Machine S3\3 - Scripts esES\RebornAsAVendin_S3E10_RVMSIM0034_354778_subtitle_edited_es-es.ass" --serve 
+[18/05/2026 14:41:19,78] "C:\Users\ajime\OneDrive\Documentos\PENDING\Misc\ShiboyugiPlayin_S1E12_PDGSIM0012_367399_subtitle_edited_es-la.ass" --serve 
+[18/05/2026 14:58:55,19] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E5.0_KAASIM0005_351097_subtitle_edited_es-la.ass" --serve 
+[18/05/2026 20:10:49,55] "C:\Users\ajime\OneDrive\Documentos\PENDING\149 - Versatile Mage\3 - Scripts esES\VersatileMage_S8E1_VSMSIM0073_376455_subtitle_edited_es-es.ass" --serve 
+[19/05/2026 11:26:38,33] "C:\Users\ajime\OneDrive\Documentos\PENDING\146 - Vending Machine S3\3 - Scripts esES\RebornAsAVendin_S3E8_RVMSIM0032_354774_subtitle_edited_es-la.ass" --serve 
+[22/05/2026  4:29:35,66] "C:\Users\ajime\OneDrive\Documentos\PENDING\145 - TBATE S2\3 - Scripts esES\TheBeginningAft_S2E9_BGFSIM0021_350666_subtitle_edited_es-es.ass" --serve 
+[24/05/2026 11:03:42,78] "C:\Users\ajime\OneDrive\Documentos\PENDING\146 - Vending Machine S3\3 - Scripts esES\RebornAsAVendin_S3E11_RVMSIM0035_354780_subtitle_edited_es-es.ass" --serve 
+[24/05/2026 11:36:18,38] "C:\Users\ajime\OneDrive\Documentos\PENDING\149 - Versatile Mage\3 - Scripts esES\VersatileMage_S8E2_VSMSIM0074_376456_subtitle_edited_es-es.ass" --serve 
+[24/05/2026 11:38:44,28] "C:\Users\ajime\OneDrive\Documentos\PENDING\149 - Versatile Mage\3 - Scripts esES\VersatileMage_S8E3_VSMSIM0075_376457_subtitle_edited_es-es.ass" --serve 
+[24/05/2026 11:39:20,75] "C:\Users\ajime\OneDrive\Documentos\PENDING\149 - Versatile Mage\3 - Scripts esES\VersatileMage_S8E3_VSMSIM0075_376457_subtitle_edited_es-es.ass" --serve 
+[24/05/2026 11:39:34,23] "C:\Users\ajime\OneDrive\Documentos\PENDING\149 - Versatile Mage\3 - Scripts esES\VersatileMage_S8E3_VSMSIM0075_376457_subtitle_edited_es-es.ass" --serve 
+[25/05/2026 14:37:09,94] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E6.0_KAASIM0006_351100_subtitle_edited_es-la.ass" --serve 
+[25/05/2026 17:58:05,30] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S1E1_SUKSIM0001_378537_subtitle_edited_es-es.ass" --serve 
+[25/05/2026 18:29:10,53] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S1E2_SUKSIM0002_378538_subtitle_edited_es-es.ass" --serve 
+[26/05/2026  9:50:20,50] "C:\Users\ajime\OneDrive\Documentos\PENDING\145 - TBATE S2\3 - Scripts esES\TheBeginningAft_S2E9_BGFSIM0021_350666_subtitle_edited_es-la.ass" --serve 
+[26/05/2026 19:07:14,99] "C:\Users\ajime\OneDrive\Documentos\PENDING\146 - Vending Machine S3\3 - Scripts esES\RebornAsAVendin_S3E9_RVMSIM0033_354776_subtitle_edited_es-la.ass" --serve 
+[26/05/2026 21:04:23,58] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S1E3_SUKSIM0003_378539_subtitle_edited_es-es.ass" --serve 
+[27/05/2026 15:04:46,05] "C:\Users\ajime\OneDrive\Documentos\PENDING\150 - Clevatess\3 - Scripts esES\Clevatess_S2.0E1.0_CLVSIM0013_377815_subtitle_edited_es-es.ass" --serve 
+[27/05/2026 16:57:50,09] "C:\Users\ajime\OneDrive\Documentos\PENDING\150 - Clevatess\3 - Scripts esES\Clevatess_S2.0E2.0_CLVSIM0014_377816_subtitle_edited_es-es.ass" --serve 
+[28/05/2026 10:31:29,44] "C:\Users\ajime\OneDrive\Documentos\PENDING\150 - Clevatess\3 - Scripts esES\Clevatess_S2.0E3.0_CLVSIM0015_377817_subtitle_edited_es-es.ass" --serve 
+[28/05/2026 18:33:25,90] "C:\Users\ajime\OneDrive\Documentos\PENDING\150 - Clevatess\3 - Scripts esES\Clevatess_S2.0E4.0_CLVSIM0016_377818_subtitle_edited_es-es.ass" --serve 
+[29/05/2026 11:05:56,15] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S1E4_SUKSIM0004_378540_subtitle_edited_es-es.ass" --serve 
+[29/05/2026 11:54:51,98] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S1E6_SUKSIM0006_378542_subtitle_edited_es-es.ass" --serve 
+[29/05/2026 11:56:07,26] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S1E5_SUKSIM0005_378541_subtitle_edited_es-es.ass" --serve 
+[29/05/2026 12:41:22,76] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S1E6_SUKSIM0006_378542_subtitle_edited_es-es.ass" --serve 

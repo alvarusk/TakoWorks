@@ -9,7 +9,7 @@ from .paths import app_root
 from . import __version__
 
 
-def run_app(cfg: dict) -> None:
+def run_app(cfg: dict, launch_opts: dict | None = None) -> None:
     root = tk.Tk()
 
     icon_path = Path(app_root()) / "assets" / "takoworks_big.ico"
@@ -27,5 +27,5 @@ def run_app(cfg: dict) -> None:
     except Exception:
         pass
 
-    MainWindow(root, cfg).pack(fill="both", expand=True)
+    MainWindow(root, cfg, launch_opts=launch_opts or {}).pack(fill="both", expand=True)
     root.mainloop()

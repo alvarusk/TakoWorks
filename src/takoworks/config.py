@@ -36,6 +36,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "anthropic": "",
         "gemini": "",
         "deepseek": "",
+        "deepl": "",
     },
 
     "stylizer_options": {
@@ -71,6 +72,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "video_in": "",
         "word_in": "",
         "pdf_in": "",
+        "translator_ass": "",
+        "translator_glossary": "",
         "out_dir": "",
         "splitter_pos": 0,
         "series": "",
@@ -198,4 +201,39 @@ def save_config(cfg: Dict[str, Any]) -> None:
     for k in _REL_KEYS:
         portable[k] = _to_portable_path(str(portable.get(k, "") or ""))
 
+    # La clave de DeepL vive solo en config.local.json
+    api_keys = portable.get("api_keys")
+    if isinstance(api_keys, dict):
+        api_keys.pop("deepl", None)
+
     p.write_text(json.dumps(portable, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def save_local_config(partial: Dict[str, Any]) -> None:
+    p = _user_local_config_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+
+    current: Dict[str, Any] = {}
+    try:
+        if p.exists():
+            current = json.loads(p.read_text(encoding="utf-8"))
+            if not isinstance(current, dict):
+                current = {}
+    except Exception:
+        current = {}
+
+    merged = json.loads(json.dumps(current))
+    for key, value in partial.items():
+        if key not in merged or not isinstance(value, dict) or not isinstance(merged.get(key), dict):
+            merged[key] = value
+            continue
+        merged[key].update(value)
+
+    # Nunca dejamos la clave de DeepL en el config portable.
+    api_keys = merged.get("api_keys")
+    if isinstance(api_keys, dict):
+        deepl = str(api_keys.get("deepl", "") or "").strip()
+        if not deepl:
+            api_keys.pop("deepl", None)
+
+    p.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")

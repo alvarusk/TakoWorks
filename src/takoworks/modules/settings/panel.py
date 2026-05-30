@@ -14,7 +14,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from ... import __version__, paths
-from ...config import save_config
+from ...config import save_config, save_local_config
 
 
 def _add_to_path(*dirs: str) -> None:
@@ -44,6 +44,7 @@ class SettingsPanel(ttk.Frame):
         self.cfg = cfg
 
         self.ffmpeg_var = tk.StringVar(value=cfg.get("ffmpeg_dir", ""))
+        self.deepl_var = tk.StringVar(value=cfg.get("api_keys", {}).get("deepl", ""))
 
         self._build()
 
@@ -54,6 +55,11 @@ class SettingsPanel(ttk.Frame):
         ttk.Label(frm, text="Paths (stored in config.json)").pack(anchor="w", pady=(0, 8))
 
         self._row(frm, "FFmpeg Folder (ffmpeg.exe)", self.ffmpeg_var, self._pick_dir)
+
+        ttk.Separator(frm).pack(fill="x", pady=10)
+
+        ttk.Label(frm, text="API Keys").pack(anchor="w", pady=(0, 8))
+        self._row(frm, "DeepL Auth Key", self.deepl_var, None, secret=True)
 
         btns = ttk.Frame(frm)
         btns.pack(fill="x", pady=10)
@@ -67,16 +73,19 @@ class SettingsPanel(ttk.Frame):
         ttk.Label(
             frm,
             text="- FFmpeg is added to subprocesses via PATH.\n"
+            "- DeepL API Free keys end in ':fx' and automatically use api-free.deepl.com.\n"
             "- The app also keeps its bundled tools on PATH when available.",
             justify="left",
         ).pack(anchor="w", pady=6)
 
-    def _row(self, parent, label, var, browse_cmd):
+    def _row(self, parent, label, var, browse_cmd, secret: bool = False):
         r = ttk.Frame(parent)
         r.pack(fill="x", pady=3)
         ttk.Label(r, text=label).pack(side="left")
-        ttk.Entry(r, textvariable=var).pack(side="left", fill="x", expand=True, padx=6)
-        ttk.Button(r, text="Browse", command=lambda: browse_cmd(var)).pack(side="left")
+        entry = ttk.Entry(r, textvariable=var, show="*" if secret else "")
+        entry.pack(side="left", fill="x", expand=True, padx=6)
+        if browse_cmd is not None:
+            ttk.Button(r, text="Browse", command=lambda: browse_cmd(var)).pack(side="left")
 
     def _pick_dir(self, var):
         p = filedialog.askdirectory()
@@ -88,8 +97,10 @@ class SettingsPanel(ttk.Frame):
 
     def _save_apply(self):
         self.cfg["ffmpeg_dir"] = self.ffmpeg_var.get().strip()
+        deepl_key = self.deepl_var.get().strip()
 
         save_config(self.cfg)
+        save_local_config({"api_keys": {"deepl": deepl_key}})
         self._apply_env()
         messagebox.showinfo("OK", "Settings saved and applied.")
 

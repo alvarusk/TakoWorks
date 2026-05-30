@@ -7,12 +7,14 @@ from .console_widget import ConsoleFrame
 
 from ..modules.settings.panel import SettingsPanel
 from ..modules.transcriber.panel import TranscriberPanel
+from ..modules.translator.panel import TranslatorPanel
 from ..modules.scanner.panel import ScannerPanel
 
 class MainWindow(ttk.Frame):
-    def __init__(self, parent, cfg: dict):
+    def __init__(self, parent, cfg: dict, launch_opts: dict | None = None):
         super().__init__(parent)
         self.cfg = cfg
+        self.launch_opts = launch_opts or {}
 
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
@@ -37,8 +39,39 @@ class MainWindow(ttk.Frame):
         self.runner = TaskRunner(parent, self.console.write)
 
         self.notebook.add(TranscriberPanel(self.notebook, self.runner, self.cfg), text="Transcriber")
+        self.notebook.add(
+            TranslatorPanel(self.notebook, self.runner, self.cfg, launch_opts=self.launch_opts),
+            text="Translator",
+        )
         self.notebook.add(ScannerPanel(self.notebook, self.runner, self.cfg), text="Scanner")
         self.notebook.add(SettingsPanel(self.notebook, self.runner, self.cfg), text="Settings")
+        self._select_initial_tab()
+
+    def _select_initial_tab(self):
+        target = str(self.launch_opts.get("tab", "") or "").strip().lower()
+        if not target:
+            self.notebook.select(self.notebook.tabs()[0])
+            return
+
+        mapping = {
+            "transcriber": "Transcriber",
+            "translator": "Translator",
+            "scanner": "Scanner",
+            "settings": "Settings",
+        }
+        wanted = mapping.get(target)
+        if not wanted:
+            self.notebook.select(self.notebook.tabs()[0])
+            return
+
+        for tab_id in self.notebook.tabs():
+            try:
+                if str(self.notebook.tab(tab_id, "text")) == wanted:
+                    self.notebook.select(tab_id)
+                    return
+            except Exception:
+                continue
+
         self.notebook.select(self.notebook.tabs()[0])
 
     def _restore_splitter(self):

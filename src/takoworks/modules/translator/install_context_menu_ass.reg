@@ -1,0 +1,31 @@
+Windows Registry Editor Version 5.00
+
+; =========================
+; TakoWorks -> Translator (.ass / .ssa)
+; Instala en: C:\TakoWorks\Translator\
+; Archivos: translator_context.py, run_translator_context.cmd
+; =========================
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ass\shell\TakoWorks]
+"MUIVerb"="TakoWorks"
+"SubCommands"=""
+"Icon"="C:\\TakoWorks\\assets\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ass\shell\TakoWorks\shell\Translator]
+"MUIVerb"="Translator"
+"Icon"="C:\\TakoWorks\\assets\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ass\shell\TakoWorks\shell\Translator\command]
+@="\"C:\\TakoWorks\\Translator\\run_translator_context.cmd\" \"%1\""
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ssa\shell\TakoWorks]
+"MUIVerb"="TakoWorks"
+"SubCommands"=""
+"Icon"="C:\\TakoWorks\\assets\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ssa\shell\TakoWorks\shell\Translator]
+"MUIVerb"="Translator"
+"Icon"="C:\\TakoWorks\\assets\\takoworks_big.ico"
+
+[HKEY_CURRENT_USER\Software\Classes\SystemFileAssociations\.ssa\shell\TakoWorks\shell\Translator\command]
+@="\"C:\\TakoWorks\\Translator\\run_translator_context.cmd\" \"%1\""
