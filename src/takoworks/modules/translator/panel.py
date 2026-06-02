@@ -34,7 +34,7 @@ class TranslatorPanel(ttk.Frame):
 
         r1 = ttk.Frame(frm)
         r1.pack(fill="x", pady=3)
-        ttk.Label(r1, text="Glossary CSV").pack(side="left")
+        ttk.Label(r1, text="Glossary CSV (optional)").pack(side="left")
         ttk.Entry(r1, textvariable=self.glossary_var).pack(side="left", fill="x", expand=True, padx=6)
         ttk.Button(r1, text="Browse", command=self._pick_glossary).pack(side="left")
 
@@ -45,7 +45,7 @@ class TranslatorPanel(ttk.Frame):
             text=(
                 "- Translates only Dialogue text.\n"
                 "- ASS tags and line breaks are preserved.\n"
-                "- DeepL glossary is created from the selected CSV, used for the run, and removed afterward."
+                "- If a glossary CSV is selected, DeepL creates a temporary glossary for the run and removes it afterward."
             ),
             justify="left",
         ).pack(anchor="w", padx=8, pady=6)
@@ -77,12 +77,12 @@ class TranslatorPanel(ttk.Frame):
         if not ass_path or not os.path.isfile(ass_path):
             messagebox.showerror("Error", "Select a valid ASS file.")
             return
-        if not glossary_path or not os.path.isfile(glossary_path):
+        if glossary_path and not os.path.isfile(glossary_path):
             messagebox.showerror("Error", "Select a valid glossary CSV file.")
             return
 
         ass_path = os.path.abspath(ass_path)
-        glossary_path = os.path.abspath(glossary_path)
+        glossary_path = os.path.abspath(glossary_path) if glossary_path else ""
         out_path = None
 
         self.cfg["last"]["translator_ass"] = ass_path
@@ -95,7 +95,7 @@ class TranslatorPanel(ttk.Frame):
             nonlocal out_path
             out_path = core._make_output_path(ass_path)
             log(f"ASS: {ass_path}")
-            log(f"Glossary: {glossary_path}")
+            log(f"Glossary: {glossary_path or '(none)'}")
             log(f"Output: {out_path}")
             core.translate_ass_file(
                 ass_path,

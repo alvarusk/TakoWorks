@@ -250,3 +250,10 @@
 [29/05/2026 11:54:51,98] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S1E6_SUKSIM0006_378542_subtitle_edited_es-es.ass" --serve 
 [29/05/2026 11:56:07,26] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S1E5_SUKSIM0005_378541_subtitle_edited_es-es.ass" --serve 
 [29/05/2026 12:41:22,76] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S1E6_SUKSIM0006_378542_subtitle_edited_es-es.ass" --serve 
+[31/05/2026 11:24:38,41] "C:\Users\ajime\OneDrive\Documentos\PENDING\151 - BLACK TORCH\3 - Scripts esES\BlackTorch_S1.0E1.0_BCKSIM0001_377921_subtitle_edited_es-es.ass" --serve 
+[01/06/2026  4:55:18,18] "C:\Users\ajime\OneDrive\Documentos\PENDING\151 - BLACK TORCH\2 - Scripts enUS\BlackTorch_S1.0E3.0_BCKSIM0003_377923_subtitle_edited_en-us.ass" --serve 
+[01/06/2026  4:55:53,36] "C:\Users\ajime\OneDrive\Documentos\PENDING\151 - BLACK TORCH\3 - Scripts esES\BlackTorch_S1.0E3.0_BCKSIM0003_377923_subtitle_edited_es-es.ass" --serve 
+[01/06/2026 13:23:43,91] "C:\Users\ajime\OneDrive\Documentos\PENDING\149 - Versatile Mage\3 - Scripts esES\VersatileMage_S8E4_VSMSIM0076_376458_subtitle_edited_es-es.ass" --serve 
+[01/06/2026 13:33:00,14] "C:\Users\ajime\OneDrive\Documentos\PENDING\146 - Vending Machine S3\3 - Scripts esES\RebornAsAVendin_S3E10_RVMSIM0034_354778_subtitle_edited_es-la.ass" --serve 
+[01/06/2026 17:55:47,50] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E7.0_KAASIM0007_351103_subtitle_edited_es-es.ass" --serve 
+[01/06/2026 19:09:48,34] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E7.0_KAASIM0007_351103_subtitle_edited_es-la.ass" --serve 

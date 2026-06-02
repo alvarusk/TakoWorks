@@ -57,6 +57,8 @@ HEADER_HINTS = {
     "target text",
 }
 
+GLOSSARY_DELIMITERS = (",", ";", "\t", "|")
+
 
 def _read_api_key() -> str:
     env = os.getenv("DEEPL_AUTH_KEY", "").strip() or os.getenv("DEEPL_API_KEY", "").strip()
@@ -105,27 +107,64 @@ def _looks_like_header(row: Sequence[str]) -> bool:
     return a in HEADER_HINTS and b in HEADER_HINTS
 
 
+def _candidate_glossary_delimiters(csv_text: str) -> List[str]:
+    first_non_empty = ""
+    for line in csv_text.splitlines():
+        if line.strip():
+            first_non_empty = line
+            break
+
+    order = list(GLOSSARY_DELIMITERS)
+    if ";" in first_non_empty and "," not in first_non_empty:
+        order = [";"] + [d for d in order if d != ";"]
+    elif "," in first_non_empty and ";" not in first_non_empty:
+        order = [","] + [d for d in order if d != ","]
+    else:
+        try:
+            sniffed = csv.Sniffer().sniff(csv_text, delimiters=",;\t|")
+            if sniffed.delimiter in order:
+                order = [sniffed.delimiter] + [d for d in order if d != sniffed.delimiter]
+        except csv.Error:
+            pass
+    return order
+
+
 def _load_glossary_csv(csv_path: str) -> Tuple[str, int]:
-    rows: List[Tuple[str, str]] = []
     with open(csv_path, "r", encoding="utf-8-sig", newline="") as fh:
-        reader = csv.reader(fh)
+        csv_text = fh.read()
+
+    rows: List[Tuple[str, str]] = []
+    last_error: Optional[ValueError] = None
+    for delimiter in _candidate_glossary_delimiters(csv_text):
+        candidate_rows: List[Tuple[str, str]] = []
+        bad_row: Optional[List[str]] = None
+        reader = csv.reader(io.StringIO(csv_text), delimiter=delimiter)
         for raw_row in reader:
             row = [cell.strip() for cell in raw_row]
             if not any(row):
                 continue
-            if not rows and _looks_like_header(row):
+            if not candidate_rows and _looks_like_header(row):
                 continue
             if len(row) < 2:
-                raise ValueError(
-                    f"Glossary CSV rows must have at least 2 columns. Bad row: {raw_row!r}"
-                )
+                bad_row = raw_row
+                break
             source = row[0].strip()
             target = row[1].strip()
             if not source or not target:
                 continue
-            rows.append((source, target))
+            candidate_rows.append((source, target))
+
+        if bad_row is None and candidate_rows:
+            rows = candidate_rows
+            break
+        if bad_row is not None:
+            last_error = ValueError(
+                f"Glossary CSV rows must have at least 2 columns. Bad row: {bad_row!r}"
+            )
 
     if not rows:
+        if last_error is not None:
+            raise last_error
         raise ValueError("Glossary CSV does not contain usable entries.")
 
     buf = io.StringIO()
@@ -310,7 +349,7 @@ class DeepLClient:
 
 def translate_ass_file(
     ass_path: str,
-    glossary_csv_path: str,
+    glossary_csv_path: Optional[str] = None,
     out_path: Optional[str] = None,
     *,
     auth_key: Optional[str] = None,
@@ -325,7 +364,7 @@ def translate_ass_file(
 
     src_lines, events = parse_ass(ass_path)
     dialogue_events = [ev for ev in events if str(ev.get("prefix", "")).lower() == "dialogue"]
-    glossary_id = ""
+    glossary_id: Optional[str] = None
     if not dialogue_events:
         out_path = out_path or _make_output_path(ass_path)
         with open(out_path, "w", encoding="utf-8-sig", errors="replace") as fh:
@@ -333,22 +372,29 @@ def translate_ass_file(
         log("[i] No Dialogue lines were found. The file was copied unchanged.")
         return out_path
 
-    glossary_entries_csv, entry_count = _load_glossary_csv(glossary_csv_path)
-    glossary_name = f"TakoWorks_{Path(glossary_csv_path).stem}_{uuid.uuid4().hex[:8]}"
-
     log(f"[i] DeepL endpoint: {client.base_url}")
-    log(f"[i] Glossary entries: {entry_count}")
+    if glossary_csv_path:
+        glossary_csv_path = glossary_csv_path.strip()
+    if glossary_csv_path:
+        if not os.path.isfile(glossary_csv_path):
+            raise FileNotFoundError(f"Glossary CSV file not found: {glossary_csv_path}")
+        glossary_entries_csv, entry_count = _load_glossary_csv(glossary_csv_path)
+        glossary_name = f"TakoWorks_{Path(glossary_csv_path).stem}_{uuid.uuid4().hex[:8]}"
+        log(f"[i] Glossary entries: {entry_count}")
 
-    glossary_id = client.create_glossary(
-        name=glossary_name,
-        entries_csv=glossary_entries_csv,
-        source_lang="en",
-        target_lang="es",
-    )
-    log(f"[i] Created DeepL glossary: {glossary_id}")
+        glossary_id = client.create_glossary(
+            name=glossary_name,
+            entries_csv=glossary_entries_csv,
+            source_lang="en",
+            target_lang="es",
+        )
+        log(f"[i] Created DeepL glossary: {glossary_id}")
+    else:
+        log("[i] No glossary selected; translating without a DeepL glossary.")
 
     try:
-        client.wait_glossary_ready(glossary_id)
+        if glossary_id:
+            client.wait_glossary_ready(glossary_id)
 
         run_id = uuid.uuid4().hex[:10]
         payloads: List[str] = []
@@ -417,14 +463,14 @@ def translate_ass_file(
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="TakoWorks Translator (ASS -> DeepL -> ASS)")
     ap.add_argument("--ass", required=True, help="Input ASS file")
-    ap.add_argument("--glossary", required=True, help="CSV glossary (English-Spanish)")
+    ap.add_argument("--glossary", default="", help="Optional CSV glossary (English-Spanish)")
     ap.add_argument("--out", default=None, help="Output ASS file")
     ap.add_argument("--api-key", default="", help="DeepL auth key (optional; can come from config/env)")
     args = ap.parse_args(argv)
 
     out_path = translate_ass_file(
         args.ass,
-        args.glossary,
+        args.glossary or None,
         args.out,
         auth_key=args.api_key.strip() or None,
     )

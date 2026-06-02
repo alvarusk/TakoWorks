@@ -14,7 +14,7 @@ def main(argv=None):
         "--glossary",
         dest="glossary_path",
         default="",
-        help="Glossary CSV to prefill in Translator.",
+        help="Optional glossary CSV to prefill in Translator.",
     )
     args = ap.parse_args(argv)
 
