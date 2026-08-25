@@ -257,3 +257,195 @@
 [01/06/2026 13:33:00,14] "C:\Users\ajime\OneDrive\Documentos\PENDING\146 - Vending Machine S3\3 - Scripts esES\RebornAsAVendin_S3E10_RVMSIM0034_354778_subtitle_edited_es-la.ass" --serve 
 [01/06/2026 17:55:47,50] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E7.0_KAASIM0007_351103_subtitle_edited_es-es.ass" --serve 
 [01/06/2026 19:09:48,34] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E7.0_KAASIM0007_351103_subtitle_edited_es-la.ass" --serve 
+[02/06/2026 18:14:49,88] "C:\Users\ajime\OneDrive\Documentos\PENDING\145 - TBATE S2\3 - Scripts esES\TheBeginningAft_S2E10_BGFSIM0022_350669_subtitle_edited_es-es.ass" --serve 
+[02/06/2026 19:55:42,22] "C:\Users\ajime\OneDrive\Documentos\PENDING\145 - TBATE S2\3 - Scripts esES\TheBeginningAft_S2E10_BGFSIM0022_350669_subtitle_edited_es-la.ass" --serve 
+[03/06/2026 11:48:07,39] "C:\Users\ajime\OneDrive\Documentos\PENDING\152 - Exiled Heavy Knight\3 - Scripts esES\TheExiledHeavyK_S1.0E1_XHKSIM0001_378046_subtitle_edited_es-es.ass" --serve 
+[05/06/2026  6:06:09,84] "C:\Users\ajime\OneDrive\Documentos\PENDING\151 - BLACK TORCH\3 - Scripts esES\BlackTorch_S1.0E5.0_BCKSIM0005_377925_subtitle_edited_es-es.ass" --serve 
+[05/06/2026  8:02:42,65] "C:\Users\ajime\OneDrive\Documentos\PENDING\150 - Clevatess\3 - Scripts esES\Clevatess_S2.0E5.0_CLVSIM0017_377819_subtitle_edited_es-es.ass" --serve 
+[08/06/2026  6:12:14,72] "C:\Users\ajime\OneDrive\Documentos\PENDING\149 - Versatile Mage\3 - Scripts esES\VersatileMage_S8E5_VSMSIM0077_376459_subtitle_edited_es-es.ass" --serve 
+[08/06/2026  7:21:09,80] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E8.0_KAASIM0008_351106_subtitle_edited_es-es.ass" --serve 
+[08/06/2026 13:41:36,67] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\Hanaori-san Still Wants to Fight in the Next Life 02.temp._edited_es-es.ass" --serve 
+[08/06/2026 19:22:02,69] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E8.0_KAASIM0008_351106_subtitle_edited_es-la.ass" --serve 
+[09/06/2026 18:04:45,24] "C:\Users\ajime\OneDrive\Documentos\PENDING\145 - TBATE S2\3 - Scripts esES\TheBeginningAft_S2E11_BGFSIM0023_350672_subtitle_edited_es-es.ass" --serve 
+[10/06/2026  6:55:16,17] "C:\Users\ajime\OneDrive\Documentos\PENDING\152 - Exiled Heavy Knight\3 - Scripts esES\TheExiledHeavyK_S1.0E2_XHKSIM0002_378047_subtitle_edited_es-es.ass" --serve 
+[11/06/2026  6:37:30,77] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\Hanaori-san Still Wants to Fight in the Next Life 03.temp_edited_es-es.ass" --serve 
+[14/06/2026 12:55:34,33] "C:\Users\ajime\OneDrive\Documentos\PENDING\150 - Clevatess\3 - Scripts esES\Clevatess_S2.0E6.0_CLVSIM0018_377820_subtitle_edited_es-es.ass" --serve 
+[14/06/2026 13:37:24,67] "C:\Users\ajime\OneDrive\Documentos\PENDING\151 - BLACK TORCH\3 - Scripts esES\BlackTorch_S1.0E6.0_BCKSIM0006_377926_subtitle_edited_es-es.ass" --serve 
+[14/06/2026 15:00:55,69] "C:\Users\ajime\OneDrive\Documentos\PENDING\145 - TBATE S2\3 - Scripts esES\ep12\TheBeginningAft_S2E12_BGFSIM0024_350675_subtitle_edited_es-es.ass" --serve 
+[14/06/2026 18:11:44,14] "C:\Users\ajime\OneDrive\Documentos\PENDING\152 - Exiled Heavy Knight\3 - Scripts esES\TheExiledHeavyK_S1.0E3_XHKSIM0003_378048_subtitle_edited_es-es.ass" --serve 
+[15/06/2026 13:53:12,33] "C:\Users\ajime\OneDrive\Documentos\PENDING\149 - Versatile Mage\3 - Scripts esES\VersatileMage_S8E6_VSMSIM0078_376460_subtitle_edited_es-es.ass" --serve 
+[16/06/2026  6:34:01,72] "C:\Users\ajime\OneDrive\Documentos\PENDING\145 - TBATE S2\3 - Scripts esES\TheBeginningAft_S2E12_BGFSIM0024_350675_subtitle_edited_es-la.ass" --serve 
+[16/06/2026 13:18:57,82] "C:\Users\ajime\OneDrive\Documentos\PENDING\155 - Jaadugar\3 - Scripts esES\Jaadugar_S01_E0001-E0002_Screener_subtitle_edited_es-es.ass" --serve 
+[16/06/2026 13:49:55,17] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E9_KAASIM0009_351109_subtitle_edited_es-es.ass" --serve 
+[16/06/2026 13:57:23,68] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E9_KAASIM0009_351109_subtitle_edited_es-la.ass" --serve 
+[18/06/2026  9:59:13,33] "C:\Users\ajime\OneDrive\Documentos\PENDING\148 - Lord of Mysteries Specials\2 - Scripts esES\LordOfMysteries_S4.0E1.0_LRDSIMS9019_378392_subtitle_edited_es-es.ass" --serve 
+[20/06/2026  7:06:10,12] "C:\Users\ajime\OneDrive\Documentos\PENDING\150 - Clevatess\3 - Scripts esES\Clevatess_S2.0E7.0_CLVSIM0019_377821_subtitle_edited_es-es.ass" --serve 
+[21/06/2026  7:11:27,49] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\Hanaori-san Still Wants to Fight in the Next Life 04.temp_edited_es-es.ass" --serve 
+[22/06/2026  4:33:23,82] "C:\Users\ajime\OneDrive\Documentos\PENDING\149 - Versatile Mage\3 - Scripts esES\VersatileMage_S8E7_VSMSIM0079_376461_subtitle_edited_es-es.ass" --serve 
+[22/06/2026  7:47:19,41] "C:\Users\ajime\OneDrive\Documentos\PENDING\150 - Clevatess\3 - Scripts esES\Clevatess_S2.0E8.0_CLVSIM0020_377822_subtitle_edited_es-es.ass" --serve 
+[22/06/2026 18:11:56,29] "C:\Users\ajime\OneDrive\Documentos\PENDING\146 - Vending Machine S3\3 - Scripts esES\RebornAsAVendin_S3E12_RVMSIM0036_354782_subtitle_edited_es-es.ass" --serve 
+[23/06/2026  8:27:59,01] "C:\Users\ajime\OneDrive\Documentos\PENDING\152 - Exiled Heavy Knight\3 - Scripts esES\TheExiledHeavyK_S1.0E4_XHKSIM0004_378049_subtitle_edited_es-es.ass" --serve 
+[23/06/2026 15:22:48,66] "C:\Users\ajime\OneDrive\Documentos\PENDING\146 - Vending Machine S3\3 - Scripts esES\RebornAsAVendin_S3E12_RVMSIM0036_354782_subtitle_edited_es-la.ass" --serve 
+[24/06/2026 11:09:31,31] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E10.0_KAASIM0010_351112_subtitle_edited_es-es.ass" --serve 
+[24/06/2026 11:12:17,35] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E10.0_KAASIM0010_351112_subtitle_edited_es-la.ass" --serve 
+[24/06/2026 14:09:03,90] "C:\Users\ajime\OneDrive\Documentos\PENDING\148 - Lord of Mysteries Specials\2 - Scripts esES\LordOfMysteries_S4.0E2_LRDSIMS9020_378393_subtitle_edited_es-es.ass" --serve 
+[25/06/2026 10:20:26,48] "C:\Users\ajime\OneDrive\Documentos\PENDING\148 - Lord of Mysteries Specials\2 - Scripts esES\LordOfMysteries_S4.0E3_LRDSIMS9021_378394_subtitle_edited_es-es.ass" --serve 
+[25/06/2026 21:10:32,46] "C:\Users\ajime\OneDrive\Documentos\PENDING\151 - BLACK TORCH\3 - Scripts esES\BlackTorch_S1.0E8.0_BCKSIM0008_377928_subtitle_edited_es-es.ass" --serve 
+[26/06/2026  5:27:17,33] "C:\Users\ajime\OneDrive\Documentos\PENDING\149 - Versatile Mage\3 - Scripts esES\VersatileMage_S8E8_VSMSIM0080_376462_subtitle_edited_es-es.ass" --serve 
+[27/06/2026  0:02:14,08] "C:\Users\ajime\OneDrive\Documentos\PENDING\150 - Clevatess\3 - Scripts esES\Clevatess_S2.0E9.0_CLVSIM0021_377823_subtitle_edited_es-es.ass" --serve 
+[28/06/2026  6:13:20,16] "C:\Users\ajime\OneDrive\Documentos\PENDING\151 - BLACK TORCH\3 - Scripts esES\BlackTorch_S1.0E9.0_BCKSIM0009_377929_subtitle_edited_es-es.ass" --serve 
+[29/06/2026 12:13:15,76] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\Hanaori-san Still Wants to Fight in the Next Life 05.temp_edited_es-es.ass" --serve 
+[29/06/2026 12:38:46,02] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E11.0_KAASIM0011_351115_subtitle_edited_es-es.ass" --serve 
+[29/06/2026 17:28:45,97] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\Hanaori-sanStillWantstoFightintheNextLife_S01_E0005_subtitle_edited_es-la.ass" --serve 
+[29/06/2026 17:57:18,58] "C:\Users\ajime\OneDrive\Documentos\PENDING\152 - Exiled Heavy Knight\3 - Scripts esES\TheExiledHeavyK_S1.0E5_XHKSIM0005_378050_subtitle_edited_es-es.ass" --serve 
+[29/06/2026 18:16:22,47] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardian_S1E11_KAASIM0011_351115_subtitle_edited_es-la.ass" --serve 
+[30/06/2026  9:50:10,23] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S2.0E1.0_YBVSIM0013_376609_subtitle_edited_es-es.ass" --serve 
+[30/06/2026 10:18:23,12] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S2.0E2.0_YBVSIM0014_376610_subtitle_edited_es-es.ass" --serve 
+[30/06/2026 15:58:51,23] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimiForYouI_S2.0E1.0_YBVSIM0013_376609_subtitle_edited_es-la.ass" --serve 
+[30/06/2026 21:52:54,40] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimiForYouI_S2.0E2.0_YBVSIM0014_376610_subtitle_edited_es-la.ass" --serve 
+[01/07/2026 14:36:15,14] "C:\Users\ajime\OneDrive\Documentos\PENDING\149 - Versatile Mage\3 - Scripts esES\VersatileMage_S8E9_VSMSIM0081_376463_subtitle_edited_es-es.ass" --serve 
+[02/07/2026 15:22:38,53] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1E1.0_WSRSIM0001_378228_subtitle_edited_es-es.ass" --serve 
+[03/07/2026 12:41:01,25] "C:\Users\ajime\OneDrive\Documentos\PENDING\144 - Star Blazers\3 - Scripts esLA\StarBlazers_S4E19_STBSIM0071_328668_subtitle_edited_es-la.ass" --serve 
+[05/07/2026 18:43:02,08] "C:\Users\ajime\OneDrive\Documentos\PENDING\151 - BLACK TORCH\3 - Scripts esES\BlackTorch_S1.0E10.0_BCKSIM0010_377930_subtitle_edited_es-es.ass" --serve 
+[05/07/2026 19:09:27,88] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E1_PGTSIM0001_378659_subtitle_edited_es-es.ass" --serve 
+[05/07/2026 19:28:06,77] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E1_PGTSIM0001_378659_subtitle_edited_es-la.ass" --serve 
+[06/07/2026  7:00:04,31] "C:\Users\ajime\OneDrive\Documentos\PENDING\151 - BLACK TORCH\3 - Scripts esES\BlackTorch_S1.0E10.0_BCKSIM0010_377930_subtitle_edited_es-es.ass" --serve 
+[06/07/2026  8:27:23,32] "C:\Users\ajime\OneDrive\Documentos\PENDING\150 - Clevatess\3 - Scripts esES\Clevatess_S2.0E10.0_CLVSIM0022_377824_subtitle_edited_es-es.ass" --serve 
+[06/07/2026 11:01:28,94] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\Hanaori-san Still Wants to Fight in the Next Life 06.temp_edited_es-es.ass" --serve 
+[06/07/2026 11:34:25,89] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\Hanaori-sanStillWantstoFightintheNextLife_S01_E0006_subtitle_edited_es-la.ass" --serve 
+[07/07/2026 10:12:18,64] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E1.0_TDSSIM0013_380192_subtitle_edited_es-es.ass" --serve 
+[07/07/2026 11:47:37,35] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E1.0_TDSSIM0013_380192_subtitle_edited_es-la.ass" --serve 
+[07/07/2026 12:44:16,34] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\HanaKimiForYouI_S2E3_YBVSIM0015_376611_subtitle_edited_es-es.ass" --serve 
+[07/07/2026 13:26:54,34] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\HanaKimiForYouI_S2E3_YBVSIM0015_376611_subtitle_edited_es-la.ass" --serve 
+[10/07/2026 12:24:11,50] "C:\Users\ajime\OneDrive\Documentos\PENDING\155 - Jaadugar\3 - Scripts esES\ep3\JaadugarAWitchI_S1E3_JWMSIM0003_380362_subtitle_translated_es-es.ass" --serve 
+[11/07/2026  7:24:28,44] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1E2.0_WSRSIM0002_378229_subtitle_edited_es-es.ass" --serve 
+[11/07/2026 15:49:25,51] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\2 - Scripts esES\LetsGoKaikigumi_S1.0E2.0_LKGSIM0002_379363_subtitle_edited_es-la.ass" --serve 
+[11/07/2026 16:15:20,53] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\2 - Scripts esES\LetsGoKaikigumi_S1.0E2.0_LKGSIM0002_379363_subtitle_edited_es-es.ass" --serve 
+[11/07/2026 23:22:17,96] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E2_PGTSIM0002_378660_subtitle_edited_es-es.ass" --serve 
+[12/07/2026  8:15:30,24] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\HanaorisanStill_S1.0E7_HWFSIM0007_378210_subtitle_edited_es-es.ass" --serve 
+[12/07/2026 18:37:38,44] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E2_PGTSIM0002_378660_subtitle_edited_es-la.ass" --serve 
+[13/07/2026  5:46:20,48] "C:\Users\ajime\OneDrive\Documentos\PENDING\149 - Versatile Mage\3 - Scripts esES\VersatileMage_S8E10_VSMSIM0082_376464_subtitle_edited_es-es.ass" --serve 
+[13/07/2026  7:54:50,11] "C:\Users\ajime\OneDrive\Documentos\PENDING\150 - Clevatess\3 - Scripts esES\Clevatess_S2.0E11.0_CLVSIM0023_377825_subtitle_edited_es-es.ass" --serve 
+[13/07/2026  8:30:12,14] "C:\Users\ajime\OneDrive\Documentos\PENDING\150 - Clevatess\3 - Scripts esES\Clevatess_S2.0E11.0_CLVSIM0023_377825_subtitle_edited_es-es.ass" --serve 
+[13/07/2026 11:58:51,06] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\HanaorisanStill_S1.0E7_HWFSIM0007_378210_subtitle_edited_es-la.ass" --serve 
+[13/07/2026 18:36:09,21] "C:\Users\ajime\OneDrive\Documentos\PENDING\151 - BLACK TORCH\3 - Scripts esES\BlackTorch_S1.0E11.0_BCKSIM0011_377931_subtitle_edited_es-es.ass" --serve 
+[14/07/2026 10:16:48,99] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E2.0_TDSSIM0014_380193_subtitle_edited_es-es.ass" --serve 
+[14/07/2026 10:57:50,58] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S2.0E4.0_YBVSIM0016_376612_subtitle_edited_es-es.ass" --serve 
+[14/07/2026 12:48:46,41] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S2.0E4.0_YBVSIM0016_376612_subtitle_edited_es-la.ass" --serve 
+[14/07/2026 18:10:42,24] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E2.0_TDSSIM0014_380193_subtitle_edited_es-la.ass" --serve 
+[16/07/2026 11:00:15,86] "C:\Users\ajime\OneDrive\Documentos\PENDING\155 - Jaadugar\3 - Scripts esES\JaadugarAWitchI_S1E4_JWMSIM0004_380363_subtitle_translated_es-es.ass" --serve 
+[16/07/2026 12:13:08,00] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\2 - Scripts esES\LetsGoKaikigumi_S1.0E3.0_LKGSIM0003_379364_subtitle_edited_es-es.ass" --serve 
+[16/07/2026 14:45:26,15] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1E3.0_WSRSIM0003_378230_subtitle_edited_es-es.ass" --serve 
+[16/07/2026 22:05:20,63] "C:\Users\ajime\OneDrive\Documentos\PENDING\149 - Versatile Mage\3 - Scripts esES\VersatileMage_S8E11_VSMSIM0083_376465_subtitle_edited_es-es.ass" --serve 
+[17/07/2026  8:36:26,03] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\HanaorisanStill_S1.0E8_HWFSIM0008_378211_subtitle_edited_es-es.ass" --serve 
+[17/07/2026 17:08:06,28] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1E3.0_WSRSIM0003_378230_subtitle_edited_es-la.ass" --serve 
+[18/07/2026 18:10:20,23] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\2 - Scripts esES\LetsGoKaikigumi_S1.0E3.0_LKGSIM0003_379364_subtitle_edited_es-la.ass" --serve 
+[19/07/2026  7:28:14,78] "C:\Users\ajime\OneDrive\Documentos\PENDING\151 - BLACK TORCH\3 - Scripts esES\BlackTorch_S1.0E12.0_BCKSIM0012_377932_subtitle_edited_es-es.ass" --serve 
+[19/07/2026  7:52:28,78] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimiForYouI_S2.0E5.0_YBVSIM0017_376613_subtitle_edited_es-la.ass" --serve 
+[19/07/2026 15:06:55,13] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E3_PGTSIM0003_378661_subtitle_edited_es-es.ass" --serve 
+[19/07/2026 18:32:31,40] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E3_PGTSIM0003_378661_subtitle_edited_es-la.ass" --serve 
+[20/07/2026  7:10:50,46] "C:\Users\ajime\OneDrive\Documentos\PENDING\150 - Clevatess\3 - Scripts esES\Clevatess_S2.0E12.0_CLVSIM0024_377826_subtitle_edited_es-es.ass" --serve 
+[20/07/2026 12:08:01,70] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\HanaorisanStill_S1.0E8_HWFSIM0008_378211_subtitle_edited_es-la.ass" --serve 
+[21/07/2026  7:51:43,92] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S2.0E5.0_YBVSIM0017_376613__subtitle_edited_es-es.ass" --serve 
+[21/07/2026 13:11:13,23] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E3.0_TDSSIM0015_380194_subtitle_edited_es-la.ass" --serve 
+[21/07/2026 13:49:22,68] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E3.0_TDSSIM0015_380194_subtitle_edited_es-es.ass" --serve 
+[22/07/2026  8:25:42,07] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E12.0_KAASIM0012_351118_subtitle_edited_es-es.ass" --serve 
+[22/07/2026  8:29:19,84] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E12.0_KAASIM0012_351118_subtitle_edited_es-la.ass" --serve 
+[24/07/2026 10:51:15,10] "C:\Users\ajime\OneDrive\Documentos\PENDING\155 - Jaadugar\3 - Scripts esES\JaadugarAWitchI_S1E5_JWMSIM0005_380364_subtitle_translated_es-es.ass" --serve 
+[24/07/2026 12:00:35,65] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1E4.0_WSRSIM0004_378231_subtitle_edited_es-la.ass" --serve 
+[24/07/2026 12:02:00,31] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1E4.0_WSRSIM0004_378231_subtitle_edited_es-es.ass" --serve 
+[24/07/2026 12:02:27,98] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1E4.0_WSRSIM0004_378231_subtitle_edited_es-es.ass" --serve 
+[24/07/2026 13:18:17,12] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\HanaorisanStill_S001_E0009_FP_subtitle_edited_es-la.ass" --serve 
+[24/07/2026 13:21:00,65] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\HanaorisanStill_S001_E0009_FP_subtitle_edited_es-es.ass" --serve 
+[25/07/2026  5:01:50,61] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\2 - Scripts esES\LetsGoKaikigumi_S1.0E4.0_LKGSIM0004_379365_subtitle_edited_es-es.ass" --serve 
+[25/07/2026  6:40:01,73] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimiForYouI_S2E6_YBVSIM0018_376614_subtitle_edited_es-la_temp.ass" --serve 
+[25/07/2026  7:04:25,08] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimiForYouI_S2E7_YBVSIM0019_376615_subtitle_edited_es-la_temp.ass" --serve 
+[25/07/2026  7:43:26,44] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimiForYouI_S2E8_YBVSIM0020_376616_subtitle_edited_es-la_temp.ass" --serve 
+[25/07/2026  8:46:28,32] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimiForYouI_S2E9_YBVSIM0021_376617_subtitle_edited_es-la_temp.ass" --serve 
+[25/07/2026  9:05:50,39] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimiForYouI_S2E10_YBVSIM0022_376618_subtitle_edited_es-la_temp.ass" --serve 
+[25/07/2026 15:53:24,39] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\2 - Scripts esES\LetsGoKaikigumi_S1.0E4.0_LKGSIM0004_379365_subtitle_edited_es-la.ass" --serve 
+[25/07/2026 16:13:17,63] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimiForYouI_S2E11_YBVSIM0023_376619_subtitle_edited_es-la_temp.ass" --serve 
+[25/07/2026 16:43:39,48] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\3 - Scripts esLA\HanaKimiForYouI_S2E12_YBVSIM0024_376620_subtitle_edited_es-la_temp.ass" --serve 
+[26/07/2026  8:15:16,48] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E4_PGTSIM0004_378662_subtitle_edited_es-es.ass" --serve 
+[26/07/2026  8:42:00,38] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E13.0_KAASIM0013_351121_subtitle_edited_es-es.ass" --serve 
+[26/07/2026  8:44:50,88] "C:\Users\ajime\OneDrive\Documentos\PENDING\147 - Karna The Guardian\3 - Scripts esES\KarnaTheGuardia_S1.0E13.0_KAASIM0013_351121_subtitle_edited_es-la.ass" --serve 
+[26/07/2026 16:30:09,70] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E4_PGTSIM0004_378662_subtitle_edited_es-la.ass" --serve 
+[27/07/2026  8:47:51,84] "C:\Users\ajime\OneDrive\Documentos\PENDING\149 - Versatile Mage\3 - Scripts esES\VersatileMage_S8E12_VSMSIM0084_376466_subtitle_edited_es-es.ass" --serve 
+[27/07/2026 11:02:31,63] "C:\Users\ajime\OneDrive\Documentos\PENDING\150 - Clevatess\3 - Scripts esES\Clevatess_S2.0E13.0_CLVSIM0025_377828_subtitle_edited_es-es.ass" --serve 
+[28/07/2026  0:21:13,53] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E4.0_TDSSIM0016_380195_subtitle_edited_es-es.ass" --serve 
+[28/07/2026  0:23:18,59] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E4.0_TDSSIM0016_380195_subtitle_edited_es-la.ass" --serve 
+[28/07/2026 12:50:28,00] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S2.0E6.0_YBVSIM0018_376614_subtitle_edited_es-es.ass" --serve 
+[29/07/2026  7:49:54,82] "C:\Users\ajime\OneDrive\Documentos\PENDING\152 - Exiled Heavy Knight\3 - Scripts esES\TheExiledHeavyK_S1.0E6_XHKSIM0006_378051_subtitle_edited_es-es.ass" --serve 
+[29/07/2026  8:30:07,78] "C:\Users\ajime\OneDrive\Documentos\9 - CPSL\2 - Proyectos\2026-07-28_V¡deos\SRT ES\FA-11522586-1_Remibrutinib_REMIX author videos W52_2026.srt" --serve 
+[30/07/2026  8:29:26,52] "C:\Users\ajime\OneDrive\Documentos\PENDING\155 - Jaadugar\3 - Scripts esES\JaadugarAWitchI_S1E6_JWMSIM0006_380365_subtitle_translated_es-es.ass" --serve 
+[30/07/2026 16:59:55,67] "C:\Users\ajime\OneDrive\Documentos\PENDING\152 - Exiled Heavy Knight\3 - Scripts esES\TheExiledHeavyK_S1.0E7_XHKSIM0007_378052_subtitle_edited_es-es.ass" --serve 
+[31/07/2026 15:18:22,65] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\2 - Scripts esES\LetsGoKaikigumi_S1.0E5.0_LKGSIM0005_379366_subtitle_edited_es-es.ass" --serve 
+[01/08/2026  7:55:52,67] "C:\Users\ajime\OneDrive\Documentos\PENDING\152 - Exiled Heavy Knight\3 - Scripts esES\TheExiledHeavyK_S1.0E8_XHKSIM0008_378053_subtitle_edited_es-es.ass" --serve 
+[01/08/2026 13:36:34,47] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1.0E5_WSRSIM0005_378232_subtitle_edited_es-es.ass" --serve 
+[01/08/2026 15:12:46,66] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\2 - Scripts esES\LetsGoKaikigumi_S1.0E5.0_LKGSIM0005_379366_subtitle_edited_es-la.ass" --serve 
+[01/08/2026 15:25:17,52] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1.0E5_WSRSIM0005_378232_subtitle_edited_es-la.ass" --serve 
+[02/08/2026 11:32:03,84] "C:\Users\ajime\OneDrive\Documentos\PENDING\152 - Exiled Heavy Knight\3 - Scripts esES\TheExiledHeavyK_S1.0E9_XHKSIM0009_378054_subtitle_edited_es-es.ass" --serve 
+[02/08/2026 16:53:52,08] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E5_PGTSIM0005_378663_subtitle_edited_es-es.ass" --serve 
+[02/08/2026 17:27:13,44] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\HanaorisanStill_S001_E0010_FP_subtitle_edited_es-es.ass" --serve 
+[02/08/2026 17:47:12,18] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E5_PGTSIM0005_378663_subtitle_edited_es-la.ass" --serve 
+[04/08/2026 10:49:14,39] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E5.0_TDSSIM0017_380196_subtitle_edited_es-la.ass" --serve 
+[04/08/2026 10:56:49,26] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E5.0_TDSSIM0017_380196_subtitle_edited_es-es.ass" --serve 
+[04/08/2026 11:13:09,19] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S2.0E7.0_YBVSIM0019_376615_subtitle_edited_es-es.ass" --serve 
+[06/08/2026  8:26:46,89] "C:\Users\ajime\OneDrive\Documentos\PENDING\155 - Jaadugar\3 - Scripts esES\JaadugarAWitchI_S1E7_JWMSIM0007_380366_subtitle_translated_es-es.ass" --serve 
+[07/08/2026 13:11:06,50] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1E6.0_WSRSIM0006_378233_subtitle_edited_es-la.ass" --serve 
+[08/08/2026  7:03:47,56] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1E6.0_WSRSIM0006_378233_subtitle_edited_es-es.ass" --serve 
+[08/08/2026  7:37:50,93] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\2 - Scripts esES\LetsGoKaikigumi_S1.0E6.0_LKGSIM0006_379367_subtitle_edited_es-es.ass" --serve 
+[08/08/2026 17:57:25,94] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\2 - Scripts esES\LetsGoKaikigumi_S1.0E6.0_LKGSIM0006_379367_subtitle_edited_es-la.ass" --serve 
+[09/08/2026 13:50:33,99] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E6_PGTSIM0006_378664_subtitle_edited_es-es.ass" --serve 
+[09/08/2026 14:44:18,60] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\HanaorisanStill_S1E11_HWFSIM0011_378214_subtitle_edited_es-es.ass" --serve 
+[09/08/2026 16:17:02,55] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E6_PGTSIM0006_378664_subtitle_edited_es-la.ass" --serve 
+[10/08/2026 19:33:39,05] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\HanaorisanStill_S1E11_HWFSIM0011_378214_subtitle_edited_es-la.ass" --serve 
+[11/08/2026  8:02:11,68] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E6.0_TDSSIM0018_380197_subtitle_edited_es-es.ass" --serve 
+[11/08/2026  8:28:09,78] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S2.0E8.0_YBVSIM0020_376616_subtitle_edited_es-es.ass" --serve 
+[11/08/2026 10:28:46,51] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E6.0_TDSSIM0018_380197_subtitle_edited_es-la.ass" --serve 
+[12/08/2026 12:09:33,98] "C:\Users\ajime\OneDrive\Documentos\PENDING\160 - LINK CLICK S5\3 - Scripts esES\LinkClick_S5.0E1.0_LNKSIM0030_380298_subtitle_edited_es-es.ass" --serve 
+[12/08/2026 13:34:16,48] "C:\Users\ajime\OneDrive\Documentos\PENDING\160 - LINK CLICK S5\3 - Scripts esES\LinkClick_S5.0E2.0_LNKSIM0031_380299_subtitle_edited_es-es.ass" --serve 
+[12/08/2026 13:46:39,93] "C:\Users\ajime\OneDrive\Documentos\PENDING\160 - LINK CLICK S5\3 - Scripts esES\LinkClick_S5.0E2.0_LNKSIM0031_380299_subtitle_edited_es-es.ass" --serve 
+[12/08/2026 17:41:43,90] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\HanaorisanStill_S1E12_HWFSIM0012_378215_subtitle_edited_es-es.ass" --serve 
+[13/08/2026 15:39:22,68] "C:\Users\ajime\OneDrive\Documentos\PENDING\155 - Jaadugar\3 - Scripts esES\JaadugarAWitchI_S1E8_JWMSIM0008_380367_subtitle_translated_es-es.ass" --serve 
+[14/08/2026  7:26:08,99] "C:\Users\ajime\OneDrive\Documentos\PENDING\152 - Exiled Heavy Knight\3 - Scripts esES\TheExiledHeavyK_S1.0E10_XHKSIM0010_378055_subtitle_edited_es-es.ass" --serve 
+[14/08/2026  9:13:14,51] "C:\Users\ajime\OneDrive\Documentos\PENDING\152 - Exiled Heavy Knight\3 - Scripts esES\TheExiledHeavyK_S1.0E11_XHKSIM0011_378056_subtitle_edited_es-es.ass" --serve 
+[14/08/2026 16:44:07,89] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\2 - Scripts esES\LetsGoKaikigumi_S1.0E7.0_LKGSIM0007_379368_subtitle_edited_es-es.ass" --serve 
+[15/08/2026 17:07:09,72] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\2 - Scripts esES\LetsGoKaikigumi_S1.0E7.0_LKGSIM0007_379368_subtitle_edited_es-la.ass" --serve 
+[15/08/2026 17:27:36,88] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1E7.0_WSRSIM0007_378234_subtitle_edited_es-es.ass" --serve 
+[16/08/2026 17:27:44,77] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E7_PGTSIM0007_378665_subtitle_edited_es-la.ass" --serve 
+[16/08/2026 17:30:29,79] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E7_PGTSIM0007_378665_subtitle_edited_es-es.ass" --serve 
+[16/08/2026 17:30:59,63] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E7_PGTSIM0007_378665_subtitle_edited_es-es.ass" --serve 
+[17/08/2026 16:28:44,93] "C:\Users\ajime\OneDrive\Documentos\PENDING\154 - Hanaori-san\3 - Scripts esES\HanaorisanStill_S1E12_HWFSIM0012_378215_subtitle_edited_es-la.ass" --serve 
+[18/08/2026  8:28:17,58] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E7.0_TDSSIM0019_380198_subtitle_edited_es-es.ass" --serve 
+[18/08/2026  8:53:48,39] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E7.0_TDSSIM0019_380198_subtitle_edited_es-la.ass" --serve 
+[18/08/2026 10:35:29,89] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - Super Cube\2 - Scripts esLA\SuperCube_S1E1_UPUSIM0001_380068_subtitle_edited_es-la.ass" --serve 
+[18/08/2026 10:39:00,35] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - Super Cube\2 - Scripts esLA\SuperCube_S1E2_UPUSIM0002_380069_subtitle_edited_es-la.ass" --serve 
+[18/08/2026 10:40:36,68] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - Super Cube\2 - Scripts esLA\SuperCube_S1E3_UPUSIM0003_380070_subtitle_edited_es-la.ass" --serve 
+[18/08/2026 10:44:59,95] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - Super Cube\2 - Scripts esLA\SuperCube_S1E4_UPUSIM0004_380071_subtitle_edited_es-la.ass" --serve 
+[18/08/2026 18:53:18,03] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S2E7_SUKSIM0007_378543_subtitle_edited_es-es.ass" --serve 
+[18/08/2026 19:11:36,20] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S2E7_SUKSIM0007_378543_subtitle_edited_es-la.ass" --serve 
+[18/08/2026 19:49:42,67] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S2.0E9.0_YBVSIM0021_376617_subtitle_edited_es-es.ass" --serve 
+[19/08/2026  9:55:17,45] "C:\Users\ajime\OneDrive\Documentos\PENDING\160 - LINK CLICK S5\3 - Scripts esES\LinkClick_S5.0E3.0_LNKSIM0032_380300_subtitle_edited_es-es.ass" --serve 
+[19/08/2026 11:45:55,23] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - Super Cube\2 - Scripts esLA\SuperCube_S1E5_UPUSIM0005_380072_subtitle_edited_es-la.ass" --serve 
+[19/08/2026 11:47:34,15] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - Super Cube\2 - Scripts esLA\SuperCube_S1E6_UPUSIM0006_380073_subtitle_edited_es-la.ass" --serve 
+[19/08/2026 11:52:19,19] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - Super Cube\2 - Scripts esLA\SuperCube_S1E7_UPUSIM0007_380074_subtitle_edited_es-la.ass" --serve 
+[19/08/2026 11:54:30,03] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - Super Cube\2 - Scripts esLA\SuperCube_S1E8_UPUSIM0008_380075_subtitle_edited_es-la.ass" --serve 
+[19/08/2026 11:57:56,20] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - Super Cube\2 - Scripts esLA\SuperCube_S1E9_UPUSIM0009_380076_subtitle_edited_es-la.ass" --serve 
+[19/08/2026 12:01:04,22] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - Super Cube\2 - Scripts esLA\SuperCube_S1E10_UPUSIM0010_380077_subtitle_edited_es-la.ass" --serve 
+[19/08/2026 13:54:23,30] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - Super Cube\2 - Scripts esLA\SuperCube_S1E11_UPUSIM0011_380078_subtitle_edited_es-la.ass" --serve 
+[19/08/2026 13:58:55,80] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - Super Cube\2 - Scripts esLA\SuperCube_S1E12_UPUSIM0012_380079_subtitle_edited_es-la.ass" --serve 
+[20/08/2026 10:40:56,08] "C:\Users\ajime\OneDrive\Documentos\PENDING\155 - Jaadugar\3 - Scripts esES\JaadugarAWitchI_S1E9_JWMSIM0009_380368_subtitle_trad_es-es.ass" --serve 
+[20/08/2026 17:57:46,88] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1E8.0_WSRSIM0008_378235_subtitle_edited_es-la.ass" --serve 
+[21/08/2026  9:27:21,65] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S2E8_SUKSIM0008_378544_subtitle_edited_es-es.ass" --serve 
+[21/08/2026  9:45:08,17] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S2E9_SUKSIM0009_378545_subtitle_edited_es-es.ass" --serve 
+[22/08/2026  8:59:02,74] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1E8.0_WSRSIM0008_378235_subtitle_edited_es-es.ass" --serve 
+[22/08/2026 16:48:55,61] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\LetsGoKaikigumi_S1E8_LKGSIM0008_379369_subtitle_edited_es-es.ass" --serve 
+[22/08/2026 17:01:53,37] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\LetsGoKaikigumi_S1E8_LKGSIM0008_379369_subtitle_edited_es-la.ass" --serve 
+[23/08/2026 11:42:46,22] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E8_PGTSIM0008_378666_subtitle_edited_es-es.ass" --serve 
+[23/08/2026 16:11:29,88] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E8_PGTSIM0008_378666_subtitle_edited_es-la.ass" --serve 
+[24/08/2026 14:53:42,31] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S2E10_YBVSIM0022_376618_subtitle_edited_es-es.ass" --serve 
+[25/08/2026  5:47:34,95] "C:\Users\ajime\OneDrive\Documentos\PENDING\160 - LINK CLICK S5\3 - Scripts esES\LinkClick_S5.0E4.0_LNKSIM0033_380301_subtitle_edited_es-es.ass" --serve 
+[25/08/2026  5:48:17,83] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E8.0_TDSSIM0020_380199_subtitle_edited_es-es.ass" --serve 
+[25/08/2026  5:52:09,52] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E8.0_TDSSIM0020_380199_subtitle_edited_es-la.ass" --serve 
+[25/08/2026  6:04:37,61] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S2E8_SUKSIM0008_378544_subtitle_edited_es-la.ass" --serve 
