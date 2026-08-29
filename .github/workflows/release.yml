@@ -625,7 +625,42 @@ jobs:
             --clientId $env:MSSTORE_CLIENT_ID `
             --clientSecret $env:MSSTORE_CLIENT_SECRET
 
-          msstore publish "$msixPath" -id $env:MSSTORE_PRODUCT_ID
+          # Azure Blob uploads can fail transiently or leave a pending draft
+          # after a partial upload. Clean it up and retry the full publish.
+          $published = $false
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            if ($attempt -gt 1) {
+              Write-Host "Cleaning pending submission before retry $attempt..."
+              $deleteOutput = & msstore submission delete $env:MSSTORE_PRODUCT_ID --no-confirm 2>&1
+              $deleteExitCode = $LASTEXITCODE
+              if ($deleteOutput) { $deleteOutput | ForEach-Object { Write-Host $_ } }
+              if ($deleteExitCode -ne 0) {
+                $deleteText = $deleteOutput -join "`n"
+                if ($deleteText -notmatch "No pending submission found") {
+                  throw "Could not clean pending submission before retry $attempt (exit $deleteExitCode)."
+                }
+              }
+              Start-Sleep -Seconds 20
+            }
+
+            Write-Host "Publishing MSIX (attempt $attempt/3)..."
+            $publishOutput = & msstore publish "$msixPath" -id $env:MSSTORE_PRODUCT_ID --verbose 2>&1
+            $publishExitCode = $LASTEXITCODE
+            if ($publishOutput) { $publishOutput | ForEach-Object { Write-Host $_ } }
+            if ($publishExitCode -eq 0) {
+              $published = $true
+              break
+            }
+
+            if ($attempt -lt 3) {
+              Write-Warning "MSIX publication attempt $attempt failed (exit $publishExitCode). Retrying after 30 seconds."
+              Start-Sleep -Seconds 30
+            }
+          }
+
+          if (-not $published) {
+            throw "MSIX publication failed after 3 attempts. Review the verbose output above."
+          }
 
       - name: Attach artifact to release
         if: github.event_name == 'release' && github.event.action == 'published'

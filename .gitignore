@@ -236,3 +236,9 @@ bin/ffmpeg/
 *.pyd
 *.pyz
 *.pkg
+
+# Generated Microsoft Store packages (created by CI/local packaging)
+*.msix
+*.msixbundle
+*.appx
+*.appxbundle
