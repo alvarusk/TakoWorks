@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-# TakoWorks (v1.95.0)
-=======
 # TakoWorks (v1.96.0)
->>>>>>> d044844 (feat(release): Implement retry logic for MSIX publication and update version to 1.94.1)
 
 Toolkit for transcribing, romanizing, translating, and reviewing ASS subtitle files for Japanese and Chinese. Generates per-model ASS files, summary HTML, and optionally logs costs to Supabase.
 
