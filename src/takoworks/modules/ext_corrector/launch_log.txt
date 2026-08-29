@@ -449,3 +449,9 @@
 [25/08/2026  5:48:17,83] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E8.0_TDSSIM0020_380199_subtitle_edited_es-es.ass" --serve 
 [25/08/2026  5:52:09,52] "C:\Users\ajime\OneDrive\Documentos\PENDING\156 - Dating Sim S2\3 - Scripts esES\TrappedInADatin_S2.0E8.0_TDSSIM0020_380199_subtitle_edited_es-la.ass" --serve 
 [25/08/2026  6:04:37,61] "C:\Users\ajime\OneDrive\Documentos\PENDING\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S2E8_SUKSIM0008_378544_subtitle_edited_es-la.ass" --serve 
+[27/08/2026 13:05:48,08] "C:\Users\ajime\OneDrive\Documentos\PENDING\155 - Jaadugar\3 - Scripts esES\JaadugarAWitchI_S1E10_JWMSIM0010_380369_subtitle_trad_es-es.ass" --serve 
+[28/08/2026  8:54:32,47] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1E9.0_WSRSIM0009_378236_subtitle_edited_es-la.ass" --serve 
+[29/08/2026  1:49:52,21] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\2 - Scripts esES\LetsGoKaikigumi_S1E9_LKGSIM0009_379370_subtitle_edited_es-es.ass" --serve 
+[29/08/2026  1:53:13,28] "C:\Users\ajime\OneDrive\Documentos\PENDING\157 - Insipid Prince\3 - Scripts esES\TheInsipidPrinc_S1E9_PGTSIM0009_378667_subtitle_edited_es-es.ass" --serve 
+[29/08/2026  2:17:24,73] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1E9.0_WSRSIM0009_378236_subtitle_edited_es-es.ass" --serve 
+[29/08/2026 11:56:58,75] "C:\Users\ajime\OneDrive\Documentos\PENDING\159 - Let's Go Kaiki-gumi\2 - Scripts esES\LetsGoKaikigumi_S1E9_LKGSIM0009_379370_subtitle_edited_es-la.ass" --serve 

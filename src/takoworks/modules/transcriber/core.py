@@ -22,7 +22,9 @@ from .ass_utils import (
 from .context_notes import (
     build_contextual_explanation_prompt,
     build_contextual_explanation_repair_prompt,
+    contains_forbidden_chinese_script,
     contains_japanese_script,
+    ensure_chinese_pinyin,
     parse_contextual_explanation_response,
 )
 from .json_utils import (
@@ -1811,7 +1813,12 @@ def analyze_contextual_note_with_claude(
     else:
         _warn_missing_usage("context_note")
     note = parse_contextual_explanation_response(content)
-    if contains_japanese_script(note):
+    has_forbidden_script = (
+        contains_japanese_script(note)
+        if lang == "ja"
+        else contains_forbidden_chinese_script(note)
+    )
+    if has_forbidden_script:
         repair_prompt = build_contextual_explanation_repair_prompt(lang, lines, index, note)
         repair_message = client.messages.create(
             model=CONTEXT_NOTE_MODEL,
@@ -1844,7 +1851,12 @@ def analyze_contextual_note_with_claude(
             _warn_missing_usage("context_note")
 
         repaired_note = parse_contextual_explanation_response(repair_content)
-        if contains_japanese_script(repaired_note):
+        repaired_has_forbidden_script = (
+            contains_japanese_script(repaired_note)
+            if lang == "ja"
+            else contains_forbidden_chinese_script(repaired_note)
+        )
+        if repaired_has_forbidden_script:
             if lang == "ja":
                 repaired_note = (
                     "La linea depende del contexto y usa un matiz expresivo propio del japonés."
@@ -1852,6 +1864,8 @@ def analyze_contextual_note_with_claude(
             else:
                 repaired_note = "La linea depende del contexto y tiene un matiz propio del chino."
         note = repaired_note or note
+    if lang == "zh":
+        note = ensure_chinese_pinyin(note)
     return note, usage
 
 

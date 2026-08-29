@@ -7,6 +7,8 @@ from typing import Callable, List, Optional, Tuple
 KANJI_RE = re.compile(r"[\u3400-\u4DBF\u4E00-\u9FFF\u3005\u3006\u30FC]")
 JAPANESE_SPAN_RE = re.compile(r"[\u3400-\u4DBF\u4E00-\u9FFF\u3005\u3006\u30FC\u3040-\u30FF]+")
 JAPANESE_SCRIPT_RE = re.compile(r"[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\u3005\u3006\u30FC]")
+CHINESE_SPAN_RE = re.compile(r"[\u3400-\u4DBF\u4E00-\u9FFF]+")
+CHINESE_FORBIDDEN_SCRIPT_RE = re.compile(r"[\u3040-\u30FF]")
 
 
 def _normalize_context_line(text: str) -> str:
@@ -35,6 +37,11 @@ def _contains_kanji(text: str) -> bool:
 
 def contains_japanese_script(text: str) -> bool:
     return bool(JAPANESE_SCRIPT_RE.search(text or ""))
+
+
+def contains_forbidden_chinese_script(text: str) -> bool:
+    """Return whether text contains kana, which is not expected in a Chinese note."""
+    return bool(CHINESE_FORBIDDEN_SCRIPT_RE.search(text or ""))
 
 
 @lru_cache(maxsize=1)
@@ -106,11 +113,71 @@ def ensure_japanese_furigana(
     return "".join(out)
 
 
+@lru_cache(maxsize=1)
+def _get_default_pinyin_provider() -> Optional[Callable[[str], str]]:
+    try:
+        from pypinyin import lazy_pinyin, Style
+    except Exception:
+        return None
+
+    def _provider(span: str) -> str:
+        try:
+            return " ".join(lazy_pinyin(span, style=Style.TONE, errors="ignore")).strip()
+        except Exception:
+            return ""
+
+    return _provider
+
+
+def ensure_chinese_pinyin(
+    text: str,
+    pinyin_provider: Optional[Callable[[str], str]] = None,
+) -> str:
+    """Add tone-marked pinyin after every hanzi span mentioned in a note."""
+    raw = text or ""
+    if not raw:
+        return raw
+
+    provider = pinyin_provider or _get_default_pinyin_provider()
+    if provider is None:
+        return raw
+
+    out: List[str] = []
+    last = 0
+    for match in CHINESE_SPAN_RE.finditer(raw):
+        start, end = match.span()
+        if end < len(raw) and raw[end] in ("(", "\uff08"):
+            continue
+
+        pinyin = (provider(match.group(0)) or "").strip()
+        if not pinyin:
+            continue
+
+        out.append(raw[last:start])
+        out.append(f"{match.group(0)}({pinyin})")
+        last = end
+
+    if last == 0:
+        return raw
+    out.append(raw[last:])
+    return "".join(out)
+
+
 def build_contextual_explanation_prompt(lang: str, lines: List[str], index: int) -> str:
     line_minus_2, line_minus_1, target_line, line_plus_1, line_plus_2 = get_context_window(lines, index)
     language_name = "japones" if lang == "ja" else "chino"
     language_adj = "japonesa" if lang == "ja" else "china"
     target_label = "Linea japonesa objetivo" if lang == "ja" else "Linea china objetivo"
+    original_term_rules = (
+        "- Si mencionas una palabra o expresion japonesa, escribe su forma original seguida de su lectura completa en hiragana entre parentesis y despues su definicion en espanol. Ejemplo: termino (lectura): definicion.\n"
+        if lang == "ja"
+        else "- Si mencionas una palabra o expresion en hanzi, escribe siempre el hanzi seguido inmediatamente de su pinyin con tonos entre parentesis y despues su definicion en espanol. Ejemplo: termino (pinyin): definicion.\n"
+    )
+    script_rule = (
+        "No escribas ninguna parte de la explicacion en japones, chino, hiragana, katakana, kanji ni romaji, salvo los terminos originales que debas citar siguiendo la regla anterior."
+        if lang == "ja"
+        else "Escribe la explicacion en espanol de Espana. Puedes citar hanzi solo para definir palabras o expresiones relevantes, y cada cita debe llevar su pinyin entre parentesis. No uses caracteres japoneses kana."
+    )
 
     return f"""Eres un profesor experto de {language_name} para hispanohablantes y un analista de guion audiovisual.
 
@@ -131,8 +198,9 @@ IMPORTANTE:
 - Si aparece una contraccion, una particula final, una forma elidida o una expresion coloquial, explicalo de forma breve y clara.
 - Si el orden natural en espanol difiere mucho del {language_name}, puedes mencionarlo brevemente.
 - Escribe siempre en espanol de Espana, natural y claro.
-- No escribas ninguna parte de la explicacion en japones, chino, hiragana, katakana, kanji ni romaji.
+- {script_rule}
 - Si necesitas mencionar un elemento del original, parfrasealo o traducelo al espanol.
+{original_term_rules}
 
 FORMATO DE SALIDA:
 Devuelve solo la nota final, sin encabezados, sin viñetas, sin bloques de codigo y sin JSON.
@@ -159,13 +227,18 @@ def build_contextual_explanation_repair_prompt(lang: str, lines: List[str], inde
     language_adj = "japonesa" if lang == "ja" else "china"
     target_label = "Linea japonesa objetivo" if lang == "ja" else "Linea china objetivo"
     note_text = _normalize_context_line(note)
+    script_rule = (
+        "no incluir japones, chino, hiragana, katakana, kanji ni romaji, salvo terminos japoneses citados con su lectura en hiragana;"
+        if lang == "ja"
+        else "no incluir kana ni caracteres japoneses; si conserva una palabra en hanzi, anadir inmediatamente su pinyin con tonos entre parentesis;"
+    )
 
     return f"""Reescribe la siguiente nota contextual al espanol de Espana.
 
 La version final debe:
 - conservar el sentido, el tono y la brevedad de la nota original;
 - sonar natural para subtitulacion;
-- no incluir japones, chino, hiragana, katakana, kanji ni romaji;
+- {script_rule}
 - devolver solo la nota final, sin explicaciones sobre el cambio y sin JSON.
 
 Eres un profesor experto de {language_name} para hispanohablantes y un analista de guion audiovisual.

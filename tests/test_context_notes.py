@@ -7,7 +7,9 @@ sys.path.insert(0, str(ROOT / "src"))
 from takoworks.modules.transcriber.context_notes import (  # type: ignore
     build_contextual_explanation_prompt,
     build_contextual_explanation_repair_prompt,
+    contains_forbidden_chinese_script,
     contains_japanese_script,
+    ensure_chinese_pinyin,
     ensure_japanese_furigana,
     get_context_window,
     parse_contextual_explanation_response,
@@ -69,6 +71,34 @@ def test_prompt_forces_spanish_only_output():
     assert "No escribas ninguna parte de la explicacion en japones" in prompt
     assert "anade SIEMPRE su lectura completa en hiragana" not in prompt
     assert "No uses romaji" not in prompt
+
+
+def test_chinese_prompt_requires_definition_format_and_pinyin():
+    prompt = build_contextual_explanation_prompt("zh", ["你好"], 0)
+    assert "hanzi seguido inmediatamente de su pinyin" in prompt
+    assert "despues su definicion en espanol" in prompt
+    assert "termino (pinyin): definicion" in prompt
+    assert "No uses caracteres japoneses kana" in prompt
+
+
+def test_ensure_chinese_pinyin_adds_reading_and_preserves_existing():
+    provider = {"你好": "nǐ hǎo", "客气": "kè qi"}.get
+    assert ensure_chinese_pinyin("Define 你好 y 客气.", provider) == (
+        "Define 你好(nǐ hǎo) y 客气(kè qi)."
+    )
+    assert ensure_chinese_pinyin("Define 你好(nǐ hǎo).", provider) == "Define 你好(nǐ hǎo)."
+    assert contains_forbidden_chinese_script("ひらがな")
+    assert not contains_forbidden_chinese_script("你好")
+
+
+def test_context_note_analysis_keeps_chinese_terms_and_adds_pinyin():
+    client = _DummyClient([_DummyMessage("La expresion 你好 es un saludo.")])
+
+    note, usage = analyze_contextual_note_with_claude(client, ["a", "b", "c"], 1, "zh")
+
+    assert note == "La expresion 你好(nǐ hǎo) es un saludo."
+    assert usage.prompt_tokens == 10
+    assert len(client.messages.calls) == 1
 
 
 def test_repair_prompt_explicitly_rewrites_to_spanish():
