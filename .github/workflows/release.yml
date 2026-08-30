@@ -92,6 +92,9 @@ jobs:
           if (-not $verLine) { throw "__version__ not found in $init" }
           if ($verLine -notmatch '"([^"]+)"') { throw "Could not parse version from $verLine" }
           $ver = $Matches[1]
+          if ($ver -notmatch '^\d+\.\d+\.\d+$') {
+            throw "__version__ must contain exactly three numeric components for MSIX: $ver"
+          }
           Write-Host "Parsed __version__: $ver"
           $manifest = Join-Path $Env:GITHUB_WORKSPACE "dist_installer/AppxManifest.xml"
           if (-not (Test-Path $manifest)) { throw "AppxManifest.xml not found at $manifest" }
@@ -454,7 +457,17 @@ jobs:
           if (-not (Test-Path $manifest)) { throw "AppxManifest.xml not found inside MSIX" }
           $xml = [xml](Get-Content $manifest)
           $ver = $xml.Package.Identity.Version
-          Write-Host "MSIX AppxManifest version: $ver"
+          $init = Join-Path $Env:GITHUB_WORKSPACE "src/takoworks/__init__.py"
+          $verLine = Get-Content $init | Where-Object { $_ -match '__version__' } | Select-Object -First 1
+          if ($verLine -notmatch '"([^" ]+)"') { throw "Could not parse __version__ from $init" }
+          $expectedVer = "$($Matches[1]).0"
+          Write-Host "MSIX AppxManifest version: $ver (expected $expectedVer)"
+          if ($ver -ne $expectedVer) {
+            throw "MSIX version mismatch: package is $ver but source is $expectedVer. Do not publish a stale package."
+          }
+          if ($xml.Package.Identity.Name -ne "KingdomM.TakoWorks") {
+            throw "Unexpected MSIX identity: $($xml.Package.Identity.Name)"
+          }
 
       - name: Sign MSIX
         shell: pwsh
@@ -563,7 +576,7 @@ jobs:
           }
 
       - name: Configure Microsoft Store CLI
-        uses: microsoft/microsoft-store-apppublisher@v1.3
+        uses: microsoft/microsoft-store-apppublisher@v1.4
 
       - name: Cancel pending Microsoft Store submission (if any)
         shell: pwsh
@@ -644,7 +657,7 @@ jobs:
             }
 
             Write-Host "Publishing MSIX (attempt $attempt/3)..."
-            $publishOutput = & msstore publish "$msixPath" -id $env:MSSTORE_PRODUCT_ID --verbose 2>&1
+            $publishOutput = & msstore publish "$PWD" --inputFile "$msixPath" -id $env:MSSTORE_PRODUCT_ID --verbose 2>&1
             $publishExitCode = $LASTEXITCODE
             if ($publishOutput) { $publishOutput | ForEach-Object { Write-Host $_ } }
             if ($publishExitCode -eq 0) {
