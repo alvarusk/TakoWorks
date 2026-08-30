@@ -657,10 +657,10 @@ jobs:
             }
 
             Write-Host "Publishing MSIX (attempt $attempt/3)..."
-            # The CLI version installed by the publisher action expects the
-            # containing directory, not an inputFile path. Allow enough time
-            # for the large MSIX upload to complete.
-            $publishOutput = & msstore publish "$PWD" --inputDirectory "$PWD" -id $env:MSSTORE_PRODUCT_ID --uploadTimeout 1800 --verbose 2>&1
+            # Passing the MSIX itself lets the CLI select its MSIX publisher.
+            # Passing the repository directory makes it look for a project
+            # publisher, which this Python/PyInstaller repository does not have.
+            $publishOutput = & msstore publish "$msixPath" -id $env:MSSTORE_PRODUCT_ID --uploadTimeout 1800 --verbose 2>&1
             $publishExitCode = $LASTEXITCODE
             if ($publishOutput) { $publishOutput | ForEach-Object { Write-Host $_ } }
             if ($publishExitCode -eq 0) {
