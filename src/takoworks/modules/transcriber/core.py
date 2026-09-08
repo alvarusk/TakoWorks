@@ -6,6 +6,7 @@ import copy
 import subprocess
 import tempfile
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Set, Dict, Optional, Tuple
@@ -85,6 +86,8 @@ OPENAI_BLOCK_ATTEMPTS = 3
 MODEL_BLOCK_ATTEMPTS = 3
 CONTEXT_NOTE_MAX_TOKENS = 800
 ROMANIZATION_MAX_TOKENS = 1200
+TRANSLATION_MAX_TOKENS = 2500
+CONTEXT_NOTE_WORKERS = 6
 
 
 def _add_openai_temperature(request_kwargs: Dict[str, object], temperature: float) -> None:
@@ -1367,6 +1370,9 @@ def romanize_with_deepseek(
             try:
                 request_kwargs: Dict[str, object] = {
                     "model": DEEPSEEK_MODEL,
+                    "max_tokens": ROMANIZATION_MAX_TOKENS,
+                    "response_format": {"type": "json_object"},
+                    "extra_body": {"thinking": {"type": "disabled"}},
                     "temperature": 0.0,
                     "messages": [
                         {"role": "system", "content": system_prompt},
@@ -1813,8 +1819,9 @@ def analyze_contextual_note_with_claude(
     else:
         _warn_missing_usage("context_note")
     note = parse_contextual_explanation_response(content)
+    explanation_part = note.split("Vocabulario:", 1)[0]
     has_forbidden_script = (
-        contains_japanese_script(note)
+        contains_japanese_script(explanation_part)
         if lang == "ja"
         else contains_forbidden_chinese_script(note)
     )
@@ -1851,8 +1858,9 @@ def analyze_contextual_note_with_claude(
             _warn_missing_usage("context_note")
 
         repaired_note = parse_contextual_explanation_response(repair_content)
+        repaired_explanation_part = repaired_note.split("Vocabulario:", 1)[0]
         repaired_has_forbidden_script = (
-            contains_japanese_script(repaired_note)
+            contains_japanese_script(repaired_explanation_part)
             if lang == "ja"
             else contains_forbidden_chinese_script(repaired_note)
         )
@@ -1898,23 +1906,26 @@ def build_contextual_notes(
         return [""] * len(cleaned_lines)
 
     total = len(cleaned_lines)
-    notes: List[str] = []
     lang_label = "JA" if lang == "ja" else "ZH"
+    notes: List[str] = [""] * total
 
-    for idx, line in enumerate(cleaned_lines, start=1):
-        if not line:
-            notes.append("")
-            continue
+    def analyze(idx: int) -> Tuple[int, str, ApiUsage]:
+        print(f"[Context note {lang_label}] Line {idx + 1}/{total}...")
+        note, note_usage = analyze_contextual_note_with_claude(client, cleaned_lines, idx, lang)
+        return idx, note, note_usage
 
-        print(f"[Context note {lang_label}] Line {idx}/{total}...")
-        try:
-            note, note_usage = analyze_contextual_note_with_claude(client, cleaned_lines, idx - 1, lang)
-            if usage_accumulator is not None:
-                merge_api_usage(usage_accumulator, note_usage)
-        except Exception as e:
-            print(f"[Context note {lang_label}] Error on line {idx}: {e}")
-            note = ""
-        notes.append(note)
+    indices = [idx for idx, line in enumerate(cleaned_lines) if line]
+    with ThreadPoolExecutor(max_workers=CONTEXT_NOTE_WORKERS) as executor:
+        futures = {executor.submit(analyze, idx): idx for idx in indices}
+        for future in as_completed(futures):
+            idx = futures[future]
+            try:
+                result_idx, note, note_usage = future.result()
+                notes[result_idx] = note
+                if usage_accumulator is not None:
+                    merge_api_usage(usage_accumulator, note_usage)
+            except Exception as e:
+                print(f"[Context note {lang_label}] Error on line {idx + 1}: {e}")
 
     return notes
 
@@ -2130,6 +2141,9 @@ def translate_with_deepseek(
             try:
                 response = client.chat.completions.create(
                     model=DEEPSEEK_MODEL,
+                    max_tokens=TRANSLATION_MAX_TOKENS,
+                    response_format={"type": "json_object"},
+                    extra_body={"thinking": {"type": "disabled"}},
                     temperature=0.1,
                     messages=[
                         {"role": "system", "content": system_prompt},

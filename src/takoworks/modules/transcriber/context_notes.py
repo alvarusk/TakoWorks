@@ -169,9 +169,9 @@ def build_contextual_explanation_prompt(lang: str, lines: List[str], index: int)
     language_adj = "japonesa" if lang == "ja" else "china"
     target_label = "Linea japonesa objetivo" if lang == "ja" else "Linea china objetivo"
     original_term_rules = (
-        "- Si mencionas una palabra o expresion japonesa, escribe su forma original seguida de su lectura completa en hiragana entre parentesis y despues su definicion en espanol. Ejemplo: termino (lectura): definicion.\n"
+        "- En Vocabulario, escribe el furigana en hiragana en la linea inmediatamente superior al termino japones y despues `: definicion en espanol`.\n"
         if lang == "ja"
-        else "- Si mencionas una palabra o expresion en hanzi, escribe siempre el hanzi seguido inmediatamente de su pinyin con tonos entre parentesis y despues su definicion en espanol. Ejemplo: termino (pinyin): definicion.\n"
+        else "- En Vocabulario, escribe el hanzi seguido inmediatamente de su pinyin con tonos entre parentesis y despues su definicion en espanol; formato: termino (pinyin): definicion.\n"
     )
     script_rule = (
         "No escribas ninguna parte de la explicacion en japones, chino, hiragana, katakana, kanji ni romaji, salvo los terminos originales que debas citar siguiendo la regla anterior."
@@ -191,7 +191,7 @@ IMPORTANTE:
   1. semantico: que quiere decir realmente la frase en contexto;
   2. sintactico: como esta construida y que funcion cumplen las partes importantes;
   3. cultural/pragmatico: matices de registro, implicaturas, relaciones entre personajes, referencias culturales o usos tipicos del {language_name}.
-- No hagas una lista larga ni un analisis academico excesivo.
+- Incluye entre 2 y 5 terminos de vocabulario relevantes.
 - No inventes informacion cultural si no esta razonablemente sugerida por la frase o el contexto.
 - Si la frase es muy simple, se breve.
 - Si hay ambiguedad, indicala de forma natural y di cual es la interpretacion mas probable en este contexto.
@@ -202,16 +202,22 @@ IMPORTANTE:
 - Si necesitas mencionar un elemento del original, parfrasealo o traducelo al espanol.
 {original_term_rules}
 
-FORMATO DE SALIDA:
-Devuelve solo la nota final, sin encabezados, sin viñetas, sin bloques de codigo y sin JSON.
+FORMATO DE SALIDA (obligatorio):
+Explicacion: 1 a 4 frases que combinen gramatica y significado semantico con el contexto.
+Vocabulario:
+- [furigana en hiragana]
+  [termino japones]: [traduccion o definicion en espanol]
+- [furigana en hiragana]
+  [termino japones]: [traduccion o definicion en espanol]
 
 REGLAS DE ESTILO PARA "explicacion":
 - 1 a 4 frases como maximo.
 - Tono claro, docente y natural.
 - Debe poder leerse como una nota breve de subtitulacion.
 - No empieces con "Esta frase significa...".
-- No uses vinetas, numeracion ni encabezados.
-- No incluyas nada fuera del contenido pedido.
+- Usa exactamente los encabezados "Explicacion:" y "Vocabulario:".
+- Usa viñetas solo en la lista de vocabulario.
+- No incluyas nada fuera de esta estructura.
 
 CONTEXTO:
 Linea -2: {line_minus_2}
@@ -237,6 +243,8 @@ def build_contextual_explanation_repair_prompt(lang: str, lines: List[str], inde
 
 La version final debe:
 - conservar el sentido, el tono y la brevedad de la nota original;
+- conservar exactamente los encabezados "Explicacion:" y "Vocabulario:";
+- conservar la lista de vocabulario con el furigana en hiragana encima de cada termino japones;
 - sonar natural para subtitulacion;
 - {script_rule}
 - devolver solo la nota final, sin explicaciones sobre el cambio y sin JSON.
