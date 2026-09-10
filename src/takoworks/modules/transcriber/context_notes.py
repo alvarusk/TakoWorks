@@ -169,7 +169,8 @@ def build_contextual_explanation_prompt(lang: str, lines: List[str], index: int)
     language_adj = "japonesa" if lang == "ja" else "china"
     target_label = "Línea japonesa objetivo" if lang == "ja" else "Línea china objetivo"
     original_term_rules = (
-        "- En Vocabulario, escribe el furigana en hiragana en la línea inmediatamente superior al término japonés y después `: definición en español`.\n"
+        "- En Vocabulario, escribe siempre el término en kanji y su furigana en hiragana: `kanji(furigana): definición en español`. No escribas el término solo en hiragana y no uses romaji.\n"
+        "  Cada palabra o expresión debe aparecer una sola vez: no hagas una entrada para la forma en hiragana/katakana y otra para su forma en kanji. Si no existe kanji habitual, escribe una sola entrada en hiragana o katakana, sin añadir otra línea de lectura.\n"
         if lang == "ja"
         else "- En Vocabulario, escribe el hanzi seguido inmediatamente de su pinyin con tonos entre paréntesis y después su definición en español; formato: término (pinyin): definición.\n"
     )
@@ -205,10 +206,8 @@ IMPORTANTE:
 FORMATO DE SALIDA (obligatorio):
 Explicación: 1 a 4 frases que combinen gramática y significado semántico con el contexto.
 Vocabulario:
-- [furigana en hiragana]
-  [término japonés]: [traducción o definición en español]
-- [furigana en hiragana]
-  [término japonés]: [traducción o definición en español]
+- [término en kanji]([furigana en hiragana]): [traducción o definición en español]
+- [término en kanji]([furigana en hiragana]): [traducción o definición en español]
 
 REGLAS DE ESTILO PARA "explicación":
 - 1 a 4 frases como maximo.
@@ -217,6 +216,7 @@ REGLAS DE ESTILO PARA "explicación":
 - No empieces con "Esta frase significa...".
 - Usa exactamente los encabezados "Explicación:" y "Vocabulario:".
 - Usa viñetas solo en la lista de vocabulario.
+- La sección "Explicación:" nunca puede faltar ni sustituirse por una frase genérica sobre que depende del contexto: explica qué significa y qué matiz tiene la línea objetivo.
 - No incluyas nada fuera de esta estructura.
 
 CONTEXTO:
@@ -244,7 +244,9 @@ def build_contextual_explanation_repair_prompt(lang: str, lines: List[str], inde
 La version final debe:
 - conservar el sentido, el tono y la brevedad de la nota original;
 - conservar exactamente los encabezados "Explicación:" y "Vocabulario:";
-- conservar la lista de vocabulario con el furigana en hiragana encima de cada término japonés;
+- conservar la lista de vocabulario usando siempre kanji con furigana en hiragana: `kanji(furigana): definición`. Reescribe cualquier término que esté solo en hiragana y elimina el romaji;
+- no duplicar entradas: kanji y su forma en hiragana/katakana son una sola entrada; si no hay kanji, deja una sola forma kana y no añadas una lectura separada;
+- incluir una explicación real y específica de la línea objetivo; no devuelvas una frase genérica ni una nota sin el encabezado "Explicación:";
 - sonar natural para subtitulacion;
 - {script_rule}
 - devolver solo la nota final, sin explicaciones sobre el cambio y sin JSON.

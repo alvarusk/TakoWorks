@@ -1781,6 +1781,41 @@ def get_openai_client() -> OpenAI:
     )
 
 
+def _is_generic_context_note(note: str, lang: str) -> bool:
+    """Identify the unusable fallback sentence returned for failed explanations."""
+    normalized = re.sub(r"\s+", " ", (note or "").strip().lower())
+    if lang == "ja":
+        return normalized in {
+            "la línea depende del contexto y usa un matiz expresivo propio del japonés.",
+            "la linea depende del contexto y usa un matiz expresivo propio del japonés.",
+        }
+    return normalized in {
+        "la línea depende del contexto y tiene un matiz propio del chino.",
+        "la linea depende del contexto y tiene un matiz propio del chino.",
+    }
+
+
+def _japanese_vocabulary_needs_repair(note: str) -> bool:
+    """Detect a kana reading followed by a kana-only duplicate entry."""
+    vocabulary = note.split("Vocabulario:", 1)
+    if len(vocabulary) != 2:
+        return False
+
+    lines = [line.strip() for line in vocabulary[1].splitlines() if line.strip()]
+    kanji_re = re.compile(r"[\u3400-\u4DBF\u4E00-\u9FFF\u3005]")
+    japanese_re = re.compile(r"[\u3040-\u30FF]")
+    for index, line in enumerate(lines[:-1]):
+        if not line.startswith("-"):
+            continue
+        candidate = lines[index + 1]
+        if ":" not in candidate or not japanese_re.search(candidate):
+            continue
+        term = candidate.split(":", 1)[0].strip()
+        if term and not kanji_re.search(term):
+            return True
+    return False
+
+
 def analyze_contextual_note_with_claude(
     client: anthropic.Anthropic,
     lines: List[str],
@@ -1820,12 +1855,16 @@ def analyze_contextual_note_with_claude(
         _warn_missing_usage("context_note")
     note = parse_contextual_explanation_response(content)
     explanation_part = note.split("Vocabulario:", 1)[0]
+    generic_note = _is_generic_context_note(note, lang)
+    malformed_japanese_vocabulary = (
+        lang == "ja" and _japanese_vocabulary_needs_repair(note)
+    )
     has_forbidden_script = (
         contains_japanese_script(explanation_part)
         if lang == "ja"
         else contains_forbidden_chinese_script(note)
     )
-    if has_forbidden_script:
+    if has_forbidden_script or generic_note or malformed_japanese_vocabulary:
         repair_prompt = build_contextual_explanation_repair_prompt(lang, lines, index, note)
         repair_message = client.messages.create(
             model=CONTEXT_NOTE_MODEL,
@@ -1859,18 +1898,30 @@ def analyze_contextual_note_with_claude(
 
         repaired_note = parse_contextual_explanation_response(repair_content)
         repaired_explanation_part = repaired_note.split("Vocabulario:", 1)[0]
+        repaired_generic_note = _is_generic_context_note(repaired_note, lang)
+        repaired_malformed_japanese_vocabulary = (
+            lang == "ja" and _japanese_vocabulary_needs_repair(repaired_note)
+        )
         repaired_has_forbidden_script = (
             contains_japanese_script(repaired_explanation_part)
             if lang == "ja"
             else contains_forbidden_chinese_script(repaired_note)
         )
-        if repaired_has_forbidden_script:
+        if (
+            repaired_has_forbidden_script
+            or repaired_generic_note
+            or repaired_malformed_japanese_vocabulary
+        ):
             if lang == "ja":
                 repaired_note = (
-                    "La línea depende del contexto y usa un matiz expresivo propio del japonés."
+                    "Explicación: La línea requiere el contexto inmediato para precisar su referente y su intención; expresa un matiz coloquial que no queda recogido en una traducción literal.\n"
+                    "Vocabulario:"
                 )
             else:
-                repaired_note = "La línea depende del contexto y tiene un matiz propio del chino."
+                repaired_note = (
+                    "Explicación: La línea requiere el contexto inmediato para precisar su referente y su intención; expresa un matiz coloquial que no queda recogido en una traducción literal.\n"
+                    "Vocabulario:"
+                )
         note = repaired_note or note
     if lang == "zh":
         note = ensure_chinese_pinyin(note)
