@@ -10,7 +10,9 @@ def _ass_unsanitize_braces(s: str) -> str:
 
 def _ass_hide(s: str) -> str:
     # Texto oculto en render, visible como "comentario" dentro del evento en Aegisub
-    return "{" + _ass_sanitize_braces(s) + "}"
+    # ASS necesita el salto de línea escapado como \N; un LF real termina la línea.
+    normalized = (s or "").replace("\r\n", "\n").replace("\r", "\n").replace("\n", r"\N")
+    return "{" + _ass_sanitize_braces(normalized) + "}"
 
 
 def _ass_hide_prefix(existing: str) -> str:

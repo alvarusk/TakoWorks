@@ -1867,10 +1867,10 @@ def analyze_contextual_note_with_claude(
         if repaired_has_forbidden_script:
             if lang == "ja":
                 repaired_note = (
-                    "La linea depende del contexto y usa un matiz expresivo propio del japonés."
+                    "La línea depende del contexto y usa un matiz expresivo propio del japonés."
                 )
             else:
-                repaired_note = "La linea depende del contexto y tiene un matiz propio del chino."
+                repaired_note = "La línea depende del contexto y tiene un matiz propio del chino."
         note = repaired_note or note
     if lang == "zh":
         note = ensure_chinese_pinyin(note)

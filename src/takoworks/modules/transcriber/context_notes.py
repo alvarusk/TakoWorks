@@ -165,86 +165,86 @@ def ensure_chinese_pinyin(
 
 def build_contextual_explanation_prompt(lang: str, lines: List[str], index: int) -> str:
     line_minus_2, line_minus_1, target_line, line_plus_1, line_plus_2 = get_context_window(lines, index)
-    language_name = "japones" if lang == "ja" else "chino"
+    language_name = "japonés" if lang == "ja" else "chino"
     language_adj = "japonesa" if lang == "ja" else "china"
-    target_label = "Linea japonesa objetivo" if lang == "ja" else "Linea china objetivo"
+    target_label = "Línea japonesa objetivo" if lang == "ja" else "Línea china objetivo"
     original_term_rules = (
-        "- En Vocabulario, escribe el furigana en hiragana en la linea inmediatamente superior al termino japones y despues `: definicion en espanol`.\n"
+        "- En Vocabulario, escribe el furigana en hiragana en la línea inmediatamente superior al término japonés y después `: definición en español`.\n"
         if lang == "ja"
-        else "- En Vocabulario, escribe el hanzi seguido inmediatamente de su pinyin con tonos entre parentesis y despues su definicion en espanol; formato: termino (pinyin): definicion.\n"
+        else "- En Vocabulario, escribe el hanzi seguido inmediatamente de su pinyin con tonos entre paréntesis y después su definición en español; formato: término (pinyin): definición.\n"
     )
     script_rule = (
-        "No escribas ninguna parte de la explicacion en japones, chino, hiragana, katakana, kanji ni romaji, salvo los terminos originales que debas citar siguiendo la regla anterior."
+        "No escribas ninguna parte de la explicación en japonés, chino, hiragana, katakana, kanji ni romaji, salvo los términos originales que debas citar siguiendo la regla anterior."
         if lang == "ja"
-        else "Escribe la explicacion en espanol de Espana. Puedes citar hanzi solo para definir palabras o expresiones relevantes, y cada cita debe llevar su pinyin entre parentesis. No uses caracteres japoneses kana."
+        else "Escribe la explicación en español de España. Puedes citar hanzi solo para definir palabras o expresiones relevantes, y cada cita debe llevar su pinyin entre paréntesis. No uses caracteres japoneses kana."
     )
 
     return f"""Eres un profesor experto de {language_name} para hispanohablantes y un analista de guion audiovisual.
 
-Tu tarea es analizar SOLO la linea {language_adj} objetivo y explicarla en espanol de forma util para subtitulacion. Debes tener en cuenta las dos lineas anteriores y las dos posteriores unicamente como contexto para desambiguar tono, referente, elipsis, intencion, registro y posibles implicaciones culturales.
+Tu tarea es analizar SOLO la línea {language_adj} objetivo y explicarla en español de forma útil para subtitulación. Debes tener en cuenta las dos líneas anteriores y las dos posteriores únicamente como contexto para desambiguar tono, referente, elipsis, intención, registro y posibles implicaciones culturales.
 
 IMPORTANTE:
-- No traduzcas todas las lineas del contexto: analizalas solo para entender mejor la linea objetivo.
-- Tu explicacion debe centrarse en la linea objetivo.
-- El resultado debe ser breve: entre una linea y un pequeno parrafo.
+- No traduzcas todas las líneas del contexto: analízalas solo para entender mejor la línea objetivo.
+- Tu explicación debe centrarse en la línea objetivo.
+- El resultado debe ser breve: entre una línea y un pequeño párrafo.
 - Debes combinar, cuando sea relevante, estos tres planos:
-  1. semantico: que quiere decir realmente la frase en contexto;
-  2. sintactico: como esta construida y que funcion cumplen las partes importantes;
-  3. cultural/pragmatico: matices de registro, implicaturas, relaciones entre personajes, referencias culturales o usos tipicos del {language_name}.
-- Incluye entre 2 y 5 terminos de vocabulario relevantes.
-- No inventes informacion cultural si no esta razonablemente sugerida por la frase o el contexto.
-- Si la frase es muy simple, se breve.
-- Si hay ambiguedad, indicala de forma natural y di cual es la interpretacion mas probable en este contexto.
-- Si aparece una contraccion, una particula final, una forma elidida o una expresion coloquial, explicalo de forma breve y clara.
-- Si el orden natural en espanol difiere mucho del {language_name}, puedes mencionarlo brevemente.
-- Escribe siempre en espanol de Espana, natural y claro.
+  1. semántico: qué quiere decir realmente la frase en contexto;
+  2. sintáctico: cómo está construida y qué función cumplen las partes importantes;
+  3. cultural/pragmático: matices de registro, implicaturas, relaciones entre personajes, referencias culturales o usos típicos del {language_name}.
+- Incluye entre 2 y 5 términos de vocabulario relevantes.
+- No inventes información cultural si no está razonablemente sugerida por la frase o el contexto.
+- Si la frase es muy simple, sé breve.
+- Si hay ambigüedad, indícala de forma natural y di cuál es la interpretación más probable en este contexto.
+- Si aparece una contracción, una partícula final, una forma elidida o una expresión coloquial, explícalo de forma breve y clara.
+- Si el orden natural en español difiere mucho del {language_name}, puedes mencionarlo brevemente.
+- Escribe siempre en español de España, natural y claro.
 - {script_rule}
-- Si necesitas mencionar un elemento del original, parfrasealo o traducelo al espanol.
+- Si necesitas mencionar un elemento del original, parafrásalo o tradúcelo al español.
 {original_term_rules}
 
 FORMATO DE SALIDA (obligatorio):
-Explicacion: 1 a 4 frases que combinen gramatica y significado semantico con el contexto.
+Explicación: 1 a 4 frases que combinen gramática y significado semántico con el contexto.
 Vocabulario:
 - [furigana en hiragana]
-  [termino japones]: [traduccion o definicion en espanol]
+  [término japonés]: [traducción o definición en español]
 - [furigana en hiragana]
-  [termino japones]: [traduccion o definicion en espanol]
+  [término japonés]: [traducción o definición en español]
 
-REGLAS DE ESTILO PARA "explicacion":
+REGLAS DE ESTILO PARA "explicación":
 - 1 a 4 frases como maximo.
 - Tono claro, docente y natural.
 - Debe poder leerse como una nota breve de subtitulacion.
 - No empieces con "Esta frase significa...".
-- Usa exactamente los encabezados "Explicacion:" y "Vocabulario:".
+- Usa exactamente los encabezados "Explicación:" y "Vocabulario:".
 - Usa viñetas solo en la lista de vocabulario.
 - No incluyas nada fuera de esta estructura.
 
 CONTEXTO:
-Linea -2: {line_minus_2}
-Linea -1: {line_minus_1}
+Línea -2: {line_minus_2}
+Línea -1: {line_minus_1}
 {target_label}: {target_line}
-Linea +1: {line_plus_1}
-Linea +2: {line_plus_2}"""
+Línea +1: {line_plus_1}
+Línea +2: {line_plus_2}"""
 
 
 def build_contextual_explanation_repair_prompt(lang: str, lines: List[str], index: int, note: str) -> str:
     line_minus_2, line_minus_1, target_line, line_plus_1, line_plus_2 = get_context_window(lines, index)
-    language_name = "japones" if lang == "ja" else "chino"
+    language_name = "japonés" if lang == "ja" else "chino"
     language_adj = "japonesa" if lang == "ja" else "china"
-    target_label = "Linea japonesa objetivo" if lang == "ja" else "Linea china objetivo"
+    target_label = "Línea japonesa objetivo" if lang == "ja" else "Línea china objetivo"
     note_text = _normalize_context_line(note)
     script_rule = (
-        "no incluir japones, chino, hiragana, katakana, kanji ni romaji, salvo terminos japoneses citados con su lectura en hiragana;"
+        "no incluir japonés, chino, hiragana, katakana, kanji ni romaji, salvo términos japoneses citados con su lectura en hiragana;"
         if lang == "ja"
-        else "no incluir kana ni caracteres japoneses; si conserva una palabra en hanzi, anadir inmediatamente su pinyin con tonos entre parentesis;"
+        else "no incluir kana ni caracteres japoneses; si conserva una palabra en hanzi, añadir inmediatamente su pinyin con tonos entre paréntesis;"
     )
 
-    return f"""Reescribe la siguiente nota contextual al espanol de Espana.
+    return f"""Reescribe la siguiente nota contextual al español de España.
 
 La version final debe:
 - conservar el sentido, el tono y la brevedad de la nota original;
-- conservar exactamente los encabezados "Explicacion:" y "Vocabulario:";
-- conservar la lista de vocabulario con el furigana en hiragana encima de cada termino japones;
+- conservar exactamente los encabezados "Explicación:" y "Vocabulario:";
+- conservar la lista de vocabulario con el furigana en hiragana encima de cada término japonés;
 - sonar natural para subtitulacion;
 - {script_rule}
 - devolver solo la nota final, sin explicaciones sobre el cambio y sin JSON.
@@ -256,11 +256,11 @@ NOTA A CORREGIR:
 {note_text}
 
 CONTEXTO:
-Linea -2: {line_minus_2}
-Linea -1: {line_minus_1}
+Línea -2: {line_minus_2}
+Línea -1: {line_minus_1}
 {target_label}: {target_line}
-Linea +1: {line_plus_1}
-Linea +2: {line_plus_2}"""
+Línea +1: {line_plus_1}
+Línea +2: {line_plus_2}"""
 
 
 def parse_contextual_explanation_response(raw: str) -> str:
@@ -284,7 +284,7 @@ def parse_contextual_explanation_response(raw: str) -> str:
                 payload = None
 
     if isinstance(payload, dict):
-        for key in ("explicacion", "explicación", "analysis", "note", "nota"):
+        for key in ("explicación", "explicacion", "explicaciÃ³n", "analysis", "note", "nota"):
             value = payload.get(key)
             if isinstance(value, str) and value.strip():
                 text = value.strip()

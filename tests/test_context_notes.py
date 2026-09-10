@@ -15,6 +15,7 @@ from takoworks.modules.transcriber.context_notes import (  # type: ignore
     parse_contextual_explanation_response,
 )
 from takoworks.modules.transcriber.core import analyze_contextual_note_with_claude  # type: ignore
+from takoworks.modules.transcriber.ass_utils import _ass_hide  # type: ignore
 
 
 class _DummyBlock:
@@ -58,17 +59,17 @@ def test_get_context_window_pads_missing_neighbors():
 def test_prompt_includes_target_and_neighbors():
     lines = ["A", "B", "C", "D", "E"]
     prompt = build_contextual_explanation_prompt("ja", lines, 2)
-    assert "Linea -2: A" in prompt
-    assert "Linea -1: B" in prompt
-    assert "Linea japonesa objetivo: C" in prompt
-    assert "Linea +1: D" in prompt
-    assert "Linea +2: E" in prompt
+    assert "Línea -2: A" in prompt
+    assert "Línea -1: B" in prompt
+    assert "Línea japonesa objetivo: C" in prompt
+    assert "Línea +1: D" in prompt
+    assert "Línea +2: E" in prompt
 
 
 def test_prompt_forces_spanish_only_output():
     prompt = build_contextual_explanation_prompt("ja", ["A"], 0)
-    assert "Escribe siempre en espanol de Espana" in prompt
-    assert "No escribas ninguna parte de la explicacion en japones" in prompt
+    assert "Escribe siempre en español de España" in prompt
+    assert "No escribas ninguna parte de la explicación en japonés" in prompt
     assert "anade SIEMPRE su lectura completa en hiragana" not in prompt
     assert "No uses romaji" not in prompt
 
@@ -76,8 +77,8 @@ def test_prompt_forces_spanish_only_output():
 def test_chinese_prompt_requires_definition_format_and_pinyin():
     prompt = build_contextual_explanation_prompt("zh", ["你好"], 0)
     assert "hanzi seguido inmediatamente de su pinyin" in prompt
-    assert "despues su definicion en espanol" in prompt
-    assert "termino (pinyin): definicion" in prompt
+    assert "después su definición en español" in prompt
+    assert "término (pinyin): definición" in prompt
     assert "No uses caracteres japoneses kana" in prompt
 
 
@@ -103,8 +104,8 @@ def test_context_note_analysis_keeps_chinese_terms_and_adds_pinyin():
 
 def test_repair_prompt_explicitly_rewrites_to_spanish():
     prompt = build_contextual_explanation_repair_prompt("ja", ["A"], 0, "日本語の説明")
-    assert "Reescribe la siguiente nota contextual al espanol de Espana." in prompt
-    assert "no incluir japones" in prompt
+    assert "Reescribe la siguiente nota contextual al español de España." in prompt
+    assert "no incluir japonés" in prompt
     assert "NOTA A CORREGIR" in prompt
 
 
@@ -155,3 +156,9 @@ def test_parse_contextual_response_accepts_braced_text():
 def test_parse_contextual_response_accepts_json_payload():
     raw = '{"explicacion":"Se sobreentiende el sujeto y el tono es cercano, casi de reproche."}'
     assert parse_contextual_explanation_response(raw) == "Se sobreentiende el sujeto y el tono es cercano, casi de reproche."
+
+
+def test_ass_hidden_context_note_uses_literal_ass_line_breaks():
+    assert _ass_hide("Explicación: primera línea\r\nsegunda línea") == (
+        "{Explicación: primera línea\\Nsegunda línea}"
+    )

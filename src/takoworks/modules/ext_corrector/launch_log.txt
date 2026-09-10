@@ -492,3 +492,7 @@
 [08/09/2026  6:26:28,26] "C:\CR\DONE\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S2E11_SUKSIM0011_378547_subtitle_edited_es-la.ass" --serve 
 [08/09/2026 10:43:27,34] "C:\Users\ajime\OneDrive\Documentos\PENDING\138 - Hana-Kimi\4 - Scripts esES\HanaKimiForYouI_S2E12_YBVSIM0024_376620_subtitle_edited_es-es.ass" --serve 
 [08/09/2026 19:38:20,35] "C:\Users\ajime\OneDrive\Documentos\PENDING\160 - LINK CLICK S5\3 - Scripts esES\LinkClick_S5.0E6.0_LNKSIM0035_380303_subtitle_edited_es-es.ass" --serve 
+[09/09/2026  9:13:58,57] "C:\Users\ajime\OneDrive\Documentos\PENDING\165 - A Returner's Magic S2\3 - Scripts esES-esLA\AReturnersMagic_S2E3_MSBSIM0015_384661_subtitle_edited_es-la.ass" --serve 
+[09/09/2026 10:14:03,12] "C:\Users\ajime\OneDrive\Documentos\PENDING\163 - Space Mercenary\3 - Scripts esES\RebornAsASpaceM_S1.0E3.0_RMWSIM0003_389244_subtitle_trad_es-es.ass" --serve 
+[10/09/2026 12:02:14,21] "C:\Users\ajime\OneDrive\Documentos\PENDING\155 - Jaadugar\3 - Scripts esES\JaadugarAWitchI_S1E12_JWMSIM0012_380371_subtitle_trad_es-es.ass" --serve 
+[10/09/2026 14:35:40,17] "C:\CR\DONE\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S2E12_SUKSIM0012_378548_subtitle_edited_es-la.ass" --serve 
