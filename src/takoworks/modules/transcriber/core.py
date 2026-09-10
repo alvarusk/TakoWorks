@@ -1782,17 +1782,25 @@ def get_openai_client() -> OpenAI:
 
 
 def _is_generic_context_note(note: str, lang: str) -> bool:
-    """Identify the unusable fallback sentence returned for failed explanations."""
+    """Identify vague context-only answers that are not useful explanations."""
     normalized = re.sub(r"\s+", " ", (note or "").strip().lower())
-    if lang == "ja":
-        return normalized in {
-            "la línea depende del contexto y usa un matiz expresivo propio del japonés.",
-            "la linea depende del contexto y usa un matiz expresivo propio del japonés.",
-        }
-    return normalized in {
-        "la línea depende del contexto y tiene un matiz propio del chino.",
-        "la linea depende del contexto y tiene un matiz propio del chino.",
-    }
+    if not normalized:
+        return True
+
+    # The model varies these refusals slightly, so exact matching is not
+    # enough. A useful note may mention context, but must also explain the
+    # target line rather than using context as the whole explanation.
+    explanation = normalized.split("vocabulario:", 1)[0]
+    generic_markers = (
+        "depende del contexto",
+        "requiere el contexto",
+        "requiere contexto",
+        "solo con el contexto",
+        "no se puede determinar",
+        "no puede determinarse",
+        "no es posible explic",
+    )
+    return any(marker in explanation for marker in generic_markers) and len(explanation) < 320
 
 
 def _japanese_vocabulary_needs_repair(note: str) -> bool:
@@ -1828,7 +1836,7 @@ def analyze_contextual_note_with_claude(
         max_tokens=CONTEXT_NOTE_MAX_TOKENS,
         system=(
             "Sigue exactamente el formato solicitado y devuelve solo la nota pedida, "
-            "sin encabezados ni texto extra."
+            "con exactamente los encabezados solicitados y sin texto extra."
         ),
         messages=[
             {
@@ -1871,7 +1879,7 @@ def analyze_contextual_note_with_claude(
             max_tokens=CONTEXT_NOTE_MAX_TOKENS,
             system=(
                 "Sigue exactamente el formato solicitado y devuelve solo la nota pedida, "
-                "sin encabezados ni texto extra."
+                "con exactamente los encabezados solicitados y sin texto extra."
             ),
             messages=[
                 {
@@ -1912,16 +1920,10 @@ def analyze_contextual_note_with_claude(
             or repaired_generic_note
             or repaired_malformed_japanese_vocabulary
         ):
-            if lang == "ja":
-                repaired_note = (
-                    "Explicación: La línea requiere el contexto inmediato para precisar su referente y su intención; expresa un matiz coloquial que no queda recogido en una traducción literal.\n"
-                    "Vocabulario:"
-                )
-            else:
-                repaired_note = (
-                    "Explicación: La línea requiere el contexto inmediato para precisar su referente y su intención; expresa un matiz coloquial que no queda recogido en una traducción literal.\n"
-                    "Vocabulario:"
-                )
+            # Never turn a failed repair into a plausible-looking but empty
+            # fallback note. build_contextual_notes logs the failure and keeps
+            # the subtitle note empty, so it can be retried explicitly.
+            raise RuntimeError("Claude devolvió una explicación genérica tras la corrección.")
         note = repaired_note or note
     if lang == "zh":
         note = ensure_chinese_pinyin(note)

@@ -496,3 +496,4 @@
 [09/09/2026 10:14:03,12] "C:\Users\ajime\OneDrive\Documentos\PENDING\163 - Space Mercenary\3 - Scripts esES\RebornAsASpaceM_S1.0E3.0_RMWSIM0003_389244_subtitle_trad_es-es.ass" --serve 
 [10/09/2026 12:02:14,21] "C:\Users\ajime\OneDrive\Documentos\PENDING\155 - Jaadugar\3 - Scripts esES\JaadugarAWitchI_S1E12_JWMSIM0012_380371_subtitle_trad_es-es.ass" --serve 
 [10/09/2026 14:35:40,17] "C:\CR\DONE\153 - Smoking Behind\3 - Scripts esES\SmokingBehindTh_S2E12_SUKSIM0012_378548_subtitle_edited_es-la.ass" --serve 
+[10/09/2026 20:31:06,13] "C:\Users\ajime\OneDrive\Documentos\PENDING\158 - The World's Strongest Rearguard\2 - Scripts esES\TheWorldsStrong_S1E12.0_WSRSIM0012_378239_subtitle_edited_es-la.ass" --serve 

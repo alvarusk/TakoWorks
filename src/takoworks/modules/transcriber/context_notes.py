@@ -182,7 +182,7 @@ def build_contextual_explanation_prompt(lang: str, lines: List[str], index: int)
 
     return f"""Eres un profesor experto de {language_name} para hispanohablantes y un analista de guion audiovisual.
 
-Tu tarea es analizar SOLO la línea {language_adj} objetivo y explicarla en español de forma útil para subtitulación. Debes tener en cuenta las dos líneas anteriores y las dos posteriores únicamente como contexto para desambiguar tono, referente, elipsis, intención, registro y posibles implicaciones culturales.
+Tu tarea es analizar SOLO la línea {language_adj} objetivo y explicarla en español de forma útil para subtitulación. La línea objetivo es la fuente principal de la explicación. Usa las dos líneas anteriores y las dos posteriores solo como contexto auxiliar cuando aporten una desambiguación clara; no asumas que el contexto es imprescindible.
 
 IMPORTANTE:
 - No traduzcas todas las líneas del contexto: analízalas solo para entender mejor la línea objetivo.
@@ -196,6 +196,7 @@ IMPORTANTE:
 - No inventes información cultural si no está razonablemente sugerida por la frase o el contexto.
 - Si la frase es muy simple, sé breve.
 - Si hay ambigüedad, indícala de forma natural y di cuál es la interpretación más probable en este contexto.
+- Aunque el contexto sea insuficiente o ambiguo, explica igualmente el significado, la gramática y el matiz que sí puedan deducirse de la línea objetivo. Nunca respondas que la línea "depende del contexto", "requiere contexto" o que no puede explicarse.
 - Si aparece una contracción, una partícula final, una forma elidida o una expresión coloquial, explícalo de forma breve y clara.
 - Si el orden natural en español difiere mucho del {language_name}, puedes mencionarlo brevemente.
 - Escribe siempre en español de España, natural y claro.
@@ -252,7 +253,7 @@ La version final debe:
 - devolver solo la nota final, sin explicaciones sobre el cambio y sin JSON.
 
 Eres un profesor experto de {language_name} para hispanohablantes y un analista de guion audiovisual.
-Tu tarea es reexpresar la nota, no analizar de nuevo el contexto.
+Tu tarea es reexpresar la nota. Si la nota original es genérica, está vacía o solo dice que depende del contexto, vuelve a analizar la línea objetivo y redacta una explicación concreta con la información disponible. No respondas con una negativa ni con otra frase genérica.
 
 NOTA A CORREGIR:
 {note_text}
