@@ -196,7 +196,7 @@ IMPORTANTE:
   1. semántico: qué quiere decir realmente la frase en contexto;
   2. sintáctico: cómo está construida y qué función cumplen las partes importantes;
   3. cultural/pragmático: matices de registro, implicaturas, relaciones entre personajes, referencias culturales o usos típicos del {language_name}.
-- Incluye entre 2 y 5 términos de vocabulario relevantes.
+- Incluye entre 2 y 5 términos de vocabulario solo si la línea contiene palabras o expresiones relevantes que merezca la pena explicar; si no, omite por completo la sección de vocabulario.
 - No inventes información cultural si no está razonablemente sugerida por la frase o el contexto.
 - Si la frase es muy simple, sé breve.
 - Si hay ambigüedad, indícala de forma natural y di cuál es la interpretación más probable en este contexto.
@@ -210,7 +210,7 @@ IMPORTANTE:
 
 FORMATO DE SALIDA (obligatorio):
 Explicación: 1 a 4 frases que combinen gramática y significado semántico con el contexto.
-Vocabulario:
+Vocabulario: (solo si hay términos relevantes; omite esta sección si no los hay)
 - [término en kanji]([furigana en hiragana]): [traducción o definición en español]
 - [término en kanji]([furigana en hiragana]): [traducción o definición en español]
 
@@ -219,7 +219,7 @@ REGLAS DE ESTILO PARA "explicación":
 - Tono claro, docente y natural.
 - Debe poder leerse como una nota breve de subtitulacion.
 - No empieces con "Esta frase significa...".
-- Usa exactamente los encabezados "Explicación:" y "Vocabulario:".
+- Usa siempre el encabezado "Explicación:". Usa "Vocabulario:" solo cuando incluyas términos.
 - Usa viñetas solo en la lista de vocabulario.
 - La sección "Explicación:" nunca puede faltar ni sustituirse por una frase genérica sobre que depende del contexto: explica qué significa y qué matiz tiene la línea objetivo.
 - No incluyas nada fuera de esta estructura.
@@ -251,7 +251,7 @@ def build_contextual_explanation_repair_prompt(lang: str, lines: List[str], inde
 
 La version final debe:
 - ignorar por completo la respuesta anterior, que puede ser incorrecta o genérica;
-- conservar exactamente los encabezados "Explicación:" y "Vocabulario:";
+- conservar siempre el encabezado "Explicación:"; conservar "Vocabulario:" solo si hay términos relevantes;
 - conservar la lista de vocabulario usando siempre kanji con furigana en hiragana: `kanji(furigana): definición`. Reescribe cualquier término que esté solo en hiragana y elimina el romaji;
 - no duplicar entradas: kanji y su forma en hiragana/katakana son una sola entrada; si no hay kanji, deja una sola forma kana y no añadas una lectura separada;
 - incluir una explicación real y específica de la línea objetivo; no devuelvas una frase genérica ni una nota sin el encabezado "Explicación:";
@@ -271,6 +271,43 @@ Línea -1: {line_minus_1}
 {target_label}: {target_line}
 Línea +1: {line_plus_1}
 Línea +2: {line_plus_2}"""
+
+
+def build_gemini_contextual_explanation_prompt(
+    lang: str, lines: List[str], index: int, retry: bool = False,
+    part: str = "explanation"
+) -> str:
+    """Build a compact, JSON-oriented prompt for Gemini context notes."""
+    _, previous, target, following, _ = get_context_window(lines, index, radius=1)
+    language = "japonés" if lang == "ja" else "chino"
+    retry_rule = (
+        "La respuesta anterior falló. Genera una explicación nueva y concreta; no digas que depende del contexto.\n"
+        if retry
+        else ""
+    )
+    vocabulary_rule = (
+        "Para japonés, usa kanji y lectura en hiragana. Para chino, usa hanzi y pinyin con tonos. "
+        "Si no hay términos útiles, devuelve una lista vacía."
+    )
+    if part == "vocabulary":
+        output = '{{"vocabulary":[{{"term":"...", "reading":"...", "meaning":"..."}}]}}'
+        task = "Extrae solo el vocabulario útil de la línea objetivo. No escribas una explicación."
+    else:
+        output = '{{"explanation":"1 a 3 frases concretas sobre significado, gramática y matiz"}}'
+        task = "Explica solo la línea objetivo. No incluyas vocabulario."
+    return f"""Eres profesor de {language} para hispanohablantes.
+{retry_rule}Explica solo la línea objetivo en español de España. La línea objetivo es la fuente principal; usa las líneas vecinas solo para aclarar un referente o una elipsis. Nunca respondas que depende del contexto ni que no puede explicarse.
+
+{task}
+
+Devuelve únicamente un objeto JSON válido con esta forma:
+{output}
+
+La salida debe contener únicamente los campos indicados. {vocabulary_rule}
+
+Línea anterior: {previous}
+Línea objetivo: {target}
+Línea siguiente: {following}"""
 
 
 def parse_contextual_explanation_response(raw: str) -> str:

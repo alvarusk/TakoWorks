@@ -34,8 +34,8 @@
       "output": 0.025
     },
     "context_note": {
-      "input": 0.002,
-      "output": 0.01
+      "input": 0.00075,
+      "output": 0.00375
     },
     "gemini": {
       "input": 0.00075,
@@ -47,12 +47,12 @@
     }
   },
   "last": {
-    "ass_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/145 - TBATE S2/3 - Scripts esES/ep8/TheBeginningAft_S2E8_BGFSIM0020_350663_subtitle_timed_ja-jp.ass",
+    "ass_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/163 - Space Mercenary/3 - Scripts esES/ep04/RebornAsASpaceM_S1E4_RMWSIM0004_389245_subtitle_timed_ja-jp.ass",
     "video_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/141 - MF Ghost S3/3 - Vídeos/CR_MfGhost_S3.0E12.0_MGHSIM0036_369282_video_ja-jp_J6126582.mp4",
     "word_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - Immortal King S5/0 - Ref/XW5#06_台词本_净版_250418.docx",
     "pdf_in": "C:/Users/ajime/OneDrive/Documentos/PENDING/141 - MF Ghost S3/0 - Ref/ep11/#35_MF_GHOST_Final script_v3.pdf",
-    "out_dir": "C:/Users/ajime/OneDrive/Documentos/PENDING/145 - TBATE S2/3 - Scripts esES/ep8",
-    "splitter_pos": 467,
+    "out_dir": "C:/Users/ajime/OneDrive/Documentos/PENDING/163 - Space Mercenary/3 - Scripts esES/ep04",
+    "splitter_pos": 554,
     "scanner_batch": false,
     "yomitoku_exe": "C:\\TakoWorks\\bin\\yomitoku\\yomitoku.exe",
     "cut_upper_ratio": 0.0,
@@ -73,6 +73,10 @@
     "scanner_out_raw": true,
     "warpgate_video": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - The Daily Life of the Immortal King S5/1 - Vídeos/CR_DailyLifeOfImmo_S5E11.0_TDISIM0062_364577_video_cmn-cn_J5837146.mp4",
     "warpgate_ass_a": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - The Daily Life of the Immortal King S5/3 - Scripts esES/s5e11/DailyLifeOfImmo_S5E11_TDISIM0062_364577_subtitle_timed.ass",
-    "warpgate_ass_b": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - The Daily Life of the Immortal King S5/3 - Scripts esES/s5e11/DailyLifeOfImmo_S5E11.0_TDISIM0062_364577_subtitle_edited_zh-cn_v2.ass"
-  }
+    "warpgate_ass_b": "C:/Users/ajime/OneDrive/Documentos/PENDING/140 - The Daily Life of the Immortal King S5/3 - Scripts esES/s5e11/DailyLifeOfImmo_S5E11.0_TDISIM0062_364577_subtitle_edited_zh-cn_v2.ass",
+    "series": "Reborn as a Space Mercenary: I Woke Up Piloting the Strongest Starship!"
+  },
+  "series_history": [
+    "Reborn as a Space Mercenary: I Woke Up Piloting the Strongest Starship!"
+  ]
 }

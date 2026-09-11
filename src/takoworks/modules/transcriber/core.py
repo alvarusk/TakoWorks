@@ -23,6 +23,7 @@ from .ass_utils import (
 from .context_notes import (
     build_contextual_explanation_prompt,
     build_contextual_explanation_repair_prompt,
+    build_gemini_contextual_explanation_prompt,
     contains_forbidden_chinese_script,
     contains_japanese_script,
     ensure_chinese_pinyin,
@@ -53,14 +54,9 @@ import anthropic                   # Claude
 try:
     from google import genai as google_genai  # Gemini SDK nuevo
     from google.genai import types as google_genai_types
-    legacy_genai = None
 except Exception:  # pragma: no cover - fallback para entornos antiguos
     google_genai = None
     google_genai_types = None
-    try:
-        import google.generativeai as legacy_genai  # Gemini SDK antiguo
-    except Exception:  # pragma: no cover - fallback opcional
-        legacy_genai = None
 
 from typing import Callable, Optional, List
 
@@ -79,15 +75,16 @@ OPENAI_MODEL   = "gpt-5.6-terra"            # OpenAI (calidad/precio)
 CLAUDE_MODEL   = "claude-opus-5"            # Anthropic
 CONTEXT_NOTE_MODEL = "claude-sonnet-5"      # Prompt explicativo / nota contextual
 GEMINI_MODEL   = "gemini-3.7-flash"         # Gemini 3.7 Flash
+CONTEXT_NOTE_GEMINI_MODEL = "gemini-3.6-flash"  # Menos saturado para notas por línea
 DEEPSEEK_MODEL = "deepseek-v4-flash"        # DeepSeek (OpenAI-like)
 OPENAI_TIMEOUT_S = 180
 OPENAI_MAX_RETRIES = 2
 OPENAI_BLOCK_ATTEMPTS = 3
 MODEL_BLOCK_ATTEMPTS = 3
-CONTEXT_NOTE_MAX_TOKENS = 800
+CONTEXT_NOTE_MAX_TOKENS = 1200
 ROMANIZATION_MAX_TOKENS = 1200
 TRANSLATION_MAX_TOKENS = 2500
-CONTEXT_NOTE_WORKERS = 3
+CONTEXT_NOTE_WORKERS = 1
 
 
 def _add_openai_temperature(request_kwargs: Dict[str, object], temperature: float) -> None:
@@ -379,7 +376,7 @@ def _read_price(model_key: str, kind: str, default: float) -> float:
 DEFAULT_PRICE_PER_1K: Dict[str, Dict[str, float]] = {
     "gpt": {"input": 0.002, "output": 0.012},
     "claude": {"input": 0.005, "output": 0.025},
-    "context_note": {"input": 0.002, "output": 0.01},
+    "context_note": {"input": 0.00075, "output": 0.00375},
     "gemini": {"input": 0.00075, "output": 0.00375},
     "deepseek": {"input": 0.00014, "output": 0.00028},
 }
@@ -1930,6 +1927,224 @@ def analyze_contextual_note_with_claude(
     return note, usage
 
 
+def _gemini_context_note_rejection_reason(
+    response, raw: str, note: str, lang: str
+) -> Optional[str]:
+    """Return a precise rejection reason; quoted source terms are allowed."""
+    candidates = getattr(response, "candidates", None) or []
+    finish_reason = getattr(candidates[0], "finish_reason", None) if candidates else None
+    reason = str(finish_reason or "").upper()
+    if "MAX_TOKENS" in reason or reason.endswith("LENGTH"):
+        return "respuesta truncada por límite de tokens"
+
+    raw_text = (raw or "").strip()
+    if not raw_text:
+        return "respuesta vacía"
+
+    explanation = note.split("Vocabulario:", 1)[0].strip()
+    if explanation in {"Explicación:", "Explicacion:"}:
+        return "explicación vacía"
+    if _is_generic_context_note(note, lang):
+        return "explicación genérica"
+    if lang == "ja" and _japanese_vocabulary_needs_repair(note):
+        return "vocabulario japonés duplicado o mal formado"
+    return None
+
+
+def analyze_contextual_note_with_gemini(
+    client,
+    lines: List[str],
+    index: int,
+    lang: str,
+) -> Tuple[str, ApiUsage]:
+    """Generate the subtitle note with the current Google GenAI SDK."""
+    system_prompt = (
+        "Sigue exactamente el formato solicitado y devuelve solo la nota pedida, "
+        "con exactamente los encabezados solicitados y sin texto extra."
+    )
+    usage = ApiUsage(engine="context_note", model_name=CONTEXT_NOTE_GEMINI_MODEL)
+
+    vocabulary_schema = {
+        "type": "OBJECT",
+        "properties": {
+            "vocabulary": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "term": {"type": "STRING"},
+                        "reading": {"type": "STRING"},
+                        "meaning": {"type": "STRING"},
+                    },
+                    "required": ["term", "reading", "meaning"],
+                },
+            }
+        },
+        "required": ["vocabulary"],
+    }
+    explanation_schema = {
+        "type": "OBJECT",
+        "properties": {"explanation": {"type": "STRING"}},
+        "required": ["explanation"],
+    }
+
+    def request(prompt: str, thinking_level: str, schema: dict, max_tokens: int):
+        for attempt in range(1, 4):
+            try:
+                return client.models.generate_content(
+                    model=CONTEXT_NOTE_GEMINI_MODEL,
+                    contents=prompt,
+                    config=google_genai_types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        max_output_tokens=max_tokens,
+                        response_mime_type="application/json",
+                        response_schema=schema,
+                        thinking_config=google_genai_types.ThinkingConfig(
+                            thinking_level=thinking_level
+                        ),
+                    )
+                )
+            except Exception as exc:
+                error_text = str(exc).upper()
+                is_transient = "503" in error_text or "UNAVAILABLE" in error_text
+                if not is_transient or attempt == 3:
+                    raise
+                wait_s = (5, 15, 30)[attempt - 1]
+                print(
+                    f"[Context note] Gemini no disponible (intento {attempt}/3). "
+                    f"Reintentando en {wait_s} s..."
+                )
+                time.sleep(wait_s)
+
+    def response_text(response) -> str:
+        text = getattr(response, "text", None)
+        if text:
+            return str(text).strip()
+        candidates = getattr(response, "candidates", None) or []
+        if candidates and getattr(candidates[0], "content", None):
+            return "".join(
+                getattr(part, "text", "")
+                for part in getattr(candidates[0].content, "parts", [])
+            ).strip()
+        return ""
+
+    def add_usage(response) -> None:
+        metadata = getattr(response, "usage_metadata", None)
+        if metadata is not None:
+            pt = _safe_int(getattr(metadata, "prompt_token_count", 0))
+            ct = _safe_int(getattr(metadata, "candidates_token_count", 0))
+            usage.prompt_tokens += pt
+            usage.completion_tokens += ct
+            usage.cost_usd += estimate_cost("context_note", pt, ct)
+
+    response = request(
+        build_gemini_contextual_explanation_prompt(lang, lines, index, part="explanation"),
+        "low",
+        explanation_schema,
+        450,
+    )
+    add_usage(response)
+    raw = response_text(response)
+
+    def json_note(raw_text: str) -> str:
+        try:
+            payload = json.loads(raw_text)
+        except (TypeError, ValueError):
+            return ""
+        if not isinstance(payload, dict):
+            return ""
+        explanation = str(payload.get("explanation") or "").strip()
+        if not explanation:
+            return ""
+        note_lines = [f"Explicación: {explanation}"]
+        vocabulary = payload.get("vocabulary") or []
+        vocab_lines = []
+        if isinstance(vocabulary, list):
+            for item in vocabulary:
+                if not isinstance(item, dict):
+                    continue
+                term = str(item.get("term") or "").strip()
+                reading = str(item.get("reading") or "").strip()
+                meaning = str(item.get("meaning") or "").strip()
+                if term and meaning:
+                    vocab_lines.append(
+                        f"- {term}{f'({reading})' if reading else ''}: {meaning}"
+                    )
+        if vocab_lines:
+            note_lines.extend(["Vocabulario:", *vocab_lines])
+        return "\n".join(note_lines)
+
+    note = json_note(raw)
+
+    explanation_part = note.split("Vocabulario:", 1)[0]
+    rejection_reason = _gemini_context_note_rejection_reason(response, raw, note, lang)
+    if rejection_reason:
+        response = request(
+            build_gemini_contextual_explanation_prompt(
+                lang, lines, index, retry=True, part="explanation"
+            ),
+            "medium",
+            explanation_schema,
+            550,
+        )
+        add_usage(response)
+        raw = response_text(response)
+        note = json_note(raw)
+        explanation_part = note.split("Vocabulario:", 1)[0]
+        rejection_reason = _gemini_context_note_rejection_reason(
+            response, raw, note, lang
+        )
+        if rejection_reason:
+            print(
+                f"[Context note DEBUG] Rechazo en línea {index + 1} "
+                f"({rejection_reason}): {raw[:300]!r}"
+            )
+            raise RuntimeError(
+                f"Gemini devolvió una respuesta inválida tras el reintento: {rejection_reason}."
+            )
+
+    target_line = (lines[index] or "").strip()
+    has_vocab_candidate = bool(
+        len(target_line) >= 5
+        and (
+            re.search(r"[一-龯]{2,}", target_line)
+            or re.search(r"(わけ|らしい|っぱなし|てほしい|よう|なんて|みたい)", target_line)
+        )
+    )
+    if has_vocab_candidate:
+        try:
+            vocabulary_response = request(
+                build_gemini_contextual_explanation_prompt(
+                    lang, lines, index, part="vocabulary"
+                ),
+                "low",
+                vocabulary_schema,
+                450,
+            )
+            add_usage(vocabulary_response)
+            vocabulary_payload = json.loads(response_text(vocabulary_response))
+            vocabulary = vocabulary_payload.get("vocabulary", [])
+            vocab_lines = []
+            for item in vocabulary if isinstance(vocabulary, list) else []:
+                if isinstance(item, dict) and item.get("term") and item.get("meaning"):
+                    reading = f"({item.get('reading')})" if item.get("reading") else ""
+                    vocab_lines.append(
+                        f"- {item['term']}{reading}: {item['meaning']}"
+                    )
+            if vocab_lines:
+                note = note + "\nVocabulario:\n" + "\n".join(vocab_lines)
+        except Exception as exc:
+            print(
+                f"[Context note DEBUG] Vocabulario omitido en línea {index + 1}: {exc}"
+            )
+
+    if not note:
+        raise RuntimeError("Gemini no devolvió texto para la nota contextual.")
+    if lang == "zh":
+        note = ensure_chinese_pinyin(note)
+    return note, usage
+
+
 def build_contextual_notes(
     lines: List[str],
     lang: str,
@@ -1944,17 +2159,17 @@ def build_contextual_notes(
     if lang not in {"ja", "zh"}:
         return [""] * len(cleaned_lines)
 
-    if not ANTHROPIC_API_KEY:
+    if not GEMINI_API_KEY:
         if not _WARNED_CONTEXT_NOTE_MISSING_KEY:
-            print("[Context note] Skipping because ANTHROPIC_API_KEY is missing.")
+            print("[Context note] Skipping because GEMINI_API_KEY is missing.")
             _WARNED_CONTEXT_NOTE_MISSING_KEY = True
         return [""] * len(cleaned_lines)
 
     try:
-        client = get_claude_client()
+        client = google_genai.Client(api_key=GEMINI_API_KEY)
     except Exception as e:
         if not _WARNED_CONTEXT_NOTE_CLIENT:
-            print(f"[Context note] Claude cannot be initialized: {e}")
+            print(f"[Context note] Gemini cannot be initialized: {e}")
             _WARNED_CONTEXT_NOTE_CLIENT = True
         return [""] * len(cleaned_lines)
 
@@ -1964,7 +2179,7 @@ def build_contextual_notes(
 
     def analyze(idx: int) -> Tuple[int, str, ApiUsage]:
         print(f"[Context note {lang_label}] Line {idx + 1}/{total}...")
-        note, note_usage = analyze_contextual_note_with_claude(client, cleaned_lines, idx, lang)
+        note, note_usage = analyze_contextual_note_with_gemini(client, cleaned_lines, idx, lang)
         return idx, note, note_usage
 
     indices = [idx for idx, line in enumerate(cleaned_lines) if line]
@@ -2002,13 +2217,7 @@ def get_gemini_model(lang: str, series_name: str, source_type: str):
     if google_genai is not None:
         client = google_genai.Client(api_key=GEMINI_API_KEY)
         return "google-genai", client, system_prompt
-    if legacy_genai is not None:
-        legacy_genai.configure(api_key=GEMINI_API_KEY)
-        return "google-generativeai", legacy_genai.GenerativeModel(
-            model_name=GEMINI_MODEL,
-            system_instruction=system_prompt,
-        ), system_prompt
-    raise RuntimeError("No Gemini SDK available. Install google-genai or google-generativeai.")
+    raise RuntimeError("No está disponible el SDK de Gemini. Instala google-genai.")
 
 
 # ============================================================
