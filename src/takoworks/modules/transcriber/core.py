@@ -87,7 +87,7 @@ MODEL_BLOCK_ATTEMPTS = 3
 CONTEXT_NOTE_MAX_TOKENS = 800
 ROMANIZATION_MAX_TOKENS = 1200
 TRANSLATION_MAX_TOKENS = 2500
-CONTEXT_NOTE_WORKERS = 6
+CONTEXT_NOTE_WORKERS = 3
 
 
 def _add_openai_temperature(request_kwargs: Dict[str, object], temperature: float) -> None:

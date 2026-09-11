@@ -104,9 +104,10 @@ def test_context_note_analysis_keeps_chinese_terms_and_adds_pinyin():
 
 def test_repair_prompt_explicitly_rewrites_to_spanish():
     prompt = build_contextual_explanation_repair_prompt("ja", ["A"], 0, "日本語の説明")
-    assert "Reescribe la siguiente nota contextual al español de España." in prompt
+    assert "Genera de nuevo una nota contextual en español de España." in prompt
+    assert "RESPUESTA ANTERIOR (IGNORAR)" in prompt
     assert "no incluir japonés" in prompt
-    assert "NOTA A CORREGIR" in prompt
+    assert "RESPUESTA ANTERIOR (IGNORAR)" in prompt
 
 
 def test_contains_japanese_script_detects_kana_and_kanji():
@@ -129,7 +130,7 @@ def test_context_note_analysis_repairs_japanese_output():
     assert usage.prompt_tokens == 20
     assert usage.completion_tokens == 12
     assert len(client.messages.calls) == 2
-    assert "Reescribe la siguiente nota contextual" in client.messages.calls[1]["messages"][0]["content"]
+    assert "Genera de nuevo una nota contextual" in client.messages.calls[1]["messages"][0]["content"]
 
 
 def test_ensure_japanese_furigana_adds_readings_to_every_kanji_span():

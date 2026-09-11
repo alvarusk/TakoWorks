@@ -15,8 +15,12 @@ def _normalize_context_line(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip())
 
 
-def get_context_window(lines: List[str], index: int) -> Tuple[str, str, str, str, str]:
+def get_context_window(
+    lines: List[str], index: int, radius: int = 2
+) -> Tuple[str, str, str, str, str]:
     def pick(offset: int) -> str:
+        if abs(offset) > radius:
+            return ""
         pos = index + offset
         if 0 <= pos < len(lines):
             return _normalize_context_line(lines[pos])
@@ -229,7 +233,10 @@ Línea +2: {line_plus_2}"""
 
 
 def build_contextual_explanation_repair_prompt(lang: str, lines: List[str], index: int, note: str) -> str:
-    line_minus_2, line_minus_1, target_line, line_plus_1, line_plus_2 = get_context_window(lines, index)
+    # Retries use less context and regenerate the answer from the target line.
+    line_minus_2, line_minus_1, target_line, line_plus_1, line_plus_2 = get_context_window(
+        lines, index, radius=1
+    )
     language_name = "japonés" if lang == "ja" else "chino"
     language_adj = "japonesa" if lang == "ja" else "china"
     target_label = "Línea japonesa objetivo" if lang == "ja" else "Línea china objetivo"
@@ -240,10 +247,10 @@ def build_contextual_explanation_repair_prompt(lang: str, lines: List[str], inde
         else "no incluir kana ni caracteres japoneses; si conserva una palabra en hanzi, añadir inmediatamente su pinyin con tonos entre paréntesis;"
     )
 
-    return f"""Reescribe la siguiente nota contextual al español de España.
+    return f"""Genera de nuevo una nota contextual en español de España.
 
 La version final debe:
-- conservar el sentido, el tono y la brevedad de la nota original;
+- ignorar por completo la respuesta anterior, que puede ser incorrecta o genérica;
 - conservar exactamente los encabezados "Explicación:" y "Vocabulario:";
 - conservar la lista de vocabulario usando siempre kanji con furigana en hiragana: `kanji(furigana): definición`. Reescribe cualquier término que esté solo en hiragana y elimina el romaji;
 - no duplicar entradas: kanji y su forma en hiragana/katakana son una sola entrada; si no hay kanji, deja una sola forma kana y no añadas una lectura separada;
@@ -253,9 +260,9 @@ La version final debe:
 - devolver solo la nota final, sin explicaciones sobre el cambio y sin JSON.
 
 Eres un profesor experto de {language_name} para hispanohablantes y un analista de guion audiovisual.
-Tu tarea es reexpresar la nota. Si la nota original es genérica, está vacía o solo dice que depende del contexto, vuelve a analizar la línea objetivo y redacta una explicación concreta con la información disponible. No respondas con una negativa ni con otra frase genérica.
+Tu tarea es analizar de nuevo la línea objetivo. Explica su significado, gramática y matiz con la información disponible. Aunque el contexto sea insuficiente, redacta una explicación autónoma y concreta. No respondas con una negativa ni con otra frase genérica.
 
-NOTA A CORREGIR:
+RESPUESTA ANTERIOR (IGNORAR):
 {note_text}
 
 CONTEXTO:
