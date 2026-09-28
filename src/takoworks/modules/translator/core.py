@@ -58,6 +58,14 @@ HEADER_HINTS = {
 }
 
 GLOSSARY_DELIMITERS = (",", ";", "\t", "|")
+TRANSLATOR_SOURCE_LANGS = {"EN": "English", "FR": "French"}
+
+
+def _normalize_source_lang(source_lang: str) -> str:
+    normalized = str(source_lang or "EN").strip().upper()
+    if normalized not in TRANSLATOR_SOURCE_LANGS:
+        raise ValueError("Translator source language must be EN (English) or FR (French).")
+    return normalized
 
 
 def _read_api_key() -> str:
@@ -353,12 +361,14 @@ def translate_ass_file(
     out_path: Optional[str] = None,
     *,
     auth_key: Optional[str] = None,
+    source_lang: str = "EN",
     log=None,
     cancel_event=None,
 ) -> str:
     if log is None:
         log = print
 
+    source_lang = _normalize_source_lang(source_lang)
     auth_key = (auth_key or _read_api_key()).strip()
     client = DeepLClient(auth_key=auth_key)
 
@@ -385,7 +395,7 @@ def translate_ass_file(
         glossary_id = client.create_glossary(
             name=glossary_name,
             entries_csv=glossary_entries_csv,
-            source_lang="en",
+            source_lang=source_lang.lower(),
             target_lang="es",
         )
         log(f"[i] Created DeepL glossary: {glossary_id}")
@@ -426,7 +436,7 @@ def translate_ass_file(
             batch_translated = client.translate_batch(
                 batch,
                 glossary_id=glossary_id,
-                source_lang="EN",
+                source_lang=source_lang,
                 target_lang="ES",
             )
             translated_payloads.extend(batch_translated)
@@ -464,6 +474,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="TakoWorks Translator (ASS -> DeepL -> ASS)")
     ap.add_argument("--ass", required=True, help="Input ASS file")
     ap.add_argument("--glossary", default="", help="Optional CSV glossary (English-Spanish)")
+    ap.add_argument("--source-lang", choices=("EN", "FR"), default="EN", help="Source language: EN (English) or FR (French)")
     ap.add_argument("--out", default=None, help="Output ASS file")
     ap.add_argument("--api-key", default="", help="DeepL auth key (optional; can come from config/env)")
     args = ap.parse_args(argv)
@@ -473,6 +484,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         args.glossary or None,
         args.out,
         auth_key=args.api_key.strip() or None,
+        source_lang=args.source_lang,
     )
     print(f"[ok] {out_path}")
     return 0

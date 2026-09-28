@@ -17,8 +17,12 @@ class TranslatorPanel(ttk.Frame):
         last = cfg.setdefault("last", {})
         initial_ass = self.launch_opts.get("ass") or last.get("translator_ass", "")
         initial_glossary = self.launch_opts.get("glossary") or last.get("translator_glossary", "")
+        initial_source_lang = str(last.get("translator_source_lang", "EN") or "EN").upper()
+        if initial_source_lang not in {"EN", "FR"}:
+            initial_source_lang = "EN"
         self.ass_var = tk.StringVar(value=initial_ass)
         self.glossary_var = tk.StringVar(value=initial_glossary)
+        self.source_lang_var = tk.StringVar(value=initial_source_lang)
 
         self._build()
 
@@ -37,6 +41,18 @@ class TranslatorPanel(ttk.Frame):
         ttk.Label(r1, text="Glossary CSV (optional)").pack(side="left")
         ttk.Entry(r1, textvariable=self.glossary_var).pack(side="left", fill="x", expand=True, padx=6)
         ttk.Button(r1, text="Browse", command=self._pick_glossary).pack(side="left")
+
+        r2 = ttk.Frame(frm)
+        r2.pack(fill="x", pady=3)
+        ttk.Label(r2, text="Source language").pack(side="left")
+        ttk.Combobox(
+            r2,
+            textvariable=self.source_lang_var,
+            values=("EN", "FR"),
+            state="readonly",
+            width=8,
+        ).pack(side="left", padx=6)
+        ttk.Label(r2, text="(English / French)").pack(side="left")
 
         note = ttk.LabelFrame(frm, text="Notes")
         note.pack(fill="x", pady=8)
@@ -73,6 +89,7 @@ class TranslatorPanel(ttk.Frame):
 
         ass_path = self.ass_var.get().strip()
         glossary_path = self.glossary_var.get().strip()
+        source_lang = self.source_lang_var.get().strip().upper()
 
         if not ass_path or not os.path.isfile(ass_path):
             messagebox.showerror("Error", "Select a valid ASS file.")
@@ -87,6 +104,7 @@ class TranslatorPanel(ttk.Frame):
 
         self.cfg["last"]["translator_ass"] = ass_path
         self.cfg["last"]["translator_glossary"] = glossary_path
+        self.cfg["last"]["translator_source_lang"] = source_lang
         save_config(self.cfg)
 
         def job(cancel_event, log):
@@ -96,11 +114,13 @@ class TranslatorPanel(ttk.Frame):
             out_path = core._make_output_path(ass_path)
             log(f"ASS: {ass_path}")
             log(f"Glossary: {glossary_path or '(none)'}")
+            log(f"Source language: {source_lang}")
             log(f"Output: {out_path}")
             core.translate_ass_file(
                 ass_path,
                 glossary_path,
                 out_path,
+                source_lang=source_lang,
                 cancel_event=cancel_event,
                 log=log,
             )

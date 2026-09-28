@@ -100,12 +100,13 @@ def test_translate_ass_file_runs_without_glossary(tmp_path, monkeypatch):
     monkeypatch.setattr(translator_core, "_read_api_key", lambda: "test-key")
     monkeypatch.setattr(translator_core, "DeepLClient", FakeClient)
 
-    result = translate_ass_file("input.ass", None, str(out_path), log=lambda *args, **kwargs: None)
+    result = translate_ass_file("input.ass", None, str(out_path), source_lang="FR", log=lambda *args, **kwargs: None)
 
     assert result == str(out_path)
     assert out_path.read_text(encoding="utf-8-sig") == "Dialogue: 0,0,0,0,0,0,0,0,Hola\n"
     assert calls["auth_key"] == "test-key"
     assert calls["translate_batch"]["glossary_id"] is None
+    assert calls["translate_batch"]["source_lang"] == "FR"
     assert "create_glossary" not in calls
     assert "wait_glossary_ready" not in calls
     assert "delete_glossary" not in calls
