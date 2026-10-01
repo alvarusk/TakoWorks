@@ -74,6 +74,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "pdf_in": "",
         "translator_ass": "",
         "translator_glossary": "",
+        "translator_instructions_md": "",
+        "transcriber_instructions_md": "",
         "translator_source_lang": "EN",
         "out_dir": "",
         "splitter_pos": 0,

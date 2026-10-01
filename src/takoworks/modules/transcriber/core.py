@@ -36,6 +36,7 @@ from .json_utils import (
     parse_json_translations_result,
 )
 from .source_type import describe_source_type, normalize_source_type
+from ...shared.series_instructions import read_series_instructions
 
 try:
     import requests  # type: ignore
@@ -1707,7 +1708,7 @@ def ask_source_type() -> str:
         print("Invalid input. Type 1, 2, 3, or 4.\n")
 
 
-def build_system_prompt(lang: str, series_name: str, source_type: str) -> str:
+def build_system_prompt(lang: str, series_name: str, source_type: str, terminology_instructions: str = "") -> str:
     if lang == "ja":
         src_lang = "japonés"
     elif lang == "zh":
@@ -1717,11 +1718,20 @@ def build_system_prompt(lang: str, series_name: str, source_type: str) -> str:
 
     source_sentence = describe_source_type(source_type)
 
+    custom = ""
+    if terminology_instructions.strip():
+        custom = (
+            "\nTerminología e instrucciones específicas de esta serie (debes aplicarlas con prioridad "
+            "en nombres propios y términos recurrentes):\n---\n"
+            f"{terminology_instructions.strip()}\n---\n"
+        )
+
     return (
         f"Eres un traductor profesional del {src_lang} al español de España, "
         "especializado en anime y donghua, y en subtitulación profesional.\n\n"
         f"Estás traduciendo la serie «{series_name}».\n"
         f"{source_sentence}\n\n"
+        f"{custom}"
         "Instrucciones de subtitulación:\n"
         "- Las líneas ya están segmentadas como subtítulos; NO las fusiones ni las "
         "dividas. Cada línea de origen debe corresponder exactamente a una línea traducida.\n"
@@ -1745,7 +1755,7 @@ def build_system_prompt(lang: str, series_name: str, source_type: str) -> str:
     )
 
 
-def build_user_prompt(chunk_lines: List[str], lang: str, series_name: str, source_type: str) -> str:
+def build_user_prompt(chunk_lines: List[str], lang: str, series_name: str, source_type: str, terminology_instructions: str = "") -> str:
     if lang == "ja":
         src_lang = "japonés"
     elif lang == "zh":
@@ -1756,9 +1766,13 @@ def build_user_prompt(chunk_lines: List[str], lang: str, series_name: str, sourc
     lines_str = "\n".join(
         f"{i+1}: {text}" for i, text in enumerate(chunk_lines)
     )
+    custom = ""
+    if terminology_instructions.strip():
+        custom = f"\nAplica también estas instrucciones de terminología de la serie:\n{terminology_instructions.strip()}\n"
     user_prompt = (
         f"Estás traduciendo subtítulos de la serie «{series_name}».\n"
         f"El idioma original es {src_lang}.\n\n"
+        f"{custom}\n"
         "Devuelve EXCLUSIVAMENTE un JSON con esta forma:\n"
         "{\"translations\": [\"traducción de la línea 1\", \"traducción de la línea 2\", ...]}\n"
         "sin texto adicional.\n\n"
@@ -2210,10 +2224,10 @@ def get_claude_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 
-def get_gemini_model(lang: str, series_name: str, source_type: str):
+def get_gemini_model(lang: str, series_name: str, source_type: str, terminology_instructions: str = ""):
     if not GEMINI_API_KEY:
         raise RuntimeError("Falta GEMINI_API_KEY. Define la variable de entorno.")
-    system_prompt = build_system_prompt(lang, series_name, source_type)
+    system_prompt = build_system_prompt(lang, series_name, source_type, terminology_instructions)
     if google_genai is not None:
         client = google_genai.Client(api_key=GEMINI_API_KEY)
         return "google-genai", client, system_prompt
@@ -2230,6 +2244,7 @@ def translate_with_openai(
     series_name: str,
     source_type: str,
     debug_dir: Optional[str] = None,
+    terminology_instructions: str = "",
 ) -> Tuple[List[str], ApiUsage, Optional[str]]:
     if not OPENAI_API_KEY:
         print(f"[{DISPLAY_NAMES['gpt']}] GPT is skipped because OPENAI_API_KEY is missing (env or config.local.json).")
@@ -2241,7 +2256,7 @@ def translate_with_openai(
         print(f"[{DISPLAY_NAMES['gpt']}] The client cannot be initialized: {e}. GPT will be skipped.")
         return src_lines, ApiUsage(engine="gpt", model_name=OPENAI_MODEL), "client_error"
 
-    system_prompt = build_system_prompt(lang, series_name, source_type)
+    system_prompt = build_system_prompt(lang, series_name, source_type, terminology_instructions)
     all_translations: List[str] = []
     total = len(src_lines)
     usage = ApiUsage(engine="gpt", model_name=OPENAI_MODEL)
@@ -2249,7 +2264,7 @@ def translate_with_openai(
 
     for start in range(0, total, CHUNK_SIZE):
         chunk = src_lines[start:start + CHUNK_SIZE]
-        base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
+        base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type, terminology_instructions)
         end_line = min(start + CHUNK_SIZE, total)
         print(f"[{DISPLAY_NAMES['gpt']}] Lines {start + 1}-{end_line} of {total}...")
 
@@ -2376,13 +2391,14 @@ def translate_with_deepseek(
     series_name: str,
     source_type: str,
     debug_dir: Optional[str] = None,
+    terminology_instructions: str = "",
 ) -> Tuple[List[str], ApiUsage, Optional[str]]:
     try:
         client = get_deepseek_client()
     except Exception as e:
         print(f"[DeepSeek] DeepSeek is skipped (client not initialized): {e}")
         return src_lines, ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL), "client_error"
-    system_prompt = build_system_prompt(lang, series_name, source_type)
+    system_prompt = build_system_prompt(lang, series_name, source_type, terminology_instructions)
     all_translations: List[str] = []
     total = len(src_lines)
     usage = ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL)
@@ -2390,7 +2406,7 @@ def translate_with_deepseek(
 
     for start in range(0, total, CHUNK_SIZE):
         chunk = src_lines[start:start + CHUNK_SIZE]
-        base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
+        base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type, terminology_instructions)
         end_line = min(start + CHUNK_SIZE, total)
         print(f"[DeepSeek] Lines {start + 1}-{end_line} of {total}...")
 
@@ -2487,6 +2503,7 @@ def translate_with_claude(
     series_name: str,
     source_type: str,
     debug_dir: Optional[str] = None,
+    terminology_instructions: str = "",
 ) -> Tuple[List[str], ApiUsage, Optional[str]]:
     try:
         client = get_claude_client()
@@ -2494,7 +2511,7 @@ def translate_with_claude(
         print(f"[Claude] Claude is skipped (client not initialized): {e}")
         return src_lines, ApiUsage(engine="claude", model_name=CLAUDE_MODEL), "client_error"
 
-    system_prompt = build_system_prompt(lang, series_name, source_type)
+    system_prompt = build_system_prompt(lang, series_name, source_type, terminology_instructions)
     all_translations: List[str] = []
     total = len(src_lines)
     usage = ApiUsage(engine="claude", model_name=CLAUDE_MODEL)
@@ -2502,7 +2519,7 @@ def translate_with_claude(
 
     for start in range(0, total, CHUNK_SIZE):
         chunk = src_lines[start:start + CHUNK_SIZE]
-        base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
+        base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type, terminology_instructions)
         end_line = min(start + CHUNK_SIZE, total)
         print(f"[Claude] Lines {start + 1}-{end_line} of {total}...")
 
@@ -2619,13 +2636,14 @@ def translate_with_gemini(
     series_name: str,
     source_type: str,
     debug_dir: Optional[str] = None,
+    terminology_instructions: str = "",
 ) -> Tuple[List[str], ApiUsage, Optional[str]]:
     """
     Usa Gemini 3.7 Flash, con bloques más pequeños y max_output_tokens
     limitado para ir algo más rápido/estable.
     """
     try:
-        gemini_sdk, model, system_prompt = get_gemini_model(lang, series_name, source_type)
+        gemini_sdk, model, system_prompt = get_gemini_model(lang, series_name, source_type, terminology_instructions)
     except Exception as e:
         print(f"[{DISPLAY_NAMES['gemini']}] Gemini is skipped (client not initialized): {e}")
         return src_lines, ApiUsage(engine="gemini", model_name=GEMINI_MODEL), "client_error"
@@ -2636,7 +2654,7 @@ def translate_with_gemini(
 
     for start in range(0, total, GEMINI_CHUNK):
         chunk = src_lines[start:start + GEMINI_CHUNK]
-        base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type)
+        base_user_prompt = build_user_prompt(chunk, lang, series_name, source_type, terminology_instructions)
         end_line = min(start + GEMINI_CHUNK, total)
         print(f"[{DISPLAY_NAMES['gemini']}] Lines {start + 1}-{end_line} of {total}...")
 
@@ -2953,6 +2971,7 @@ def process_all_models_with_subs(
     base_name: str,
     models: Set[str],
     out_dir: str,
+    terminology_instructions: str = "",
 ) -> Tuple[Dict[str, List[str]], Dict[str, ApiUsage], Dict[str, float]]:
     def _should_write_output(reason: Optional[str]) -> bool:
         return reason not in {"missing_key", "client_error", "auth_error"}
@@ -2990,7 +3009,8 @@ def process_all_models_with_subs(
         print(f"=== {DISPLAY_NAMES['gpt']} ===")
         start = time.time()
         gpt_trans, gpt_usage, gpt_skip = translate_with_openai(
-            src_lines, lang, series_name, source_type, debug_dir=debug_dir
+            src_lines, lang, series_name, source_type, debug_dir=debug_dir,
+            terminology_instructions=terminology_instructions,
         )
         elapsed = time.time() - start
         model_timings["gpt"] = elapsed
@@ -3009,7 +3029,8 @@ def process_all_models_with_subs(
         print(f"=== {DISPLAY_NAMES['claude']} ===")
         start = time.time()
         claude_trans, claude_usage, claude_skip = translate_with_claude(
-            src_lines, lang, series_name, source_type, debug_dir=debug_dir
+            src_lines, lang, series_name, source_type, debug_dir=debug_dir,
+            terminology_instructions=terminology_instructions,
         )
         elapsed = time.time() - start
         model_timings["claude"] = elapsed
@@ -3028,7 +3049,8 @@ def process_all_models_with_subs(
         print(f"=== {DISPLAY_NAMES['gemini']} ===")
         start = time.time()
         gemini_trans, gemini_usage, gemini_skip = translate_with_gemini(
-            src_lines, lang, series_name, source_type, debug_dir=debug_dir
+            src_lines, lang, series_name, source_type, debug_dir=debug_dir,
+            terminology_instructions=terminology_instructions,
         )
         elapsed = time.time() - start
         model_timings["gemini"] = elapsed
@@ -3047,7 +3069,8 @@ def process_all_models_with_subs(
         print(f"=== {DISPLAY_NAMES['deepseek']} ===")
         start = time.time()
         deepseek_trans, deepseek_usage, deepseek_skip = translate_with_deepseek(
-            src_lines, lang, series_name, source_type, debug_dir=debug_dir
+            src_lines, lang, series_name, source_type, debug_dir=debug_dir,
+            terminology_instructions=terminology_instructions,
         )
         elapsed = time.time() - start
         model_timings["deepseek"] = elapsed
@@ -3143,6 +3166,11 @@ def main(argv: Optional[List[str]] = None):
         help="Add romaji/pinyin via DeepSeek and a context note with Claude Sonnet to the ASS.",
     )
     parser.add_argument(
+        "--instructions-md",
+        default="",
+        help="Markdown file with series-specific terminology and translation instructions.",
+    )
+    parser.add_argument(
         "--html",
         action="store_true",
         help="Generate a summary HTML with original text, romanization, context notes, and translations.",
@@ -3159,6 +3187,10 @@ def main(argv: Optional[List[str]] = None):
     )
 
     args = parser.parse_args(argv)
+
+    terminology_instructions = read_series_instructions(args.instructions_md)
+    if terminology_instructions:
+        print(f"[+] Loaded series terminology/instructions: {args.instructions_md}")
 
     # Normalizamos rutas y carpeta de salida
     ass_in = os.path.abspath(args.ass_in)
@@ -3247,6 +3279,7 @@ def main(argv: Optional[List[str]] = None):
         base_name,
         models,
         out_dir,
+        terminology_instructions=terminology_instructions,
     )
 
     if romanization_usage.total_tokens > 0:

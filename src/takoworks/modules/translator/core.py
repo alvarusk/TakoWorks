@@ -15,6 +15,7 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import requests
 
 from ...config import load_config
+from ...shared.series_instructions import read_series_instructions, terminology_pairs_csv
 from ..transferer.transferer import parse_ass
 
 DEEPL_PRO_URL = "https://api.deepl.com"
@@ -362,6 +363,7 @@ def translate_ass_file(
     *,
     auth_key: Optional[str] = None,
     source_lang: str = "EN",
+    terminology_md_path: Optional[str] = None,
     log=None,
     cancel_event=None,
 ) -> str:
@@ -375,6 +377,8 @@ def translate_ass_file(
     src_lines, events = parse_ass(ass_path)
     dialogue_events = [ev for ev in events if str(ev.get("prefix", "")).lower() == "dialogue"]
     glossary_id: Optional[str] = None
+    terminology_md = read_series_instructions(terminology_md_path)
+    md_glossary = terminology_pairs_csv(terminology_md)
     if not dialogue_events:
         out_path = out_path or _make_output_path(ass_path)
         with open(out_path, "w", encoding="utf-8-sig", errors="replace") as fh:
@@ -383,13 +387,24 @@ def translate_ass_file(
         return out_path
 
     log(f"[i] DeepL endpoint: {client.base_url}")
+    glossary_entries_csv = ""
+    glossary_label = ""
     if glossary_csv_path:
         glossary_csv_path = glossary_csv_path.strip()
     if glossary_csv_path:
         if not os.path.isfile(glossary_csv_path):
             raise FileNotFoundError(f"Glossary CSV file not found: {glossary_csv_path}")
         glossary_entries_csv, entry_count = _load_glossary_csv(glossary_csv_path)
-        glossary_name = f"TakoWorks_{Path(glossary_csv_path).stem}_{uuid.uuid4().hex[:8]}"
+        glossary_label = Path(glossary_csv_path).stem
+        if md_glossary:
+            glossary_entries_csv = f"{glossary_entries_csv}\n{md_glossary}".strip()
+            entry_count += len(md_glossary.splitlines())
+    elif md_glossary:
+        glossary_entries_csv = md_glossary
+        entry_count = len(md_glossary.splitlines())
+        glossary_label = "series_terminology"
+    if glossary_entries_csv:
+        glossary_name = f"TakoWorks_{glossary_label}_{uuid.uuid4().hex[:8]}"
         log(f"[i] Glossary entries: {entry_count}")
 
         glossary_id = client.create_glossary(
@@ -474,6 +489,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="TakoWorks Translator (ASS -> DeepL -> ASS)")
     ap.add_argument("--ass", required=True, help="Input ASS file")
     ap.add_argument("--glossary", default="", help="Optional CSV glossary (English-Spanish)")
+    ap.add_argument("--instructions-md", default="", help="Optional Markdown series terminology file")
     ap.add_argument("--source-lang", choices=("EN", "FR"), default="EN", help="Source language: EN (English) or FR (French)")
     ap.add_argument("--out", default=None, help="Output ASS file")
     ap.add_argument("--api-key", default="", help="DeepL auth key (optional; can come from config/env)")
@@ -483,6 +499,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         args.ass,
         args.glossary or None,
         args.out,
+        terminology_md_path=args.instructions_md or None,
         auth_key=args.api_key.strip() or None,
         source_lang=args.source_lang,
     )

@@ -17,11 +17,13 @@ class TranslatorPanel(ttk.Frame):
         last = cfg.setdefault("last", {})
         initial_ass = self.launch_opts.get("ass") or last.get("translator_ass", "")
         initial_glossary = self.launch_opts.get("glossary") or last.get("translator_glossary", "")
+        initial_instructions = last.get("translator_instructions_md", "")
         initial_source_lang = str(last.get("translator_source_lang", "EN") or "EN").upper()
         if initial_source_lang not in {"EN", "FR"}:
             initial_source_lang = "EN"
         self.ass_var = tk.StringVar(value=initial_ass)
         self.glossary_var = tk.StringVar(value=initial_glossary)
+        self.instructions_var = tk.StringVar(value=initial_instructions)
         self.source_lang_var = tk.StringVar(value=initial_source_lang)
 
         self._build()
@@ -41,6 +43,12 @@ class TranslatorPanel(ttk.Frame):
         ttk.Label(r1, text="Glossary CSV (optional)").pack(side="left")
         ttk.Entry(r1, textvariable=self.glossary_var).pack(side="left", fill="x", expand=True, padx=6)
         ttk.Button(r1, text="Browse", command=self._pick_glossary).pack(side="left")
+
+        r1b = ttk.Frame(frm)
+        r1b.pack(fill="x", pady=3)
+        ttk.Label(r1b, text="Series terminology / instructions (.md)").pack(side="left")
+        ttk.Entry(r1b, textvariable=self.instructions_var).pack(side="left", fill="x", expand=True, padx=6)
+        ttk.Button(r1b, text="Browse", command=self._pick_instructions).pack(side="left")
 
         r2 = ttk.Frame(frm)
         r2.pack(fill="x", pady=3)
@@ -83,12 +91,18 @@ class TranslatorPanel(ttk.Frame):
         if p:
             self.glossary_var.set(p)
 
+    def _pick_instructions(self):
+        p = filedialog.askopenfilename(filetypes=[("Markdown", "*.md"), ("All files", "*.*")])
+        if p:
+            self.instructions_var.set(p)
+
     def _run(self):
         if self.runner.is_busy():
             return
 
         ass_path = self.ass_var.get().strip()
         glossary_path = self.glossary_var.get().strip()
+        instructions_path = self.instructions_var.get().strip()
         source_lang = self.source_lang_var.get().strip().upper()
 
         if not ass_path or not os.path.isfile(ass_path):
@@ -97,13 +111,18 @@ class TranslatorPanel(ttk.Frame):
         if glossary_path and not os.path.isfile(glossary_path):
             messagebox.showerror("Error", "Select a valid glossary CSV file.")
             return
+        if instructions_path and not os.path.isfile(instructions_path):
+            messagebox.showerror("Error", "Select a valid Markdown instructions file.")
+            return
 
         ass_path = os.path.abspath(ass_path)
         glossary_path = os.path.abspath(glossary_path) if glossary_path else ""
+        instructions_path = os.path.abspath(instructions_path) if instructions_path else ""
         out_path = None
 
         self.cfg["last"]["translator_ass"] = ass_path
         self.cfg["last"]["translator_glossary"] = glossary_path
+        self.cfg["last"]["translator_instructions_md"] = instructions_path
         self.cfg["last"]["translator_source_lang"] = source_lang
         save_config(self.cfg)
 
@@ -114,12 +133,14 @@ class TranslatorPanel(ttk.Frame):
             out_path = core._make_output_path(ass_path)
             log(f"ASS: {ass_path}")
             log(f"Glossary: {glossary_path or '(none)'}")
+            log(f"Terminology Markdown: {instructions_path or '(none)'}")
             log(f"Source language: {source_lang}")
             log(f"Output: {out_path}")
             core.translate_ass_file(
                 ass_path,
                 glossary_path,
                 out_path,
+                terminology_md_path=instructions_path or None,
                 source_lang=source_lang,
                 cancel_event=cancel_event,
                 log=log,

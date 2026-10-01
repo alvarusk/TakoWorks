@@ -69,6 +69,7 @@ class TranscriberPanel(ttk.Frame):
         self.ass_var = tk.StringVar(value=cfg["last"].get("ass_in", ""))
         self.video_var = tk.StringVar(value=cfg["last"].get("video_in", ""))
         self.out_var = tk.StringVar(value=cfg["last"].get("out_dir", ""))
+        self.instructions_var = tk.StringVar(value=cfg["last"].get("transcriber_instructions_md", ""))
 
         self.lang_var = tk.StringVar(value="ja")
         self.series_history = _clean_series_history(cfg.get("series_history", []))
@@ -107,6 +108,11 @@ class TranscriberPanel(ttk.Frame):
         ttk.Label(r2, text="Output Folder").pack(side="left")
         ttk.Entry(r2, textvariable=self.out_var).pack(side="left", fill="x", expand=True, padx=6)
         ttk.Button(r2, text="Browse", command=self._pick_out).pack(side="left")
+
+        r3 = ttk.Frame(frm); r3.pack(fill="x", pady=3)
+        ttk.Label(r3, text="Series terminology / instructions (.md)").pack(side="left")
+        ttk.Entry(r3, textvariable=self.instructions_var).pack(side="left", fill="x", expand=True, padx=6)
+        ttk.Button(r3, text="Browse", command=self._pick_instructions).pack(side="left")
 
         meta = ttk.LabelFrame(frm, text="Metadata")
         meta.pack(fill="x", pady=8)
@@ -164,6 +170,11 @@ class TranscriberPanel(ttk.Frame):
         if p:
             self.out_var.set(p)
 
+    def _pick_instructions(self):
+        p = filedialog.askopenfilename(filetypes=[("Markdown", "*.md"), ("All files", "*.*")])
+        if p:
+            self.instructions_var.set(p)
+
     def _remember_series(self, series: str):
         history = _prepend_series_history(self.cfg.get("series_history", []), series)
         self.cfg["series_history"] = history
@@ -186,6 +197,10 @@ class TranscriberPanel(ttk.Frame):
             return
 
         out_dir = self.out_var.get().strip() or os.path.dirname(ass_in)
+        instructions_md = self.instructions_var.get().strip()
+        if instructions_md and not os.path.isfile(instructions_md):
+            messagebox.showerror("Error", "Select a valid Markdown instructions file.")
+            return
 
         models = []
         if self.v_gpt.get(): models.append("GPT-5.6 Terra")
@@ -202,6 +217,7 @@ class TranscriberPanel(ttk.Frame):
         self.cfg["last"]["ass_in"] = ass_in
         self.cfg["last"]["video_in"] = video_in
         self.cfg["last"]["out_dir"] = out_dir
+        self.cfg["last"]["transcriber_instructions_md"] = os.path.abspath(instructions_md) if instructions_md else ""
         save_config(self.cfg)
 
         run_started_at = time.time()
@@ -218,6 +234,8 @@ class TranscriberPanel(ttk.Frame):
             argv += ["--source-type", normalize_source_type(self.source_var.get())]
             if series_name:
                 argv += ["--series", series_name]
+            if instructions_md:
+                argv += ["--instructions-md", os.path.abspath(instructions_md)]
             if models_str != "":
                 argv += ["--models", models_str]
             else:

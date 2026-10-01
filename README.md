@@ -1,4 +1,4 @@
-# TakoWorks (v1.107.0)
+# TakoWorks (v1.108.0)
 
 Toolkit for transcribing, romanizing, translating, and reviewing ASS subtitle files for Japanese and Chinese. Generates per-model ASS files, summary HTML, and optionally logs costs to Supabase.
 
