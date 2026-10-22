@@ -78,6 +78,19 @@ jobs:
           $spec = Join-Path $Env:GITHUB_WORKSPACE "TakoWorks.spec"
           pyinstaller --clean $spec
 
+      - name: Check packaged startup
+        shell: pwsh
+        run: |
+          $exe = Join-Path $PWD "${{ env.BUILD_DIR }}/TakoWorks.exe"
+          $process = Start-Process -FilePath $exe -ArgumentList "--help" -WindowStyle Hidden -PassThru
+          if (-not $process.WaitForExit(60000)) {
+            Stop-Process -Id $process.Id -Force
+            throw "Packaged startup timed out; check for an import error dialog."
+          }
+          if ($process.ExitCode -ne 0) {
+            throw "Packaged startup failed (exit $($process.ExitCode))."
+          }
+
       - name: Package artifact (zip)
         shell: pwsh
         run: |

@@ -39,7 +39,8 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    # Optional layout analysis auto-loads models that TakoWorks does not use.
+    excludes=['pymupdf.layout'],
     noarchive=False,
     optimize=0,
 )
