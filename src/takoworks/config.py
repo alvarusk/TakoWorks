@@ -60,8 +60,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 
     # Costes por 1K tokens (USD) para cada motor
     "cost_per_1k": {
-        "gpt": {"input": 0.002, "output": 0.012},
-        "claude": {"input": 0.005, "output": 0.025},
+        "gpt": {"input": 0.002, "output": 0.01},
+        "claude": {"input": 0.004, "output": 0.02},
         "context_note": {"input": 0.002, "output": 0.01},
         "gemini": {"input": 0.00075, "output": 0.00375},
         "deepseek": {"input": 0.00014, "output": 0.00028},

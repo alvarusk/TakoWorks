@@ -3,7 +3,7 @@
 r"""
 TakoWorks - Corrector (ASS -> LanguageTool -> HTML)
 
-v0.473 (repack)
+v0.474 (CARTEL/LT fix)
 Principales funciones:
 - Regla CARTEL:
   - CARTEL si Name/Actor contiene "CARTEL" (case-insensitive)
@@ -368,17 +368,38 @@ def clean_ass_text(s: str) -> str:
     s = re.sub(r"\s+", " ", s, flags=re.UNICODE).strip()
     return s
 
+def _is_repetitive_cartel_text(text: str) -> bool:
+    words = re.findall(r"[^\W_]+", text.casefold(), flags=re.UNICODE)
+    if len(words) < 8:
+        return False
+    most_common = max(words.count(w) for w in set(words))
+    return most_common >= 8 and most_common / len(words) >= 0.75
+
+
 def extract_dialogue_lines(events: List[Event]) -> Tuple[List[str], List[bool]]:
     out_lines: List[str] = []
     flags: List[bool] = []
+    skipped = 0
+
     for ev in events:
         if ev.kind != "Dialogue":
             continue
+
         cleaned = clean_ass_text(ev.text)
-        if cleaned == "":
+        if not cleaned:
             continue
+
+        if ev.is_cartel and _is_repetitive_cartel_text(cleaned):
+            skipped += 1
+            continue
+
         out_lines.append(cleaned)
         flags.append(bool(ev.is_cartel))
+
+    if skipped:
+        print(f"[i] CARTEL repetitivos omitidos de LT: {skipped}")
+        print("[i] Los eventos originales no se modifican.")
+
     return out_lines, flags
 
 def merge_lines(lines: List[str], is_cartel: List[bool]) -> List[str]:
@@ -499,9 +520,70 @@ def lt_check(text: str, settings: Settings) -> Dict[str, Any]:
     req.add_header("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
     req.add_header("User-Agent", "TakoWorks-Corrector/0.473")
 
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        raw = resp.read().decode("utf-8", errors="replace")
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(
+            f"LanguageTool HTTP {exc.code}: {detail[:650]}"
+        ) from exc
     return json.loads(raw)
+
+def lt_check_resilient(
+    chunk_lines: List[str],
+    settings: Settings,
+    skipped: List[str],
+) -> List[Tuple[List[str], Dict[str, Any]]]:
+    if not chunk_lines:
+        return []
+
+    try:
+        response = lt_check("\n".join(chunk_lines), settings)
+        return [(chunk_lines, response)]
+    except Exception as exc:
+        message = str(exc).casefold()
+
+        error_rate = (
+            "too many errors" in message
+            or "error rate" in message
+            or "demasiados errores" in message
+        )
+        size_error = (
+            "http 413" in message
+            or "text exceeds" in message
+            or "too long" in message
+        )
+
+        if not (error_rate or size_error):
+            raise
+
+        if len(chunk_lines) == 1:
+            if size_error:
+                raise
+
+            skipped.append(chunk_lines[0])
+            print(
+                "[WARN] LanguageTool rechaza una línea por "
+                "exceso de errores. Se omite únicamente esa línea."
+            )
+            print(f"       {chunk_lines[0][:120]}")
+            return []
+
+        midpoint = len(chunk_lines) // 2
+        print(
+            "[i] LanguageTool rechazó un bloque. "
+            "Dividiendo para aislar el problema..."
+        )
+
+        left = lt_check_resilient(
+            chunk_lines[:midpoint], settings, skipped
+        )
+        right = lt_check_resilient(
+            chunk_lines[midpoint:], settings, skipped
+        )
+        return left + right
+
 
 def lt_add_word(word: str, settings: Settings, dict_name: str = "") -> Tuple[bool, str]:
     """
@@ -1271,7 +1353,7 @@ def main() -> int:
     ap.add_argument("ass_path", help="Ruta del .ass")
     ap.add_argument("--settings", help="Ruta a corrector_settings.json", default=None)
     ap.add_argument("--no-open", action="store_true", help="No abrir el HTML al terminar")
-    ap.add_argument("--max-chars", type=int, default=45000, help="Máximo de caracteres por request (por chunk)")
+    ap.add_argument("--max-chars", type=int, default=4000, help="Máximo de caracteres por request (por chunk)")
     ap.add_argument("--keep-intermediate", action="store_true", help="Guardar archivos intermedios (_cartelFirst.ass, _dialogo.txt, _dialogo_merged.txt, _LT_raw.json)")
     ap.add_argument("--serve", action="store_true", help="Sirve el HTML en localhost y habilita añadir palabras al diccionario con un clic")
     ap.add_argument("--serve-idle", type=int, default=45, help="Auto-cerrar servidor tras N segundos sin ping del HTML (default: 45)")
@@ -1390,6 +1472,11 @@ def main() -> int:
 
     print("[+] Extrayendo diálogo y limpiando tags…")
     lines, flags = extract_dialogue_lines(events_reordered)
+    skipped_repetitions = sum(
+        1 for ev in events_reordered
+        if ev.kind == "Dialogue" and ev.is_cartel
+        and _is_repetitive_cartel_text(clean_ass_text(ev.text))
+    )
     if args.keep_intermediate:
         out_txt = os.path.join(out_dir, f"{base_name}_dialogo.txt")
         _write_text(out_txt, "\n".join(lines) + ("\n" if lines else ""))
@@ -1404,11 +1491,13 @@ def main() -> int:
     rows_all: List[Dict[str, Any]] = []
     raw_responses: List[Dict[str, Any]] = []
     chunks = split_into_chunks(merged, max_chars=args.max_chars)
+    skipped_lt: List[str] = []
 
     for ci, chunk_lines in enumerate(chunks, start=1):
-        chunk_text = "\n".join(chunk_lines)
         try:
-            resp = lt_check(chunk_text, settings)
+            results = lt_check_resilient(
+                chunk_lines, settings, skipped_lt
+            )
         except Exception as e:
             meta = {
                 "Archivo": os.path.basename(ass_path),
@@ -1428,14 +1517,23 @@ def main() -> int:
                 open_file(out_html)
             return 3
 
-        raw_responses.append(resp)
-        rows = map_matches_to_rows(chunk_lines, resp)
-        if not personal_word_set and local_word_set:
-            personal_word_set = set(local_word_set)
-        if personal_word_set:
-            rows = filter_rows_by_personal_dict(rows, personal_word_set)
-        rows_all.extend(rows)
-        print(f"    - Chunk {ci}/{len(chunks)}: {len(rows)} errores")
+        chunk_errors = 0
+        for checked_lines, resp in results:
+            raw_responses.append(resp)
+            rows = map_matches_to_rows(checked_lines, resp)
+            if not personal_word_set and local_word_set:
+                personal_word_set = set(local_word_set)
+            if personal_word_set:
+                rows = filter_rows_by_personal_dict(
+                    rows, personal_word_set
+                )
+            rows_all.extend(rows)
+            chunk_errors += len(rows)
+
+        print(
+            f"    - Chunk {ci}/{len(chunks)}: "
+            f"{chunk_errors} errores"
+        )
 
 
     if args.keep_intermediate:
@@ -1455,6 +1553,8 @@ def main() -> int:
         "Omitir reglas (HTML)": settings.suppress_rules or "(vacío)",
         "Omitir categorías (HTML)": settings.suppress_categories or "(vacío)",
         "CARTEL movidos": str(cartel_count),
+        "CARTEL repetitivos omitidos de LT": str(skipped_repetitions),
+        "Fragmentos rechazados por LT": str(len(skipped_lt)),
         "Líneas (merged)": str(len(merged)),
         "Chunks": str(len(chunks)),
     }

@@ -137,10 +137,10 @@ class TranscriberPanel(ttk.Frame):
         models.pack(fill="x", pady=8)
 
         rowm = ttk.Frame(models); rowm.pack(anchor="w", padx=8, pady=4)
-        ttk.Checkbutton(rowm, text="GPT-5.6 Terra", variable=self.v_gpt).pack(side="left", padx=6)
-        ttk.Checkbutton(rowm, text="Claude Opus 5", variable=self.v_claude).pack(side="left", padx=6)
-        ttk.Checkbutton(rowm, text="Gemini 3.7 Flash", variable=self.v_gemini).pack(side="left", padx=6)
-        ttk.Checkbutton(rowm, text="DeepSeek V4 Flash", variable=self.v_deepseek).pack(side="left", padx=6)
+        ttk.Checkbutton(rowm, text="GPT-6.1 Sol", variable=self.v_gpt).pack(side="left", padx=6)
+        ttk.Checkbutton(rowm, text="Claude Opus 5.5", variable=self.v_claude).pack(side="left", padx=6)
+        ttk.Checkbutton(rowm, text="Gemini 3.8 Flash", variable=self.v_gemini).pack(side="left", padx=6)
+        ttk.Checkbutton(rowm, text="DeepSeek V4.1 Flash", variable=self.v_deepseek).pack(side="left", padx=6)
 
         btns = ttk.Frame(frm); btns.pack(fill="x", pady=10)
         self.run_btn = ttk.Button(btns, text="Run", command=self._run)
@@ -203,10 +203,10 @@ class TranscriberPanel(ttk.Frame):
             return
 
         models = []
-        if self.v_gpt.get(): models.append("GPT-5.6 Terra")
-        if self.v_claude.get(): models.append("Claude Opus 5")
-        if self.v_gemini.get(): models.append("Gemini 3.7 Flash")
-        if self.v_deepseek.get(): models.append("DeepSeek V4 Flash")
+        if self.v_gpt.get(): models.append("GPT-6.1 Sol")
+        if self.v_claude.get(): models.append("Claude Opus 5.5")
+        if self.v_gemini.get(): models.append("Gemini 3.8 Flash")
+        if self.v_deepseek.get(): models.append("DeepSeek V4.1 Flash")
         models_str = ",".join(models)  # puede ser ""
 
         series_name = self.series_var.get().strip()

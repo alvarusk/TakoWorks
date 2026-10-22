@@ -535,3 +535,43 @@
 [28/09/2026 15:47:01,29] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - PoT Finals\3 - Scripts esES\ThePrinceOfTenn_S8E7_POTSIM0232_385672_subtitle_edited_es-es.ass" --serve 
 [28/09/2026 19:09:28,74] "C:\Users\ajime\OneDrive\Documentos\PENDING\167 - Dreamland\3 - Scripts esES\Dreamland_S1E1_DMLSIM0001_384755_subtitle_edited_es-es.ass" --serve 
 [30/09/2026 21:05:10,82] "C:\Users\ajime\OneDrive\Documentos\PENDING\152 - Exiled Heavy Knight\3 - Scripts esES\TheExiledHeavyK_S1.0E18.0_XHKSIM0018_380234_subtitle_edited_es-es.ass" --serve 
+[01/10/2026 22:52:55,26] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\Keroro_S001_E0001_FP_TIM_es-es.ass" --serve 
+[01/10/2026 22:53:26,98] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\Keroro_S001_E0001_FP_TIM_es-es.ass" --serve 
+[01/10/2026 22:54:19,43] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\Keroro_S001_E0001_FP_TIM_es-es.ass" --serve 
+[01/10/2026 22:55:18,40] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\Keroro_S001_E0001_FP_TIM_es-es.ass" --serve 
+[01/10/2026 22:56:31,74] "C:\Users\ajime\OneDrive\Documentos\PENDING\163 - Reborn as a Space Mercenary\3 - Scripts esES\DONE\RebornAsASpaceM_S1E7_RMWSIM0007_389248_subtitle_trad_es-es.ass" --serve 
+[03/10/2026  5:49:44,80] "C:\Users\ajime\OneDrive\Documentos\PENDING\160 - LINK CLICK S5\3 - Scripts esES\LinkClick_S5E10_LNKSIM0039_380307_subtitle_edited_es-es.ass" --serve 
+[04/10/2026 11:43:36,96] "C:\Users\ajime\OneDrive\Documentos\PENDING\164 - Laid-Off Cheat-Granting Mage\3 - Scripts esES-esLA\TheLaidoffCheat_S1E1_TYWSIM0001_384910_subtitle_edited_es-es.ass" --serve 
+[05/10/2026  6:39:14,64] "C:\Users\ajime\OneDrive\Documentos\PENDING\167 - Dreamland\3 - Scripts esES\Dreamland_S1E2_DMLSIM0002_384756_subtitle_edited_es-es.ass" --serve 
+[05/10/2026 10:29:28,51] "C:\Users\ajime\OneDrive\Documentos\PENDING\165 - A Returner's Magic S2\3 - Scripts esES-esLA\AReturnersMagic_S2E7_MSBSIM0019_384665_subtitle_edited_es-la.ass" --serve 
+[05/10/2026 14:49:49,71] "C:\Users\ajime\OneDrive\Documentos\PENDING\166 - The Detective is Already Dead S2\3 - Scripts esES-esLA\TheDetectiveIsA_S2E1_DEDSIM0014_389833_subtitle_edited_es-la.ass" --serve 
+[08/10/2026 11:35:03,17] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\Keroro_S001_E0002_FP_trad_es-es.ass" --serve 
+[08/10/2026 14:24:55,69] "C:\Users\ajime\OneDrive\Documentos\PENDING\160 - LINK CLICK S5\3 - Scripts esES\LinkClick_S5E11_LNKSIM0040_380308_subtitle_edited_es-es.ass" --serve 
+[09/10/2026 12:46:48,60] "C:\Users\ajime\OneDrive\Documentos\PENDING\167 - Dreamland\3 - Scripts esES\Dreamland_S1E3_DMLSIM0003_384757_subtitle_edited_es-es.ass" --serve 
+[09/10/2026 15:06:53,28] "C:\Users\ajime\OneDrive\Documentos\PENDING\164 - Laid-Off Cheat-Granting Mage\3 - Scripts esES-esLA\TheLaidoffCheat_S1E2_TYWSIM0002_384911_subtitle_edited_es-es.ass" --serve 
+[11/10/2026 17:59:39,16] "C:\Users\ajime\OneDrive\Documentos\PENDING\152 - Exiled Heavy Knight\3 - Scripts esES\TheExiledHeavyK_S1.0E19.0_XHKSIM0019_380235_subtitle_edited_es-es.ass" --serve 
+[11/10/2026 18:10:48,80] "C:\Users\ajime\OneDrive\Documentos\PENDING\165 - A Returner's Magic S2\3 - Scripts esES-esLA\DONE\AReturnersMagic_S2E3_MSBSIM0015_384661_subtitle_edited_es-es.ass" --serve 
+[12/10/2026 20:20:11,83] "C:\Users\ajime\OneDrive\Documentos\PENDING\165 - A Returner's Magic S2\3 - Scripts esES-esLA\AReturnersMagic_S2E4_MSBSIM0016_384662_subtitle_edited_es-es.ass" --serve 
+[12/10/2026 20:23:41,92] "C:\Users\ajime\OneDrive\Documentos\PENDING\165 - A Returner's Magic S2\3 - Scripts esES-esLA\AReturnersMagic_S2E8_MSBSIM0020_384666_subtitle_edited_es-la.ass" --serve 
+[12/10/2026 20:51:30,53] "C:\Users\ajime\OneDrive\Documentos\PENDING\166 - The Detective is Already Dead S2\3 - Scripts esES-esLA\TheDetectiveIsA_S2E2_DEDSIM0015_389834_subtitle_edited_es-la.ass" --serve 
+[13/10/2026 13:23:42,43] "C:\Users\ajime\OneDrive\Documentos\PENDING\166 - The Detective is Already Dead S2\3 - Scripts esES-esLA\TheDetectiveIsA_S2E2_DEDSIM0015_389834_subtitle_edited_es-es.ass" --serve 
+[13/10/2026 13:27:26,33] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - PoT Finals\3 - Scripts esES\DONE\ThePrinceOfTenn_S8E3_POTSIM0228_385668_subtitle_edited_es-la.ass" --serve 
+[14/10/2026 12:28:31,93] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\Keroro_S1E3_SGKSIM0003_385937_subtitle_trad_es-es.ass" --serve 
+[14/10/2026 12:29:01,39] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\Keroro_S1E3_SGKSIM0003_385937_subtitle_trad_es-es.ass" --serve 
+[14/10/2026 12:29:31,50] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\Keroro_S1E3_SGKSIM0003_385937_subtitle_trad_es-es.ass" --serve 
+[15/10/2026 10:26:50,73] "C:\Users\ajime\OneDrive\Documentos\PENDING\163 - Reborn as a Space Mercenary\3 - Scripts esES\RebornAsASpaceM_S1E9_RMWSIM0009_389250_subtitle_trad_es-es.ass" --serve 
+[18/10/2026 19:13:50,89] "C:\Users\ajime\OneDrive\Documentos\PENDING\164 - Laid-Off Cheat-Granting Mage\3 - Scripts esES-esLA\TheLaidoffCheat_S1E3_TYWSIM0003_384912_subtitle_edited_es-es.ass" --serve 
+[19/10/2026 14:32:52,60] "C:\Users\ajime\OneDrive\Documentos\PENDING\166 - The Detective is Already Dead S2\3 - Scripts esES-esLA\TheDetectiveIsA_S2E3_DEDSIM0016_389835_subtitle_edited_es-la.ass" --serve 
+[19/10/2026 14:41:05,43] "C:\Users\ajime\OneDrive\Documentos\PENDING\165 - A Returner's Magic S2\3 - Scripts esES-esLA\AReturnersMagic_S2E9_MSBSIM0021_384667_subtitle_edited_es-la.ass" --serve 
+[20/10/2026  9:41:25,12] "C:\Users\ajime\OneDrive\Documentos\PENDING\166 - The Detective is Already Dead S2\3 - Scripts esES-esLA\TheDetectiveIsA_S2E3_DEDSIM0016_389835_subtitle_edited_es-es.ass" --serve 
+[20/10/2026 10:43:07,83] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - PoT Finals\3 - Scripts esES\DONE\ThePrinceOfTenn_S8E4_POTSIM0229_385669_subtitle_edited_es-la.ass" --serve 
+[20/10/2026 15:43:11,33] "C:\Users\ajime\OneDrive\Documentos\PENDING\160 - LINK CLICK S5\3 - Scripts esES\LinkClick_S5E12_LNKSIM0041_380309_subtitle_edited_es-es.ass" --serve 
+[20/10/2026 17:48:36,63] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\Keroro_S001_E0004_FP_TIM.ass" --serve 
+[20/10/2026 17:50:04,27] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\Keroro_S1E4_SGKSIM0003_385937_subtitle_trad_es-es.ass" --serve 
+[20/10/2026 17:50:33,70] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\Keroro_S1E4_SGKSIM0003_385937_subtitle_trad_es-es.ass" --serve 
+[20/10/2026 17:52:02,36] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\test.ass" --serve 
+[20/10/2026 17:52:50,89] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\test.ass" --serve 
+[20/10/2026 17:53:49,14] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\test.ass" --serve 
+[20/10/2026 18:25:33,37] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - PoT Finals\3 - Scripts esES\ThePrinceOfTenn_S8E8_POTSIM0233_385673_subtitle_edited_es-es.ass" --serve 
+[20/10/2026 18:56:19,90] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\DONE\Keroro_S001_E0004_FP_TRAD_es-es.ass" --serve 
+[21/10/2026 18:34:24,43] "C:\Users\ajime\OneDrive\Documentos\PENDING\167 - Dreamland\3 - Scripts esES\Dreamland_S1E4_DMLSIM0004_384758_subtitle_edited_es-es.ass" --serve 

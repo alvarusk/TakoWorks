@@ -72,12 +72,12 @@ ProgressCallback = Optional[Callable[[str, int, int, str], None]]
 #  CONFIGURACIÓN: MODELOS, CLAVES API Y DICCIONARIOS
 # ============================================================
 
-OPENAI_MODEL   = "gpt-5.6-terra"            # OpenAI (calidad/precio)
-CLAUDE_MODEL   = "claude-opus-5"            # Anthropic
+OPENAI_MODEL   = "gpt-6.1-sol"              # OpenAI
+CLAUDE_MODEL   = "claude-opus-5-5"          # Anthropic
 CONTEXT_NOTE_MODEL = "claude-sonnet-5"      # Prompt explicativo / nota contextual
-GEMINI_MODEL   = "gemini-3.7-flash"         # Gemini 3.7 Flash
+GEMINI_MODEL   = "gemini-3.8-flash"         # Gemini 3.8 Flash
 CONTEXT_NOTE_GEMINI_MODEL = "gemini-3.6-flash"  # Menos saturado para notas por línea
-DEEPSEEK_MODEL = "deepseek-v4-flash"        # DeepSeek (OpenAI-like)
+DEEPSEEK_MODEL = "deepseek-flash"           # DeepSeek V4.1 Flash
 OPENAI_TIMEOUT_S = 180
 OPENAI_MAX_RETRIES = 2
 OPENAI_BLOCK_ATTEMPTS = 3
@@ -89,7 +89,7 @@ CONTEXT_NOTE_WORKERS = 1
 
 
 def _add_openai_temperature(request_kwargs: Dict[str, object], temperature: float) -> None:
-    if not OPENAI_MODEL.startswith(("gpt-5.5", "gpt-5.6")):
+    if not OPENAI_MODEL.startswith(("gpt-5.5", "gpt-5.6", "gpt-6")):
         request_kwargs["temperature"] = temperature
 
 
@@ -113,7 +113,7 @@ GEMINI_API_KEY    = _read_api_key("gemini", "GEMINI_API_KEY")
 DEEPSEEK_API_KEY  = _read_api_key("deepseek", "DEEPSEEK_API_KEY")
 
 CHUNK_SIZE   = 20  # tamaño de lote para GPT/Claude/DeepSeek
-GEMINI_CHUNK = 3  # bloques más pequeños para Gemini, más estable
+GEMINI_CHUNK = 10
 
 # ============================================================
 #  NOMBRES DE MODELOS (UI) Y NORMALIZACIÓN
@@ -121,16 +121,18 @@ GEMINI_CHUNK = 3  # bloques más pequeños para Gemini, más estable
 
 # Nombres que quieres ver en la GUI / logs / HTML
 DISPLAY_NAMES = {
-    "gpt": "GPT-5.6 Terra",
-    "claude": "Claude Opus 5",
+    "gpt": "GPT-6.1 Sol",
+    "claude": "Claude Opus 5.5",
     "context_note": "Prompt Explicativo (Claude Sonnet 5)",
-    "gemini": "Gemini 3.7 Flash",
-    "deepseek": "DeepSeek V4 Flash",
-    "romanization": "Romanization (DeepSeek V4 Flash)",
+    "gemini": "Gemini 3.8 Flash",
+    "deepseek": "DeepSeek V4.1 Flash",
+    "romanization": "Romanization (DeepSeek V4.1 Flash)",
 }
 
 # Alias aceptados en --models (CLI/GUI). Se normalizan a claves internas:
 MODEL_ALIASES = {
+    "gpt-6.1 sol": "gpt",
+    "gpt-6.1-sol": "gpt",
     "gpt-5.6 terra": "gpt",
     "gpt-5.6-terra": "gpt",
     "gpt-5.5": "gpt",
@@ -140,6 +142,8 @@ MODEL_ALIASES = {
     "openai": "gpt",
     "chatgpt": "gpt",
 
+    "claude opus 5.5": "claude",
+    "claude-opus-5-5": "claude",
     "claude opus 5": "claude",
     "claude-opus-5": "claude",
     "claude opus 4.7": "claude",
@@ -147,6 +151,8 @@ MODEL_ALIASES = {
     "claude": "claude",
     "anthropic": "claude",
 
+    "gemini 3.8 flash": "gemini",
+    "gemini-3.8-flash": "gemini",
     "gemini 3.7 flash": "gemini",
     "gemini-3.7-flash": "gemini",
     "gemini 3 flash": "gemini",
@@ -155,6 +161,9 @@ MODEL_ALIASES = {
     "gemini-2.5-flash": "gemini",
     "gemini": "gemini",
 
+    "deepseek v4.1 flash": "deepseek",
+    "deepseek-v4.1-flash": "deepseek",
+    "deepseek-flash": "deepseek",
     "deepseek v4 flash": "deepseek",
     "deepseek-v4-flash": "deepseek",
     "deepseek": "deepseek",
@@ -375,8 +384,8 @@ def _read_price(model_key: str, kind: str, default: float) -> float:
 
 
 DEFAULT_PRICE_PER_1K: Dict[str, Dict[str, float]] = {
-    "gpt": {"input": 0.002, "output": 0.012},
-    "claude": {"input": 0.005, "output": 0.025},
+    "gpt": {"input": 0.002, "output": 0.01},
+    "claude": {"input": 0.004, "output": 0.02},
     "context_note": {"input": 0.00075, "output": 0.00375},
     "gemini": {"input": 0.00075, "output": 0.00375},
     "deepseek": {"input": 0.00014, "output": 0.00028},
@@ -499,7 +508,6 @@ def _save_translation_debug_response(
     if not debug_dir:
         return
 
-    os.makedirs(debug_dir, exist_ok=True)
     safe_issue = re.sub(r"[^a-zA-Z0-9_-]+", "_", issue).strip("_") or "issue"
     file_name = f"{model_key}_{start_line:05d}-{end_line:05d}_attempt{attempt}_{safe_issue}.json"
     path = os.path.join(debug_dir, file_name)
@@ -532,8 +540,9 @@ def _save_translation_debug_response(
         payload["extra"] = extra
 
     try:
+        os.makedirs(debug_dir, exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh, ensure_ascii=False, indent=2)
+            json.dump(payload, fh, ensure_ascii=False, indent=2, default=str)
         print(f"[DEBUG {DISPLAY_NAMES.get(model_key, model_key)}] Respuesta guardada en {path}")
     except Exception as e:
         print(f"[DEBUG {DISPLAY_NAMES.get(model_key, model_key)}] No se pudo guardar respuesta bruta: {e}")
@@ -2533,7 +2542,11 @@ def translate_with_claude(
                 request_kwargs = {
                     "model": CLAUDE_MODEL,
                     "max_tokens": 4096,
-                    "system": system_prompt,
+                    "system": [{
+                        "type": "text",
+                        "text": system_prompt,
+                        "cache_control": {"type": "ephemeral"},
+                    }],
                     "messages": [
                         {
                             "role": "user",
@@ -2555,6 +2568,26 @@ def translate_with_claude(
                     continue
                 print(f"[Claude] Translation failed; Claude is skipped for this block. Details: {e}")
                 break
+
+            msg_usage = getattr(message, "usage", None)
+            if msg_usage:
+                pt = _safe_int(getattr(msg_usage, "input_tokens", 0))
+                ct = _safe_int(getattr(msg_usage, "output_tokens", 0))
+                written = _safe_int(getattr(msg_usage, "cache_creation_input_tokens", 0))
+                cached = _safe_int(getattr(msg_usage, "cache_read_input_tokens", 0))
+                usage.prompt_tokens += pt + written + cached
+                usage.completion_tokens += ct
+                usage.cost_usd += (
+                    estimate_cost("claude", pt, ct)
+                    + estimate_cost("claude", written, 0) * 1.25
+                    + estimate_cost("claude", cached, 0) * 0.05
+                )
+                print(
+                    f"[Claude cache] Lines {start + 1}-{end_line}, attempt {attempt}: "
+                    f"write={written}, read={cached}, uncached={pt} tokens"
+                )
+            else:
+                _warn_missing_usage("claude")
 
             content = "".join(
                 block.text for block in message.content if getattr(block, "type", None) == "text"
@@ -2599,16 +2632,6 @@ def translate_with_claude(
             all_translations.extend(chunk)
             continue
 
-        msg_usage = getattr(message, "usage", None)
-        if msg_usage:
-            pt = _safe_int(getattr(msg_usage, "input_tokens", 0))
-            ct = _safe_int(getattr(msg_usage, "output_tokens", 0))
-            usage.prompt_tokens += pt
-            usage.completion_tokens += ct
-            usage.cost_usd += estimate_cost("claude", pt, ct)
-        else:
-            _warn_missing_usage("claude")
-
         if parse_result is None:
             parse_result = parse_json_translations_result(content, fallback_lines=chunk)
         if not parse_result.exact_match:
@@ -2639,7 +2662,7 @@ def translate_with_gemini(
     terminology_instructions: str = "",
 ) -> Tuple[List[str], ApiUsage, Optional[str]]:
     """
-    Usa Gemini 3.7 Flash, con bloques más pequeños y max_output_tokens
+    Usa Gemini 3.8 Flash, con bloques de diez lineas y max_output_tokens
     limitado para ir algo más rápido/estable.
     """
     try:
@@ -2664,6 +2687,9 @@ def translate_with_gemini(
 
         for attempt in range(1, MODEL_BLOCK_ATTEMPTS + 1):
             user_prompt = _build_retry_user_prompt(base_user_prompt, len(chunk), attempt)
+            response = None
+            raw = ""
+            parse_result = None
             try:
                 if gemini_sdk == "google-genai":
                     response = model.models.generate_content(
@@ -2671,15 +2697,26 @@ def translate_with_gemini(
                         contents=user_prompt,
                         config=google_genai_types.GenerateContentConfig(
                             system_instruction=system_prompt,
-                            max_output_tokens=2000,
+                            max_output_tokens=4096,
+                            thinking_config=google_genai_types.ThinkingConfig(thinking_level="low"),
                         ),
                     )
                 else:
                     response = model.generate_content(
                         user_prompt,
-                        generation_config={"max_output_tokens": 2000},
+                        generation_config={"max_output_tokens": 4096},
                     )
             except Exception as e:
+                print(
+                    f"[Gemini ERROR] model={GEMINI_MODEL} lines={start + 1}-{end_line} "
+                    f"attempt={attempt}/{MODEL_BLOCK_ATTEMPTS} "
+                    f"exception={type(e).__name__}: {e}"
+                )
+                _save_translation_debug_response(
+                    debug_dir, "gemini", start + 1, end_line, attempt,
+                    "api_error", chunk, "",
+                    extra={"model_name": GEMINI_MODEL, "exception_type": type(e).__name__, "error": str(e)},
+                )
                 if attempt < MODEL_BLOCK_ATTEMPTS:
                     wait_s = min(9, 2 * attempt)
                     print(
@@ -2693,11 +2730,48 @@ def translate_with_gemini(
                 break
 
             cand = response.candidates[0] if getattr(response, "candidates", None) else None
+            usage_md = getattr(response, "usage_metadata", None)
+            if usage_md is None and cand is not None:
+                usage_md = getattr(cand, "usage_metadata", None)
+            if usage_md:
+                pt = _safe_int(getattr(usage_md, "prompt_token_count", 0))
+                ct = (
+                    _safe_int(getattr(usage_md, "candidates_token_count", 0))
+                    + _safe_int(getattr(usage_md, "thoughts_token_count", 0))
+                )
+                usage.prompt_tokens += pt
+                usage.completion_tokens += ct
+                usage.cost_usd += estimate_cost("gemini", pt, ct)
+            else:
+                _warn_missing_usage("gemini")
+            diagnostics = {
+                "model_name": GEMINI_MODEL,
+                "response_id": getattr(response, "response_id", None),
+                "prompt_feedback": getattr(response, "prompt_feedback", None),
+                "finish_reason": getattr(cand, "finish_reason", None),
+                "finish_message": getattr(cand, "finish_message", None),
+                "safety_ratings": getattr(cand, "safety_ratings", None),
+                "citation_metadata": getattr(cand, "citation_metadata", None),
+                "usage_metadata": usage_md,
+            }
+
+            def log_failure(issue: str) -> None:
+                print(
+                    f"[Gemini ERROR] lines={start + 1}-{end_line} "
+                    f"attempt={attempt}/{MODEL_BLOCK_ATTEMPTS} issue={issue} "
+                    + json.dumps(diagnostics, ensure_ascii=False, default=str)
+                )
+                _save_translation_debug_response(
+                    debug_dir, "gemini", start + 1, end_line, attempt,
+                    issue, chunk, raw, extra=diagnostics,
+                )
+
             if cand is not None:
                 print(f"[Gemini DEBUG] finish_reason={getattr(cand, 'finish_reason', None)}")
                 print(f"[Gemini DEBUG] safety_ratings={getattr(cand, 'safety_ratings', None)}")
 
             if not cand or not getattr(cand, "content", None) or not getattr(cand.content, "parts", None):
+                log_failure("empty_or_blocked")
                 finish_reason = getattr(cand, "finish_reason", None) if cand else None
                 safety = getattr(cand, "safety_ratings", None) if cand else None
                 if attempt < MODEL_BLOCK_ATTEMPTS:
@@ -2717,46 +2791,36 @@ def translate_with_gemini(
             text_parts = [
                 getattr(part, "text", "")
                 for part in cand.content.parts
-                if getattr(part, "text", "")
+                if getattr(part, "text", "") and not getattr(part, "thought", False)
             ]
             raw = "".join(text_parts).strip()
-            if not raw:
+            finish_reason = getattr(cand, "finish_reason", None)
+            finish_name = getattr(finish_reason, "name", str(finish_reason)).split(".")[-1]
+            if not raw or finish_name not in {"STOP", "None"}:
+                log_failure("no_text" if not raw else "incomplete_or_blocked")
+                raw = ""
                 finish_reason = getattr(cand, "finish_reason", None)
                 safety = getattr(cand, "safety_ratings", None)
                 if attempt < MODEL_BLOCK_ATTEMPTS:
                     wait_s = min(9, 2 * attempt)
                     print(
-                        f"[Gemini] Sin texto utilizable (finish_reason={finish_reason}). "
+                        f"[Gemini] Respuesta incompleta, bloqueada o sin texto (finish_reason={finish_reason}). "
                         f"Reintentando en {wait_s} s..."
                     )
                     print(f"[Gemini DEBUG] safety_ratings={safety}")
                     time.sleep(wait_s)
                     continue
-                print(f"[Gemini] Sin texto utilizable (finish_reason={finish_reason}). "
+                print(f"[Gemini] Respuesta incompleta, bloqueada o sin texto (finish_reason={finish_reason}). "
                       "Se devuelven las líneas originales para este bloque.")
                 print(f"[Gemini DEBUG] safety_ratings={safety}")
                 break
 
             parse_result = parse_json_translations_result(raw, chunk)
-            if parse_result.exact_match:
+            if parse_result.exact_match and not parse_result.used_fallback and not parse_result.error:
                 break
 
             _log_translation_count_issue("gemini", start + 1, end_line, parse_result, chunk)
-            _save_translation_debug_response(
-                debug_dir,
-                "gemini",
-                start + 1,
-                end_line,
-                attempt,
-                "count_mismatch",
-                chunk,
-                raw,
-                parse_result=parse_result,
-                extra={
-                    "finish_reason": getattr(cand, "finish_reason", None),
-                    "safety_ratings": getattr(cand, "safety_ratings", None),
-                },
-            )
+            log_failure("count_mismatch")
             if attempt < MODEL_BLOCK_ATTEMPTS:
                 wait_s = min(9, 2 * attempt)
                 print(f"[Gemini] Retrying block {start + 1}-{end_line} in {wait_s} s...")
@@ -2770,18 +2834,6 @@ def translate_with_gemini(
             continue
 
         cand = response.candidates[0] if getattr(response, "candidates", None) else None
-        usage_md = getattr(response, "usage_metadata", None)
-        if usage_md is None and cand is not None and getattr(cand, "usage_metadata", None):
-            usage_md = cand.usage_metadata
-        if usage_md:
-            pt = _safe_int(getattr(usage_md, "prompt_token_count", 0))
-            ct = _safe_int(getattr(usage_md, "candidates_token_count", 0))
-            usage.prompt_tokens += pt
-            usage.completion_tokens += ct
-            usage.cost_usd += estimate_cost("gemini", pt, ct)
-        else:
-            _warn_missing_usage("gemini")
-
         if parse_result is None:
             if raw:
                 parse_result = parse_json_translations_result(raw, chunk)
@@ -2796,7 +2848,7 @@ def translate_with_gemini(
                     used_fallback=True,
                     error="empty_response",
                 )
-        if not parse_result.exact_match:
+        if not parse_result.exact_match or parse_result.used_fallback or parse_result.error:
             skipped_reason = skipped_reason or "partial_error"
             _log_translation_count_issue("gemini", start + 1, end_line, parse_result, chunk)
             _save_translation_debug_response(
@@ -3132,10 +3184,10 @@ def main(argv: Optional[List[str]] = None):
         "--models",
         help=(
             "Comma-separated list of models to run. "
-            "Options: GPT-5.6 Terra, Claude Opus 5, Gemini 3.7 Flash, DeepSeek V4 Flash (or gpt, claude, gemini, deepseek). "
+            "Options: GPT-6.1 Sol, Claude Opus 5.5, Gemini 3.8 Flash, DeepSeek V4.1 Flash (or gpt, claude, gemini, deepseek). "
             "Default: gpt,claude,gemini,deepseek"
         ),
-        default="GPT-5.6 Terra,Claude Opus 5,Gemini 3.7 Flash,DeepSeek V4 Flash",
+        default="GPT-6.1 Sol,Claude Opus 5.5,Gemini 3.8 Flash,DeepSeek V4.1 Flash",
     )
     parser.add_argument(
         "--pad-ms",

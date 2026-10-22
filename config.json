@@ -27,11 +27,11 @@
   "cost_per_1k": {
     "gpt": {
       "input": 0.002,
-      "output": 0.012
+      "output": 0.01
     },
     "claude": {
-      "input": 0.005,
-      "output": 0.025
+      "input": 0.004,
+      "output": 0.02
     },
     "context_note": {
       "input": 0.00075,
