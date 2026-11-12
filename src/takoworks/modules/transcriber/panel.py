@@ -80,6 +80,7 @@ class TranscriberPanel(ttk.Frame):
         self.v_skip_asr = tk.BooleanVar(value=True)
         self.v_do_roman = tk.BooleanVar(value=True)
         self.v_html = tk.BooleanVar(value=True)
+        self.v_final_pass = tk.BooleanVar(value=cfg["last"].get("transcriber_final_pass", False))
 
         self.v_gpt = tk.BooleanVar(value=True)
         self.v_claude = tk.BooleanVar(value=True)
@@ -132,6 +133,7 @@ class TranscriberPanel(ttk.Frame):
         ttk.Checkbutton(opts, text="Ignore transcription (skip ASR; no video required)", variable=self.v_skip_asr, command=self._toggle_video).pack(anchor="w", padx=8, pady=2)
         ttk.Checkbutton(opts, text="Add romaji/pinyin via DeepSeek + contextual note", variable=self.v_do_roman).pack(anchor="w", padx=8, pady=2)
         ttk.Checkbutton(opts, text="Generate summary HTML", variable=self.v_html).pack(anchor="w", padx=8, pady=2)
+        ttk.Checkbutton(opts, text="Final Pass", variable=self.v_final_pass).pack(anchor="w", padx=8, pady=2)
 
         models = ttk.LabelFrame(frm, text="Translation Models")
         models.pack(fill="x", pady=8)
@@ -218,6 +220,8 @@ class TranscriberPanel(ttk.Frame):
         self.cfg["last"]["video_in"] = video_in
         self.cfg["last"]["out_dir"] = out_dir
         self.cfg["last"]["transcriber_instructions_md"] = os.path.abspath(instructions_md) if instructions_md else ""
+        final_pass = bool(self.v_final_pass.get())
+        self.cfg["last"]["transcriber_final_pass"] = final_pass
         save_config(self.cfg)
 
         run_started_at = time.time()
@@ -247,6 +251,8 @@ class TranscriberPanel(ttk.Frame):
                 argv += ["--html"]
             if skip_asr:
                 argv += ["--skip-asr"]
+            if final_pass:
+                argv += ["--final-pass"]
 
             old_argv = sys.argv
             old_out, old_err = sys.stdout, sys.stderr
@@ -257,7 +263,7 @@ class TranscriberPanel(ttk.Frame):
 
                 # Si has cambiado main(argv=None), esto lo usará.
                 if "argv" in inspect.signature(core.main).parameters:
-                    core.main(argv)
+                    core.main(argv, cancel_event=cancel_event)
                 else:
                     sys.argv = ["transcriber"] + argv
                     core.main()

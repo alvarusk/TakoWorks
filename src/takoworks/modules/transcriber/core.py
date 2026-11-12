@@ -37,6 +37,7 @@ from .json_utils import (
 )
 from .source_type import describe_source_type, normalize_source_type
 from ...shared.series_instructions import read_series_instructions
+from ...shared.openai_client import OPENAI_MODEL
 
 try:
     import requests  # type: ignore
@@ -72,7 +73,6 @@ ProgressCallback = Optional[Callable[[str, int, int, str], None]]
 #  CONFIGURACIÓN: MODELOS, CLAVES API Y DICCIONARIOS
 # ============================================================
 
-OPENAI_MODEL   = "gpt-6.1-sol"              # OpenAI
 CLAUDE_MODEL   = "claude-opus-5-5"          # Anthropic
 CONTEXT_NOTE_MODEL = "claude-sonnet-5"      # Prompt explicativo / nota contextual
 GEMINI_MODEL   = "gemini-3.8-flash"         # Gemini 3.8 Flash
@@ -3024,6 +3024,7 @@ def process_all_models_with_subs(
     models: Set[str],
     out_dir: str,
     terminology_instructions: str = "",
+    translation_diagnostics: Optional[Dict[str, str]] = None,
 ) -> Tuple[Dict[str, List[str]], Dict[str, ApiUsage], Dict[str, float]]:
     def _should_write_output(reason: Optional[str]) -> bool:
         return reason not in {"missing_key", "client_error", "auth_error"}
@@ -3139,6 +3140,8 @@ def process_all_models_with_subs(
 
     if skipped:
         print("[Modelos] Saltados parcial/total:", ", ".join(f"{DISPLAY_NAMES[k]} ({v})" for k, v in skipped.items()))
+    if translation_diagnostics is not None:
+        translation_diagnostics.update(skipped)
 
     return translations_by_model, usage_by_model, model_timings
 
@@ -3146,7 +3149,7 @@ def process_all_models_with_subs(
 #  MAIN
 # ============================================================
 
-def main(argv: Optional[List[str]] = None):
+def main(argv: Optional[List[str]] = None, *, cancel_event=None):
     run_started_at = time.time()
     run_started_override = os.getenv("TAKOWORKS_TRANSCRIBER_RUN_STARTED_AT", "").strip()
     if run_started_override:
@@ -3238,6 +3241,7 @@ def main(argv: Optional[List[str]] = None):
         ),
     )
 
+    parser.add_argument("--final-pass", action="store_true", help="Review all translations with GPT and write _final.ass and notes.")
     args = parser.parse_args(argv)
 
     terminology_instructions = read_series_instructions(args.instructions_md)
@@ -3323,6 +3327,7 @@ def main(argv: Optional[List[str]] = None):
 
     # 2) Traducir
     models = normalize_models_arg(args.models)
+    translation_diagnostics: Dict[str, str] = {}
     translations_by_model, usage_by_model, model_timings = process_all_models_with_subs(
         subs,
         lang,
@@ -3332,7 +3337,30 @@ def main(argv: Optional[List[str]] = None):
         models,
         out_dir,
         terminology_instructions=terminology_instructions,
+        translation_diagnostics=translation_diagnostics,
     )
+
+    if args.final_pass:
+        from ...shared.final_pass import run_final_pass
+
+        start = time.time()
+        final_usage = run_final_pass(
+            asr_out, {key: value for key, value in translations_by_model.items()
+                      if translation_diagnostics.get(key) not in {"missing_key", "client_error", "auth_error"}},
+            os.path.join(out_dir, f"{base_name}_final.ass"),
+            source_lang=lang, model=OPENAI_MODEL,
+            instructions=terminology_instructions, cancel_event=cancel_event,
+            source_notes=[f"Traduccion {key}: {reason}; puede faltar texto traducido."
+                          for key, reason in translation_diagnostics.items()],
+        )
+        extra_usage = ApiUsage(engine="gpt", model_name=OPENAI_MODEL)
+        extra_usage.prompt_tokens = final_usage["prompt_tokens"]
+        extra_usage.completion_tokens = final_usage["completion_tokens"]
+        extra_usage.cost_usd = estimate_cost("gpt", extra_usage.prompt_tokens, extra_usage.completion_tokens)
+        usage_by_model["gpt"] = merge_api_usage(
+            usage_by_model.get("gpt", ApiUsage(engine="gpt", model_name=OPENAI_MODEL)), extra_usage,
+        )
+        model_timings["gpt"] = model_timings.get("gpt", 0.0) + time.time() - start
 
     if romanization_usage.total_tokens > 0:
         usage_by_model["romanization"] = merge_api_usage(

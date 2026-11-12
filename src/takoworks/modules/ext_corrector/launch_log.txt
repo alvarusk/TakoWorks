@@ -576,3 +576,28 @@
 [20/10/2026 18:56:19,90] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\DONE\Keroro_S001_E0004_FP_TRAD_es-es.ass" --serve 
 [21/10/2026 18:34:24,43] "C:\Users\ajime\OneDrive\Documentos\PENDING\167 - Dreamland\3 - Scripts esES\Dreamland_S1E4_DMLSIM0004_384758_subtitle_edited_es-es.ass" --serve 
 [22/10/2026 15:49:57,21] "C:\Users\ajime\OneDrive\Documentos\PENDING\164 - Laid-Off Cheat-Granting Mage\3 - Scripts esES-esLA\TheLaidoffCheat_S1E4_TYWSIM0004_384913_subtitle_edited_es-es.ass" --serve 
+[24/10/2026 12:50:27,45] "C:\Users\ajime\OneDrive\Documentos\PENDING\144 - Star Blazers\3 - Scripts esLA\StarBlazers_S4E23_STBSIM0075_328680_subtitle_edited_es-es.ass" --serve 
+[25/10/2026  0:28:18,01] "C:\Users\ajime\OneDrive\Documentos\PENDING\144 - Star Blazers\3 - Scripts esLA\StarBlazers_S4E24_STBSIM0076_328683_subtitle_edited_es-la.ass" --serve 
+[27/10/2026  9:59:51,35] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\Keroro_S001_E0005_FP_TRAD_es-es.ass" --serve 
+[27/10/2026 10:40:12,76] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - PoT Finals\3 - Scripts esES\DONE\ThePrinceOfTenn_S8E5_POTSIM0230_385670_subtitle_edited_es-la.ass" --serve 
+[27/10/2026 10:49:40,72] "C:\Users\ajime\OneDrive\Documentos\PENDING\165 - A Returner's Magic S2\3 - Scripts esES-esLA\DONE\AReturnersMagic_S2E10_MSBSIM0022_384668_subtitle_edited_es-la.ass" --serve 
+[27/10/2026 12:31:45,59] "C:\Users\ajime\OneDrive\Documentos\PENDING\166 - The Detective is Already Dead S2\3 - Scripts esES-esLA\TheDetectiveIsA_S2E4_DEDSIM0017_389836_subtitle_edited_es-la.ass" --serve 
+[28/10/2026 21:32:24,92] "C:\Users\ajime\OneDrive\Documentos\PENDING\144 - Star Blazers\3 - Scripts esLA\StarBlazers_S4E25_STBSIM0077_328686_subtitle_edited_es-la.ass" --serve 
+[29/10/2026 11:29:47,23] "C:\Users\ajime\OneDrive\Documentos\PENDING\165 - A Returner's Magic S2\3 - Scripts esES-esLA\AReturnersMagic_S2E5_MSBSIM0017_384663_subtitle_edited_es-es.ass" --serve 
+[29/10/2026 11:31:49,37] "C:\Users\ajime\OneDrive\Documentos\PENDING\165 - A Returner's Magic S2\3 - Scripts esES-esLA\AReturnersMagic_S2E6_MSBSIM0018_384664_subtitle_edited_es-es.ass" --serve 
+[29/10/2026 18:02:52,89] "C:\Users\ajime\OneDrive\Documentos\PENDING\144 - Star Blazers\3 - Scripts esLA\StarBlazers_S4E26_STBSIM0078_328689_subtitle_edited_es-la.ass" --serve 
+[29/10/2026 18:14:03,51] "C:\Users\ajime\OneDrive\Documentos\PENDING\144 - Star Blazers\3 - Scripts esLA\StarBlazers_S4E26_STBSIM0078_328689_subtitle_edited_es-la.ass" --serve 
+[30/10/2026 13:56:40,51] "C:\Users\ajime\OneDrive\Documentos\PENDING\164 - Laid-Off Cheat-Granting Mage\3 - Scripts esES-esLA\TheLaidoffCheat_S1E5_TYWSIM0005_384914_subtitle_edited_es-es.ass" --serve 
+[01/11/2026  5:09:31,58] "C:\Users\ajime\OneDrive\Documentos\PENDING\164 - Laid-Off Cheat-Granting Mage\3 - Scripts esES-esLA\TheLaidoffCheat_S1E6_TYWSIM0006_384915_subtitle_edited_es-es.ass" --serve 
+[02/11/2026 14:09:32,45] "C:\Users\ajime\OneDrive\Documentos\PENDING\166 - The Detective is Already Dead S2\3 - Scripts esES-esLA\TheDetectiveIsA_S2E5_DEDSIM0018_389837_subtitle_edited_es-la.ass" --serve 
+[02/11/2026 14:15:53,55] "C:\Users\ajime\OneDrive\Documentos\PENDING\165 - A Returner's Magic S2\3 - Scripts esES-esLA\AReturnersMagic_S2E11_MSBSIM0023_384669_subtitle_edited_es-la.ass" --serve 
+[02/11/2026 15:23:58,02] "C:\Users\ajime\OneDrive\Documentos\PENDING\162 - Keroro\2 - Scripts esES\Keroro_S001_E0006_FP_TRAD_es-es.ass" --serve 
+[02/11/2026 16:23:46,68] "C:\Users\ajime\OneDrive\Documentos\PENDING\163 - Reborn as a Space Mercenary\3 - Scripts esES\RebornAsASpaceM_S1E10_RMWSIM0010_389251_subtitle_trad_es-es.ass" --serve 
+[03/11/2026  4:56:31,41] "C:\Users\ajime\OneDrive\Documentos\PENDING\166 - The Detective is Already Dead S2\3 - Scripts esES-esLA\TheDetectiveIsA_S2E5_DEDSIM0018_389837_subtitle_edited_es-es.ass" --serve 
+[03/11/2026  5:01:14,85] "C:\Users\ajime\OneDrive\Documentos\PENDING\161 - PoT Finals\3 - Scripts esES\DONE\ThePrinceOfTenn_S8E6_POTSIM0231_385671_subtitle_edited_es-la.ass" --serve 
+[03/11/2026 16:22:15,98] "C:\Users\ajime\OneDrive\Documentos\PENDING\165 - A Returner's Magic S2\3 - Scripts esES-esLA\DONE\AReturnersMagic_S2E7_MSBSIM0019_384665_subtitle_edited_es-es.ass" --serve 
+[03/11/2026 16:23:15,25] "C:\Users\ajime\OneDrive\Documentos\PENDING\165 - A Returner's Magic S2\3 - Scripts esES-esLA\DONE\AReturnersMagic_S2E8_MSBSIM0020_384666_subtitle_edited_es-es.ass" --serve 
+[04/11/2026 11:00:45,04] "C:\Users\ajime\OneDrive\Documentos\PENDING\167 - Dreamland\3 - Scripts esES\Dreamland_S1E5_DMLSIM0005_384759_subtitle_edited_es-es.ass" --serve 
+[04/11/2026 11:28:40,01] "C:\Users\ajime\OneDrive\Documentos\PENDING\167 - Dreamland\3 - Scripts esES\Dreamland_S1E6_DMLSIM0006_384760_subtitle_edited_es-es.ass" --serve 
+[04/11/2026 16:08:15,76] "C:\Users\ajime\OneDrive\Documentos\PENDING\168 - Sekiro\2 - Scripts\SekiroNoDefeat_S001_E0001_FP-edited_es_es.ass" --serve 
+[08/11/2026 11:19:04,18] "C:\Users\ajime\OneDrive\Documentos\PENDING\169 - Shangri-La Frontier S3\2 - Scripts\ShangriLaFrontier_S3.0E1.0_SGFSIM0051_screener_edited_es-es.ass" --serve 

@@ -364,6 +364,7 @@ def translate_ass_file(
     auth_key: Optional[str] = None,
     source_lang: str = "EN",
     terminology_md_path: Optional[str] = None,
+    final_pass: bool = False,
     log=None,
     cancel_event=None,
 ) -> str:
@@ -384,6 +385,13 @@ def translate_ass_file(
         with open(out_path, "w", encoding="utf-8-sig", errors="replace") as fh:
             fh.writelines(src_lines)
         log("[i] No Dialogue lines were found. The file was copied unchanged.")
+        if final_pass:
+            from ...shared.final_pass import run_final_pass
+
+            run_final_pass(
+                ass_path, {}, str(Path(out_path).with_name(Path(out_path).stem + "_final.ass")),
+                source_lang=source_lang, log=log, cancel_event=cancel_event,
+            )
         return out_path
 
     log(f"[i] DeepL endpoint: {client.base_url}")
@@ -475,6 +483,20 @@ def translate_ass_file(
         with open(out_path, "w", encoding="utf-8-sig", errors="replace") as fh:
             fh.writelines(out_lines)
         log(f"[ok] Wrote translated ASS: {out_path}")
+        if final_pass:
+            from ...shared.final_pass import run_final_pass
+
+            _, translated_events = parse_ass(out_path)
+            translated_texts = [ev["parts"][ev["text_idx"]] for ev in translated_events
+                                if ev["prefix"].lower() == "dialogue"]
+            final_path = str(Path(out_path).with_name(Path(out_path).stem + "_final.ass"))
+            run_final_pass(
+                ass_path, {"deepl": translated_texts}, final_path,
+                source_lang=source_lang,
+                instructions=terminology_md + ("\nGlosario aplicado (origen,destino):\n" + glossary_entries_csv
+                                               if glossary_entries_csv else ""),
+                log=log, cancel_event=cancel_event,
+            )
         return out_path
     finally:
         try:
@@ -492,6 +514,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--instructions-md", default="", help="Optional Markdown series terminology file")
     ap.add_argument("--source-lang", choices=("EN", "FR"), default="EN", help="Source language: EN (English) or FR (French)")
     ap.add_argument("--out", default=None, help="Output ASS file")
+    ap.add_argument("--final-pass", action="store_true", help="Review with GPT and write _final.ass and notes")
     ap.add_argument("--api-key", default="", help="DeepL auth key (optional; can come from config/env)")
     args = ap.parse_args(argv)
 
@@ -502,6 +525,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         terminology_md_path=args.instructions_md or None,
         auth_key=args.api_key.strip() or None,
         source_lang=args.source_lang,
+        final_pass=args.final_pass,
     )
     print(f"[ok] {out_path}")
     return 0

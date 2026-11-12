@@ -3,6 +3,7 @@ from PyInstaller.utils.hooks import collect_all, copy_metadata
 import os
 
 datas = [('bin', 'bin'), ('assets', 'assets'), ('src\\takoworks\\modules\\transcriber\\weight', 'takoworks\\modules\\transcriber\\weight')]
+datas.append(('src/takoworks/shared/final_pass.md', 'takoworks/shared'))
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('pykakasi')

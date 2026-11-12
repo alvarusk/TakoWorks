@@ -25,6 +25,7 @@ class TranslatorPanel(ttk.Frame):
         self.glossary_var = tk.StringVar(value=initial_glossary)
         self.instructions_var = tk.StringVar(value=initial_instructions)
         self.source_lang_var = tk.StringVar(value=initial_source_lang)
+        self.final_pass_var = tk.BooleanVar(value=last.get("translator_final_pass", False))
 
         self._build()
 
@@ -61,6 +62,7 @@ class TranslatorPanel(ttk.Frame):
             width=8,
         ).pack(side="left", padx=6)
         ttk.Label(r2, text="(English / French)").pack(side="left")
+        ttk.Checkbutton(frm, text="Final Pass", variable=self.final_pass_var).pack(anchor="w", pady=4)
 
         note = ttk.LabelFrame(frm, text="Notes")
         note.pack(fill="x", pady=8)
@@ -104,6 +106,7 @@ class TranslatorPanel(ttk.Frame):
         glossary_path = self.glossary_var.get().strip()
         instructions_path = self.instructions_var.get().strip()
         source_lang = self.source_lang_var.get().strip().upper()
+        final_pass = bool(self.final_pass_var.get())
 
         if not ass_path or not os.path.isfile(ass_path):
             messagebox.showerror("Error", "Select a valid ASS file.")
@@ -124,6 +127,7 @@ class TranslatorPanel(ttk.Frame):
         self.cfg["last"]["translator_glossary"] = glossary_path
         self.cfg["last"]["translator_instructions_md"] = instructions_path
         self.cfg["last"]["translator_source_lang"] = source_lang
+        self.cfg["last"]["translator_final_pass"] = final_pass
         save_config(self.cfg)
 
         def job(cancel_event, log):
@@ -142,6 +146,7 @@ class TranslatorPanel(ttk.Frame):
                 out_path,
                 terminology_md_path=instructions_path or None,
                 source_lang=source_lang,
+                final_pass=final_pass,
                 cancel_event=cancel_event,
                 log=log,
             )

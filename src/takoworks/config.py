@@ -77,6 +77,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "translator_instructions_md": "",
         "transcriber_instructions_md": "",
         "translator_source_lang": "EN",
+        "translator_final_pass": False,
+        "transcriber_final_pass": False,
         "out_dir": "",
         "splitter_pos": 0,
         "series": "",
