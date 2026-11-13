@@ -7,9 +7,11 @@ import math
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
 
 from .openai_client import OPENAI_MODEL, create_openai_client
+from .api_costs import load_price_table, calculate_cost
 from ..modules.transferer.transferer import parse_ass
 
 TAG_RE = re.compile(r"\{[^}]*\}")
@@ -82,12 +84,17 @@ def _dialogues(path):
 def run_final_pass(reference_path, translations, output_path, *, source_lang,
                    model=OPENAI_MODEL, client=None, instructions="", cancel_event=None,
                    log=print, open_notes=True, source_notes=()):
-    """Preserve event metadata; return API token usage. Never truncate to fit limits."""
+    """Return tokens, estimated cost and elapsed time; report them even on failure."""
+    started = time.perf_counter()
     output_path = Path(output_path)
     notes_path = output_path.with_suffix(".txt")
     notes = [f"Final Pass | modelo: {model}", f"Referencia: {reference_path}"]
     notes.extend(source_notes)
     usage = {"prompt_tokens": 0, "completion_tokens": 0}
+    prices = {}
+    requests = 0
+    responses = 0
+    missing_usage = 0
 
     def check_cancel():
         if cancel_event is not None and cancel_event.is_set():
@@ -95,6 +102,7 @@ def run_final_pass(reference_path, translations, output_path, *, source_lang,
 
     try:
         check_cancel()
+        prices = load_price_table()["gpt"]
         if output_path.resolve() == Path(reference_path).resolve():
             raise ValueError("El archivo final no puede sobrescribir la referencia.")
         lines, events = _dialogues(reference_path)
@@ -147,14 +155,18 @@ def run_final_pass(reference_path, translations, output_path, *, source_lang,
                 check_cancel()
                 log(f"[Final Pass] {offset + 1}-{offset + len(batch)}, intento {attempt + 1}/3")
                 try:
+                    requests += 1
                     response = client.chat.completions.create(
                         model=model, messages=messages, response_format=_response_format(),
                         max_completion_tokens=6000,
                     )
-                    check_cancel()
+                    responses += 1
                     api_usage = getattr(response, "usage", None)
-                    for key in usage:
+                    if api_usage is None:
+                        missing_usage += 1
+                    for key in ("prompt_tokens", "completion_tokens"):
                         usage[key] += int(getattr(api_usage, key, 0) or 0)
+                    check_cancel()
                     choice = response.choices[0]
                     message = choice.message
                     if getattr(message, "refusal", None):
@@ -227,7 +239,29 @@ def run_final_pass(reference_path, translations, output_path, *, source_lang,
         notes.append(f"PROCESO NO COMPLETADO: {exc}. No se ha publicado un nuevo archivo final.")
         raise
     finally:
+        usage["elapsed_seconds"] = max(0.0, time.perf_counter() - started)
+        usage["cost_usd"] = calculate_cost(prices, usage["prompt_tokens"], usage["completion_tokens"])
+        usage["requests"] = requests
+        summary = (
+            f"Tiempo Final Pass: {usage['elapsed_seconds']:.2f} s | "
+            f"Coste estimado Final Pass: ${usage['cost_usd']:.6f} USD | "
+            f"Solicitudes: {requests} (incluye reintentos del revisor)"
+        )
+        notes.append(summary)
         notes.append(f"Tokens API: entrada={usage['prompt_tokens']}, salida={usage['completion_tokens']}")
+        notes.append(
+            f"Tarifas configuradas USD/1000 tokens: entrada={prices.get('input', 0)}, "
+            f"salida={prices.get('output', 0)}. Estimacion; no es la factura del proveedor."
+        )
+        if missing_usage or requests > responses:
+            notes.append(
+                f"CONSUMO INCOMPLETO: {missing_usage} respuestas sin datos de tokens y "
+                f"{requests - responses} solicitudes sin respuesta. El coste indicado solo "
+                "incluye tokens comunicados por la API; puede haber consumo adicional."
+            )
+        if requests and (float(prices.get("input", 0) or 0) <= 0 or float(prices.get("output", 0) or 0) <= 0):
+            notes.append("AVISO: hay tarifas nulas; configura cost_per_1k.gpt para estimar el gasto.")
+        log(f"[Final Pass] {summary}")
         notes_path.write_text("\n".join(notes) + "\n", encoding="utf-8-sig")
         log(f"[Final Pass] Notas: {notes_path}")
         if open_notes and os.name == "nt":

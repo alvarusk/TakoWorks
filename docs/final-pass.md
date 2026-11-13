@@ -40,5 +40,23 @@ guarda la mejor propuesta y el TXT indica **REQUIERE REVISION**, con los
 incumplimientos concretos. No se recorta texto automaticamente. Si no hay
 traducciones, la API falla sin dar ninguna propuesta valida o no se obtiene
 texto ASS seguro, no se publica un nuevo final; se conserva cualquier final
-anterior y se explica el fallo en el TXT. Los tokens de Final Pass se registran
-en el informe y, en Transcriber, se suman al consumo de GPT.
+anterior y se explica el fallo en el TXT.
+
+El TXT y el registro muestran el tiempo exclusivo de Final Pass, sus tokens de
+entrada y salida, el numero de solicitudes (incluidos los reintentos del revisor)
+y su coste estimado en USD, incluso si falla o se cancela. El tiempo mide el paso
+completo hasta generar el ASS, incluidas esperas y reintentos de API. Las
+solicitudes cuentan llamadas del revisor; el SDK puede reintentar internamente.
+Si una llamada falla sin devolver consumo, el TXT avisa de que el importe
+puede estar incompleto.
+
+La estimacion usa `cost_per_1k.gpt.input` y `cost_per_1k.gpt.output` de la
+configuracion efectiva, en USD por 1000 tokens, o las variables
+`COST_GPT_INPUT_PER_1K` y `COST_GPT_OUTPUT_PER_1K`, que tienen prioridad.
+Las tarifas aplicadas se incluyen en el TXT. No se consulta la factura del
+proveedor ni se descuentan precios de cache: el coste depende de esas tarifas.
+
+En Transcriber, **Final Pass** tiene una fila propia en los resumenes de
+tiempo y coste y se guarda con `engine=final_pass` en Supabase si esta
+configurado. Su consumo se incluye una sola vez en el total y no se mezcla con
+la traduccion de GPT. En Translator aparece en el registro y en el TXT.

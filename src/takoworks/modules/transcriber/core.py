@@ -38,6 +38,7 @@ from .json_utils import (
 from .source_type import describe_source_type, normalize_source_type
 from ...shared.series_instructions import read_series_instructions
 from ...shared.openai_client import OPENAI_MODEL
+from ...shared.api_costs import DEFAULT_PRICE_PER_1K, _read_price, load_price_table, calculate_cost
 
 try:
     import requests  # type: ignore
@@ -127,6 +128,7 @@ DISPLAY_NAMES = {
     "gemini": "Gemini 3.8 Flash",
     "deepseek": "DeepSeek V4.1 Flash",
     "romanization": "Romanization (DeepSeek V4.1 Flash)",
+    "final_pass": "Final Pass",
 }
 
 # Alias aceptados en --models (CLI/GUI). Se normalizan a claves internas:
@@ -371,53 +373,8 @@ def _safe_int(val) -> int:
         return 0
 
 
-def _read_price(model_key: str, kind: str, default: float) -> float:
-    env_name = f"COST_{model_key.upper()}_{kind.upper()}_PER_1K"
-    raw = os.getenv(env_name)
-    if raw is None or str(raw).strip() == "":
-        return default
-    try:
-        return float(raw)
-    except Exception:
-        print(f"[Costes] Valor no valido en {env_name}: {raw}. Se usa {default}.")
-        return default
-
-
-DEFAULT_PRICE_PER_1K: Dict[str, Dict[str, float]] = {
-    "gpt": {"input": 0.002, "output": 0.01},
-    "claude": {"input": 0.004, "output": 0.02},
-    "context_note": {"input": 0.00075, "output": 0.00375},
-    "gemini": {"input": 0.00075, "output": 0.00375},
-    "deepseek": {"input": 0.00014, "output": 0.00028},
-}
-
-
 def _load_price_table() -> Dict[str, Dict[str, float]]:
-    cfg_costs: Dict[str, Dict[str, float]] = {}
-    try:
-        cfg = app_config.load_config()
-        raw = cfg.get("cost_per_1k", {})
-        if isinstance(raw, dict):
-            cfg_costs = raw  # shallow; se accede con get seguro abajo
-    except Exception as e:
-        print(f"[Costes] No se pudo leer cost_per_1k de config.json: {e}")
-
-    table: Dict[str, Dict[str, float]] = {}
-    for key, defaults in DEFAULT_PRICE_PER_1K.items():
-        cfg_entry = cfg_costs.get(key, {}) if isinstance(cfg_costs, dict) else {}
-        table[key] = {
-            "input": _read_price(
-                key,
-                "input",
-                cfg_entry.get("input", defaults.get("input", 0.0)) if isinstance(cfg_entry, dict) else defaults.get("input", 0.0),
-            ),
-            "output": _read_price(
-                key,
-                "output",
-                cfg_entry.get("output", defaults.get("output", 0.0)) if isinstance(cfg_entry, dict) else defaults.get("output", 0.0),
-            ),
-        }
-    return table
+    return load_price_table()
 
 
 _WARNED_PRICING: Set[str] = set()
@@ -442,7 +399,7 @@ def estimate_cost(model_key: str, prompt_tokens: int, completion_tokens: int) ->
         )
         _WARNED_PRICING.add(model_key)
 
-    return (prompt_tokens / 1000.0) * in_price + (completion_tokens / 1000.0) * out_price
+    return calculate_cost(prices, prompt_tokens, completion_tokens)
 
 
 def _warn_missing_usage(model_key: str) -> None:
@@ -649,7 +606,7 @@ def log_time_cost_breakdown(
     print(f"Prompts explicativos: {_format_elapsed(context_seconds)}; {_format_cost(context_note_usage.cost_usd)}")
     print(f"Romanización: {_format_elapsed(roman_seconds)}; {_format_cost(0.0)}")
 
-    for key in ("gpt", "claude", "gemini", "deepseek"):
+    for key in ("gpt", "claude", "gemini", "deepseek", "final_pass"):
         if key not in model_timings and key not in usage_by_model:
             continue
         usage = usage_by_model.get(key, ApiUsage(engine=key, model_name=""))
@@ -690,7 +647,7 @@ def log_time_cost_breakdown_v2(
     print(f"Prompts explicativos: {_format_elapsed(context_seconds)}; {_format_cost(context_note_usage.cost_usd)}")
     print(f"Romanization: {_format_elapsed(roman_seconds)}; {_format_cost(romanization_usage.cost_usd)}")
 
-    for key in ("gpt", "claude", "gemini", "deepseek"):
+    for key in ("gpt", "claude", "gemini", "deepseek", "final_pass"):
         if key not in model_timings and key not in usage_by_model:
             continue
         usage = usage_by_model.get(key, ApiUsage(engine=key, model_name=""))
@@ -3343,7 +3300,6 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
     if args.final_pass:
         from ...shared.final_pass import run_final_pass
 
-        start = time.time()
         final_usage = run_final_pass(
             asr_out, {key: value for key, value in translations_by_model.items()
                       if translation_diagnostics.get(key) not in {"missing_key", "client_error", "auth_error"}},
@@ -3353,14 +3309,12 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
             source_notes=[f"Traduccion {key}: {reason}; puede faltar texto traducido."
                           for key, reason in translation_diagnostics.items()],
         )
-        extra_usage = ApiUsage(engine="gpt", model_name=OPENAI_MODEL)
+        extra_usage = ApiUsage(engine="final_pass", model_name=OPENAI_MODEL)
         extra_usage.prompt_tokens = final_usage["prompt_tokens"]
         extra_usage.completion_tokens = final_usage["completion_tokens"]
-        extra_usage.cost_usd = estimate_cost("gpt", extra_usage.prompt_tokens, extra_usage.completion_tokens)
-        usage_by_model["gpt"] = merge_api_usage(
-            usage_by_model.get("gpt", ApiUsage(engine="gpt", model_name=OPENAI_MODEL)), extra_usage,
-        )
-        model_timings["gpt"] = model_timings.get("gpt", 0.0) + time.time() - start
+        extra_usage.cost_usd = final_usage["cost_usd"]
+        usage_by_model["final_pass"] = extra_usage
+        model_timings["final_pass"] = final_usage["elapsed_seconds"]
 
     if romanization_usage.total_tokens > 0:
         usage_by_model["romanization"] = merge_api_usage(

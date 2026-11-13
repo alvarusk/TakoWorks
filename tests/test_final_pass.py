@@ -10,6 +10,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from takoworks.shared import final_pass as fp
 
 
+@pytest.fixture(autouse=True)
+def fixed_final_pass_prices(monkeypatch):
+    monkeypatch.setattr(fp, "load_price_table", lambda: {"gpt": {"input": 0.002, "output": 0.01}})
+
+
 def write_ass(path, text="Hello", duration="0:00:02.00"):
     path.write_text(
         "[Script Info]\nTitle: Keep this title\nScriptType: v4.00+\n\n"
@@ -59,13 +64,19 @@ def test_final_pass_repairs_limits_preserves_metadata_and_opens_notes(tmp_path, 
     output = tmp_path / "show_final.ass"
     client, calls = fake_client([answer("x" * 90), answer(r"{\i1}Hola.{\i0}", ["Revisar el tratamiento."])])
     opened = []
+    clock = iter([100.0, 112.5])
+    monkeypatch.setattr(fp, "time", NS(perf_counter=lambda: next(clock)))
     monkeypatch.setattr(fp.subprocess, "Popen", lambda args: opened.append(args))
     usage = fp.run_final_pass(source, {"deepl": [r"{\i1}Hola{\i0}"]}, output,
                               source_lang="EN", client=client)
     assert len(calls) == 2
     assert calls[0]["model"] == fp.OPENAI_MODEL
     assert calls[0]["response_format"]["json_schema"]["strict"] is True
-    assert usage == {"prompt_tokens": 20, "completion_tokens": 10}
+    assert usage["prompt_tokens"] == 20
+    assert usage["completion_tokens"] == 10
+    assert usage["cost_usd"] == pytest.approx(0.00014)
+    assert usage["elapsed_seconds"] == 12.5
+    assert usage["requests"] == 2
     assert source.read_bytes() == original
     result = output.read_text(encoding="utf-8-sig")
     assert "Title: Keep this title" in result
@@ -74,6 +85,8 @@ def test_final_pass_repairs_limits_preserves_metadata_and_opens_notes(tmp_path, 
     report = output.with_suffix(".txt").read_text(encoding="utf-8-sig")
     assert "Revisar el tratamiento" in report
     assert "Limites tecnicos verificados" in report
+    assert "Tiempo Final Pass: 12.50 s" in report
+    assert "Coste estimado Final Pass: $0.000140 USD" in report
     if fp.os.name == "nt":
         assert opened == [["notepad.exe", str(output.with_suffix(".txt").resolve())]]
 
@@ -104,6 +117,60 @@ def test_api_or_structural_failure_keeps_existing_final_and_writes_report(tmp_pa
     assert output.read_text(encoding="utf-8") == "previous final"
     assert "NO COMPLETADO" in output.with_suffix(".txt").read_text(encoding="utf-8-sig")
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_failed_review_still_reports_consumed_tokens_and_cost(tmp_path, monkeypatch):
+    source = write_ass(tmp_path / "source.ass")
+    output = tmp_path / "source_final.ass"
+    client, _ = fake_client([{"subtitles": [], "notes": []}] * 3)
+    clock = iter([50.0, 65.0])
+    monkeypatch.setattr(fp, "time", NS(perf_counter=lambda: next(clock)))
+    with pytest.raises(RuntimeError):
+        fp.run_final_pass(source, {"gpt": ["Hola"]}, output, source_lang="ja", client=client, open_notes=False)
+    report = output.with_suffix(".txt").read_text(encoding="utf-8-sig")
+    assert "Tiempo Final Pass: 15.00 s" in report
+    assert "entrada=30, salida=15" in report
+    assert "$0.000210 USD" in report
+
+
+def test_cancellation_after_response_preserves_its_consumption(tmp_path, monkeypatch):
+    source = write_ass(tmp_path / "source.ass")
+    output = tmp_path / "source_final.ass"
+    client, _ = fake_client([answer("Hola")])
+    create = client.chat.completions.create
+    cancelled = threading.Event()
+    def cancel_after_response(**kwargs):
+        response = create(**kwargs)
+        cancelled.set()
+        return response
+    client.chat.completions.create = cancel_after_response
+    with pytest.raises(RuntimeError, match="Cancelado"):
+        fp.run_final_pass(source, {"gpt": ["Hola"]}, output, source_lang="EN", client=client,
+                          cancel_event=cancelled, open_notes=False)
+    report = output.with_suffix(".txt").read_text(encoding="utf-8-sig")
+    assert "entrada=10, salida=5" in report
+    assert "$0.000070 USD" in report
+
+
+@pytest.mark.parametrize("no_response", [True, False])
+def test_unknown_consumption_is_reported_as_incomplete(tmp_path, no_response):
+    source = write_ass(tmp_path / "source.ass")
+    output = tmp_path / "source_final.ass"
+    client, _ = fake_client([RuntimeError("timeout")] * 3 if no_response else [answer("Hola")])
+    if not no_response:
+        create = client.chat.completions.create
+        def without_usage(**kwargs):
+            response = create(**kwargs)
+            response.usage = None
+            return response
+        client.chat.completions.create = without_usage
+    if no_response:
+        with pytest.raises(RuntimeError):
+            fp.run_final_pass(source, {"gpt": ["Hola"]}, output, source_lang="EN", client=client, open_notes=False)
+    else:
+        fp.run_final_pass(source, {"gpt": ["Hola"]}, output, source_lang="EN", client=client, open_notes=False)
+    report = output.with_suffix(".txt").read_text(encoding="utf-8-sig")
+    assert "CONSUMO INCOMPLETO" in report
 
 
 def test_cancellation_writes_notes_without_calling_api(tmp_path):
@@ -148,16 +215,18 @@ def test_translator_runs_review_after_deepl(tmp_path, monkeypatch, lang):
     monkeypatch.setattr(fp.subprocess, "Popen", lambda args: None)
     monkeypatch.setattr(core, "DeepLClient", lambda **kwargs: NS(
         base_url="test", translate_batch=lambda texts, **kwargs: ["Buenas."]))
-    translated = Path(core.translate_ass_file(str(source), auth_key="test", source_lang=lang, final_pass=True))
+    logs = []
+    translated = Path(core.translate_ass_file(str(source), auth_key="test", source_lang=lang, final_pass=True, log=logs.append))
     assert "Buenas." in translated.read_text(encoding="utf-8-sig")
     assert "Hola." in translated.with_name(translated.stem + "_final.ass").read_text(encoding="utf-8-sig")
     payload = json.loads(calls[0]["messages"][1]["content"])
     assert payload["source_lang"] == lang
     assert payload["subtitles"][0]["translations"] == {"deepl": "Buenas."}
+    assert any("Tiempo Final Pass:" in line and "$0.000070 USD" in line for line in logs)
 
 
 @pytest.mark.parametrize("lang", ["ja", "zh"])
-def test_transcriber_reviews_all_translations_after_last_engine(tmp_path, monkeypatch, lang):
+def test_transcriber_reviews_all_translations_after_last_engine(tmp_path, monkeypatch, capsys, lang):
     from takoworks.modules.transcriber import core
 
     source = write_ass(tmp_path / "source.ass", "Original{Explicacion semantica}")
@@ -173,13 +242,36 @@ def test_transcriber_reviews_all_translations_after_last_engine(tmp_path, monkey
         return client
     monkeypatch.setattr(fp, "create_openai_client", create_client)
     monkeypatch.setattr(fp.subprocess, "Popen", lambda args: None)
-    monkeypatch.setattr(core, "persist_costs_to_supabase", lambda *args: None)
+    saved = []
+    monkeypatch.setattr(core, "persist_costs_to_supabase", lambda *args: saved.append(args[-1]))
     monkeypatch.setattr(core, "_load_price_table", lambda: core.DEFAULT_PRICE_PER_1K)
     core.main([str(source), "--skip-asr", "--lang", lang, "--series", "Test", "--source-type", "None", "--final-pass"])
     assert (tmp_path / "source_final.ass").exists()
     payload = json.loads(calls[0]["messages"][1]["content"])
     assert set(payload["subtitles"][0]["translations"]) == {"gpt", "claude", "gemini", "deepseek"}
     assert "Explicacion semantica" in payload["subtitles"][0]["reference_ass"]
+    assert saved[0]["gpt"].total_tokens == 0
+    assert saved[0]["gpt"].cost_usd == 0
+    assert saved[0]["final_pass"].engine == "final_pass"
+    assert saved[0]["final_pass"].total_tokens == 15
+    assert saved[0]["final_pass"].cost_usd == pytest.approx(0.00007)
+    log = capsys.readouterr().out
+    assert "Final Pass: prompt=10 completion=5 total=15" in log
+    assert "[Costes] TOTAL: tokens=15" in log
+    assert any(line.startswith("Final Pass:") and ";" in line for line in log.splitlines())
+
+
+def test_shared_prices_respect_config_and_environment(monkeypatch):
+    from takoworks.shared import api_costs
+
+    monkeypatch.setattr(api_costs.app_config, "load_config", lambda: {
+        "cost_per_1k": {"gpt": {"input": 0.02, "output": 0.04}},
+    })
+    monkeypatch.delenv("COST_GPT_OUTPUT_PER_1K", raising=False)
+    monkeypatch.setenv("COST_GPT_INPUT_PER_1K", "0.03")
+    prices = api_costs.load_price_table()["gpt"]
+    assert prices == {"input": 0.03, "output": 0.04}
+    assert api_costs.calculate_cost(prices, 2000, 1000) == pytest.approx(0.1)
 
 
 def test_panels_expose_independent_persistent_final_pass_options():
