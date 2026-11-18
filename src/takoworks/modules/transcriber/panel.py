@@ -79,6 +79,7 @@ class TranscriberPanel(ttk.Frame):
 
         self.v_skip_asr = tk.BooleanVar(value=True)
         self.v_do_roman = tk.BooleanVar(value=True)
+        self.v_context_note = tk.BooleanVar(value=True)
         self.v_html = tk.BooleanVar(value=True)
         self.v_final_pass = tk.BooleanVar(value=cfg["last"].get("transcriber_final_pass", False))
 
@@ -131,7 +132,8 @@ class TranscriberPanel(ttk.Frame):
         opts.pack(fill="x", pady=8)
 
         ttk.Checkbutton(opts, text="Ignore transcription (skip ASR; no video required)", variable=self.v_skip_asr, command=self._toggle_video).pack(anchor="w", padx=8, pady=2)
-        ttk.Checkbutton(opts, text="Add romaji/pinyin via DeepSeek + contextual note", variable=self.v_do_roman).pack(anchor="w", padx=8, pady=2)
+        ttk.Checkbutton(opts, text="Add romaji/pinyin via DeepSeek", variable=self.v_do_roman).pack(anchor="w", padx=8, pady=2)
+        ttk.Checkbutton(opts, text="Add contextual note", variable=self.v_context_note).pack(anchor="w", padx=8, pady=2)
         ttk.Checkbutton(opts, text="Generate summary HTML", variable=self.v_html).pack(anchor="w", padx=8, pady=2)
         ttk.Checkbutton(opts, text="Final Pass", variable=self.v_final_pass).pack(anchor="w", padx=8, pady=2)
 
@@ -246,7 +248,9 @@ class TranscriberPanel(ttk.Frame):
                 argv += ["--models", ""]  # allow none (requiere que tu core lo tolere)
 
             if self.v_do_roman.get():
-                argv += ["--do-roman-morph"]
+                argv += ["--do-roman"]
+            if self.v_context_note.get():
+                argv += ["--do-context-note"]
             if self.v_html.get():
                 argv += ["--html"]
             if skip_asr:

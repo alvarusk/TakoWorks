@@ -1433,6 +1433,8 @@ def transcribe_ass(
     romanization_usage: Optional[ApiUsage] = None,
     context_note_usage: Optional[ApiUsage] = None,
     phase_timings: Optional[Dict[str, float]] = None,
+    do_romanization: Optional[bool] = None,
+    do_context_note: Optional[bool] = None,
 ) -> pysubs2.SSAFile:
     """
     Carga un .ass, transcribe audio, pule la puntuación con modelos libres
@@ -1444,6 +1446,11 @@ def transcribe_ass(
     pueda mostrar en qué línea va y el % completado.
     """
     global _ja_tagger
+
+    if do_romanization is None:
+        do_romanization = do_roman_morph
+    if do_context_note is None:
+        do_context_note = do_roman_morph
 
     print("[+] Loading ASS for transcription.")
     subs = pysubs2.load(ass_path, encoding="utf-8")
@@ -1514,7 +1521,7 @@ def transcribe_ass(
 
         romanized_lines: List[str] = []
         context_notes: List[str] = []
-        if do_roman_morph:
+        if do_romanization:
             roman_started_at = time.time()
             romanized_lines, roman_usage, roman_skip = romanize_with_deepseek(refined_lines, lang)
             if romanization_usage is not None:
@@ -1523,10 +1530,12 @@ def transcribe_ass(
             if roman_skip:
                 print(f"[Romanization] Partial fallback reason: {roman_skip}")
 
+        if do_context_note:
             note_started_at = time.time()
             context_notes = build_contextual_notes(refined_lines, lang, usage_accumulator=context_note_usage)
             _record_phase_time(phase_timings, "context_note", time.time() - note_started_at)
-            print("[+] Embedding romaji/pinyin and contextual notes into the ASS.")
+        if do_romanization or do_context_note:
+            print("[+] Embedding selected annotations into the ASS.")
 
         embedding_started_at = time.time()
         for i, (ev, text) in enumerate(zip(events, refined_lines), start=1):
@@ -1536,11 +1545,12 @@ def transcribe_ass(
 
             lines = [base_text]
 
-            if do_roman_morph:
+            if do_romanization:
                 romanized = romanized_lines[i - 1] if i - 1 < len(romanized_lines) else ""
                 if romanized:
                     lines.append("{" + _ass_sanitize_braces(romanized) + "}")
 
+            if do_context_note:
                 context_note = context_notes[i - 1] if i - 1 < len(context_notes) else ""
                 if context_note:
                     lines.append(_ass_hide(context_note))
@@ -1560,6 +1570,8 @@ def add_roman_morph_to_subs(
     romanization_usage: Optional[ApiUsage] = None,
     context_note_usage: Optional[ApiUsage] = None,
     phase_timings: Optional[Dict[str, float]] = None,
+    do_romanization: bool = True,
+    do_context_note: bool = True,
 ) -> pysubs2.SSAFile:
     """
     Añade romaji/pinyin + nota contextual a un ASS que YA tiene el guion
@@ -1585,18 +1597,22 @@ def add_roman_morph_to_subs(
     print(f"[Romaji/Pinyin] There are {total} dialogue lines to process.")
 
     base_texts = [_event_source_text(ev) for ev in events]
-    roman_started_at = time.time()
-    romanized_lines, roman_usage, roman_skip = romanize_with_deepseek(base_texts, lang)
-    if romanization_usage is not None:
-        merge_api_usage(romanization_usage, roman_usage)
-    _record_phase_time(phase_timings, "romanization", time.time() - roman_started_at)
-    if roman_skip:
-                print(f"[Romanization] Partial fallback reason: {roman_skip}")
+    romanized_lines: List[str] = []
+    context_notes: List[str] = []
+    if do_romanization:
+        roman_started_at = time.time()
+        romanized_lines, roman_usage, roman_skip = romanize_with_deepseek(base_texts, lang)
+        if romanization_usage is not None:
+            merge_api_usage(romanization_usage, roman_usage)
+        _record_phase_time(phase_timings, "romanization", time.time() - roman_started_at)
+        if roman_skip:
+            print(f"[Romanization] Partial fallback reason: {roman_skip}")
 
-    note_started_at = time.time()
-    context_notes = build_contextual_notes(base_texts, lang, usage_accumulator=context_note_usage)
-    _record_phase_time(phase_timings, "context_note", time.time() - note_started_at)
-    print("[+] Embedding romaji/pinyin and contextual notes into the ASS.")
+    if do_context_note:
+        note_started_at = time.time()
+        context_notes = build_contextual_notes(base_texts, lang, usage_accumulator=context_note_usage)
+        _record_phase_time(phase_timings, "context_note", time.time() - note_started_at)
+    print("[+] Embedding selected annotations into the ASS.")
 
     embedding_started_at = time.time()
     for i, ev in enumerate(events, start=1):
@@ -2892,6 +2908,7 @@ def generate_html(
     subs: pysubs2.SSAFile,
     translations_by_model: Dict[str, List[str]],
     output_path: str,
+    has_romanization: bool = True,
 ):
     """
     Genera un HTML con columnas:
@@ -2941,8 +2958,9 @@ def generate_html(
             original_lines, extra_lines = _split_event_original_and_extra(ev)
             hidden_lines = [line for line in extra_lines if _is_hidden_ass_line(line)]
             original = "\n".join(line.strip() for line in original_lines if line.strip())
-            roman = _extract_braced_text(hidden_lines[0]) if len(hidden_lines) > 0 else ""
-            morph = _extract_braced_text(hidden_lines[1]) if len(hidden_lines) > 1 else ""
+            roman = _extract_braced_text(hidden_lines[0]) if has_romanization and hidden_lines else ""
+            note_index = 1 if has_romanization else 0
+            morph = _extract_braced_text(hidden_lines[note_index]) if len(hidden_lines) > note_index else ""
 
             row_vals = [
                 original,
@@ -3173,6 +3191,16 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
              "If omitted, you will be prompted in the console.",
     )
     parser.add_argument(
+        "--do-roman",
+        action="store_true",
+        help="Add romaji/pinyin via DeepSeek to the ASS.",
+    )
+    parser.add_argument(
+        "--do-context-note",
+        action="store_true",
+        help="Add a contextual note to the ASS.",
+    )
+    parser.add_argument(
         "--do-roman-morph",
         action="store_true",
         help="Add romaji/pinyin via DeepSeek and a context note with Claude Sonnet to the ASS.",
@@ -3200,6 +3228,8 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
 
     parser.add_argument("--final-pass", action="store_true", help="Review all translations with GPT and write _final.ass and notes.")
     args = parser.parse_args(argv)
+    do_romanization = args.do_roman or args.do_roman_morph
+    do_context_note = args.do_context_note or args.do_roman_morph
 
     terminology_instructions = read_series_instructions(args.instructions_md)
     if terminology_instructions:
@@ -3245,17 +3275,19 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
         print("[+] Skipping audio transcription phase: the text already present in the .ass will be used.")
         subs = pysubs2.load(ass_in, encoding="utf-8")
 
-        if args.do_roman_morph:
-            print("[+] Adding romaji/pinyin and a context note on top of the existing script.")
+        if do_romanization or do_context_note:
+            print("[+] Adding selected annotations on top of the existing script.")
             subs = add_roman_morph_to_subs(
                 subs,
                 lang,
                 romanization_usage=romanization_usage,
                 context_note_usage=context_note_usage,
                 phase_timings=phase_timings,
+                do_romanization=do_romanization,
+                do_context_note=do_context_note,
             )
         else:
-            print("[+] --do-roman-morph is NOT enabled: the script will be used as-is for translation.")
+            print("[+] No annotations selected: the script will be used as-is for translation.")
 
         # Guardamos un intermedio igualmente, para tener copia de trabajo
         asr_suffix = "_ja_asr" if lang == "ja" else "_zh_asr"
@@ -3271,6 +3303,8 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
             pad_ms=args.pad_ms,
             lang=lang,
             do_roman_morph=args.do_roman_morph,
+            do_romanization=do_romanization,
+            do_context_note=do_context_note,
             romanization_usage=romanization_usage,
             context_note_usage=context_note_usage,
             phase_timings=phase_timings,
@@ -3360,7 +3394,10 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
     # 3) HTML opcional
     if args.html:
         html_out = os.path.join(out_dir, f"{base_name}_summary.html")
-        generate_html(subs, translations_by_model, html_out)
+        generate_html(
+            subs, translations_by_model, html_out,
+            has_romanization=do_romanization or not do_context_note,
+        )
 
 
 if __name__ == "__main__":
