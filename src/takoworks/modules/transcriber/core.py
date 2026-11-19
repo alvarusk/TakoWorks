@@ -129,6 +129,8 @@ DISPLAY_NAMES = {
     "deepseek": "DeepSeek V4.1 Flash",
     "romanization": "Romanization (DeepSeek V4.1 Flash)",
     "final_pass": "Final Pass",
+    "verification_gpt": "Cotejo PDF (OpenAI)",
+    "verification_gemini": "Cotejo PDF (Gemini)",
 }
 
 # Alias aceptados en --models (CLI/GUI). Se normalizan a claves internas:
@@ -647,11 +649,11 @@ def log_time_cost_breakdown_v2(
     print(f"Prompts explicativos: {_format_elapsed(context_seconds)}; {_format_cost(context_note_usage.cost_usd)}")
     print(f"Romanization: {_format_elapsed(roman_seconds)}; {_format_cost(romanization_usage.cost_usd)}")
 
-    for key in ("gpt", "claude", "gemini", "deepseek", "final_pass"):
+    for key in ("verification_gpt", "verification_gemini", "gpt", "claude", "gemini", "deepseek", "final_pass"):
         if key not in model_timings and key not in usage_by_model:
             continue
         usage = usage_by_model.get(key, ApiUsage(engine=key, model_name=""))
-        seconds = model_timings.get(key, 0.0)
+        seconds = model_timings.get(key, phase_timings.get(key, 0.0))
         displayed_seconds += seconds
         displayed_cost += usage.cost_usd
         print(f"{DISPLAY_NAMES.get(key, key)}: {_format_elapsed(seconds)}; {_format_cost(usage.cost_usd)}")
@@ -3147,6 +3149,11 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
     )
     parser.add_argument("ass_in", help="Input .ass file (with synced timing).")
     parser.add_argument("video_in", nargs="?", default="", help="Matching video (optional if --skip-asr).")
+    parser.add_argument("--asr-engine", choices=["legacy", "purfview"], default="legacy",
+                        help="ASR engine; purfview uses large-v3-turbo on non-comment Gen_ lines.")
+    parser.add_argument("--purfview-exe", default="", help="Path to faster-whisper-xxl.exe.")
+    parser.add_argument("--reference-pdf", default="",
+                        help="Episode PDF: verify with OpenAI, then Gemini, before annotations.")
     parser.add_argument(
         "--out-dir",
         help="Folder where the output files (.ass, .html) will be saved. "
@@ -3269,9 +3276,56 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
 
     romanization_usage = ApiUsage(engine="deepseek", model_name=DEEPSEEK_MODEL)
     context_note_usage = ApiUsage(engine="context_note", model_name=CONTEXT_NOTE_MODEL)
+    verification_usage: Dict[str, ApiUsage] = {}
+
+    # The new initial workflow runs before any annotations or translations.
+    initial_workflow = bool(args.reference_pdf or (not args.skip_asr and args.asr_engine == "purfview"))
+    if initial_workflow:
+        from .initial_pass import check_cancel, transcribe_purfview, validate_reference_pdf, verify_with_pdf
+
+        if args.reference_pdf:
+            validate_reference_pdf(args.reference_pdf)
+            if not OPENAI_API_KEY or not GEMINI_API_KEY or google_genai is None:
+                raise ValueError("El doble cotejo necesita las claves de OpenAI y Gemini y google-genai.")
+        check_cancel(cancel_event)
+        stage_dir = os.path.join(out_dir, f"{base_name}_initial_{run_id[:8]}")
+        os.makedirs(stage_dir, exist_ok=False)
+        print(f"[+] Archivos del flujo inicial: {stage_dir}")
+        if args.skip_asr:
+            subs = pysubs2.load(ass_in, encoding="utf-8")
+        elif args.asr_engine == "purfview":
+            asr_started = time.time()
+            subs = transcribe_purfview(ass_in, video_in, lang, args.purfview_exe,
+                                      pad_ms=args.pad_ms, cancel_event=cancel_event)
+            _record_phase_time(phase_timings, "asr", time.time() - asr_started)
+        else:
+            subs = transcribe_ass(ass_in, video_in, args.pad_ms, lang, False,
+                                  phase_timings=phase_timings,
+                                  do_romanization=False, do_context_note=False)
+        subs.save(os.path.join(stage_dir, "transcribed.ass"), encoding="utf-8-sig")
+        if args.reference_pdf:
+            try:
+                subs = verify_with_pdf(
+                    subs, args.reference_pdf, lang, stage_dir, series_name=series_name,
+                    instructions=terminology_instructions, cancel_event=cancel_event,
+                    usage_by_model=verification_usage, phase_timings=phase_timings,
+                )
+            finally:
+                # Persist these charges even if verification or a later phase fails.
+                log_cost_summary(run_id, verification_usage, series_name, base_name)
+                persist_costs_to_supabase(run_id, series_name, base_name, lang, verification_usage)
+        check_cancel(cancel_event)
+        if do_romanization or do_context_note:
+            subs = add_roman_morph_to_subs(
+                subs, lang, romanization_usage=romanization_usage,
+                context_note_usage=context_note_usage, phase_timings=phase_timings,
+                do_romanization=do_romanization, do_context_note=do_context_note,
+            )
+        asr_out = os.path.join(stage_dir, "annotated.ass")
+        subs.save(asr_out, encoding="utf-8-sig")
 
     # 1) Obtener subs de partida
-    if args.skip_asr:
+    elif args.skip_asr:
         print("[+] Skipping audio transcription phase: the text already present in the .ass will be used.")
         subs = pysubs2.load(ass_in, encoding="utf-8")
 
@@ -3382,8 +3436,11 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
         )
 
     if usage_by_model:
-        log_cost_summary(run_id, usage_by_model, series_name, base_name)
+        # Verification was already persisted, including on failed runs.
         persist_costs_to_supabase(run_id, series_name, base_name, lang, usage_by_model)
+    usage_by_model.update(verification_usage)
+    if usage_by_model:
+        log_cost_summary(run_id, usage_by_model, series_name, base_name)
 
     log_time_cost_breakdown_v2(
         phase_timings,

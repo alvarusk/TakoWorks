@@ -1,4 +1,4 @@
-# TakoWorks (v1.114.0)
+# TakoWorks (v1.115.0)
 
 Toolkit for transcribing, romanizing, translating, and reviewing ASS subtitle files for Japanese and Chinese. Generates per-model ASS files, summary HTML, and optionally logs costs to Supabase.
 
@@ -45,6 +45,50 @@ python -m takoworks.modules.transcriber.core input.ass input.mp4 --lang ja|zh \
 python -m takoworks.modules.transcriber.core input.ass --skip-asr --do-roman-morph
 ```
 - Useful transcriber flags: `--out-dir`, `--base-name`, `--pad-ms`, `--source-type`, `--series`
+
+### Timed ASS transcription and episode PDF verification
+
+In Transcriber, uncheck **Ignore transcription**, select the episode video/audio,
+choose `purfview`, and browse to `faster-whisper-xxl.exe` if needed (standard
+Subtitle Edit installations are detected automatically). This uses Purfview Faster Whisper XXL with
+`large-v3-turbo` and the selected `ja` / `zh` language. FFmpeg cuts one audio clip
+per non-comment event whose style contains the literal `Gen_`. The clips run in
+one batch, retaining the input ASS timings, styles, actors, and other events.
+The original ASS is never overwritten. `legacy` keeps the previous ASR behavior;
+the CLI still defaults to that engine for compatibility.
+
+Enable **Verify episode PDF** and select the episode PDF to run OpenAI followed
+by Gemini before romaji/pinyin, contextual notes, translations, HTML, and Final
+Pass. Both verification passes use the same model constants and API keys as
+translations, independently of the selected translation checkboxes. PDF
+verification also works with **Ignore transcription** for an already transcribed
+ASS. It only changes non-comment `Gen_` events. Both providers receive the actual
+PDF, including scanned pages, rather than only extracted text. PDFs must be
+smaller than 50 MiB and the configured models must support PDF/image input.
+
+```bash
+python -m takoworks.modules.transcriber.core input.ass episode.mkv --lang ja \
+  --series "Series" --source-type Manga --asr-engine purfview \
+  --purfview-exe "C:/Tools/Faster-Whisper-XXL/faster-whisper-xxl.exe" \
+  --reference-pdf episode.pdf --do-roman-morph --html --final-pass
+```
+
+Each run creates `<base>_initial_<run-id>/` containing `transcribed.ass`,
+`verification_gpt.ass`, `verification_gemini.ass`, and `annotated.ass`.
+`verification.json` records every returned attempt, corrections, cited PDF pages,
+uncertainties, token usage, and estimated USD costs. Partial ASS files preserve
+completed verification blocks if a later block fails. Invalid, blocked, or
+truncated responses are retried up to three times; an exhausted block stops the
+workflow before annotations/translations. Uncertain lines retain their current
+text. Page citations are model-provided evidence to review, not a guarantee of
+correctness. Temporary provider PDF uploads are deleted after each pass.
+
+Verification costs use the existing `cost_per_1k.gpt` / `cost_per_1k.gemini`
+rates, include usage from rejected responses and Gemini thinking tokens, and
+appear separately as `verification_gpt` / `verification_gemini` in the total and
+Supabase. These charges are persisted even if verification fails or is cancelled.
+Local Purfview transcription has no API charge. Costs remain estimates based on
+configured rates; no real provider requests are needed to run the unit tests.
 
 ## Outputs
 - Per-model ASS files: original line, `{romaji/pinyin}`, `{glosses}`, and translation
