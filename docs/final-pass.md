@@ -7,7 +7,7 @@ Necesita la clave OpenAI de la configuracion de TakoWorks o `OPENAI_API_KEY`.
 Despues de la ultima traduccion, revisa los subtitulos con el mismo modelo GPT
 que usa Transcriber. Translator traduce con DeepL y utiliza ese GPT para la
 revision. Si solo se han seleccionado otros motores en Transcriber, se utiliza
-igualmente GPT para Final Pass.
+igualmente GPT para Final Pass y se incluye su traduccion como respaldo.
 
 Transcriber envia el ASS intermedio `_ja_asr` o `_zh_asr`, incluidas las
 explicaciones gramaticales y semanticas, junto con las traducciones de todos los
@@ -38,9 +38,22 @@ final de las lineas internas, sin sustituir un analisis gramatical completo.
 Si no se pueden cumplir los limites conservando el sentido y los tiempos, se
 guarda la mejor propuesta y el TXT indica **REQUIERE REVISION**, con los
 incumplimientos concretos. No se recorta texto automaticamente. Si no hay
-traducciones, la API falla sin dar ninguna propuesta valida o no se obtiene
-texto ASS seguro, no se publica un nuevo final; se conserva cualquier final
-anterior y se explica el fallo en el TXT.
+una propuesta segura para un subtitulo tras los reintentos, se usa su traduccion
+GPT y se continua con los siguientes bloques. Se conservan las propuestas validas
+de los otros subtitulos, incluso de intentos anteriores. Un fallo completo de API
+o de bloque aplica el respaldo GPT a los subtitulos afectados.
+
+Cada respaldo lleva el comentario ASS oculto `{FINAL PASS FALLBACK GPT}` al final
+del texto: se puede buscar en el editor y no aparece en pantalla. El TXT y el
+registro identifican los subtitulos afectados y el error; el resultado indica
+**REQUIERE REVISION**, incluidos los limites que incumpla el respaldo GPT.
+No se hacen nuevas llamadas de traduccion al aplicar el respaldo. Transcriber
+incluye GPT aunque solo se hayan seleccionado otros motores, para disponer de
+esa traduccion antes de la revision. Si GPT no esta disponible (por ejemplo,
+Translator solo aporta DeepL), no se etiqueta otro motor como GPT: si falla el
+revisor sin una propuesta valida, se conserva cualquier final anterior y se
+explica la ausencia de respaldo en el TXT. La cancelacion tambien conserva el
+final anterior y detiene las llamadas.
 
 El TXT y el registro muestran el tiempo exclusivo de Final Pass, sus tokens de
 entrada y salida, el numero de solicitudes (incluidos los reintentos del revisor)

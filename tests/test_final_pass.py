@@ -106,16 +106,18 @@ def test_unresolved_limits_are_reported_without_truncating(tmp_path):
 
 @pytest.mark.parametrize("result", [RuntimeError("API unavailable"),
                                    {"subtitles": [], "notes": []}, answer(r"Hola{\p1}")])
-def test_api_or_structural_failure_keeps_existing_final_and_writes_report(tmp_path, result):
+def test_api_or_structural_failure_uses_marked_gpt_fallback(tmp_path, result):
     source = write_ass(tmp_path / "source.ass")
     output = tmp_path / "source_final.ass"
     output.write_text("previous final", encoding="utf-8")
     client, calls = fake_client([result] * 3)
-    with pytest.raises(RuntimeError):
-        fp.run_final_pass(source, {"gpt": ["Hola"]}, output, source_lang="zh", client=client, open_notes=False)
+    fp.run_final_pass(source, {"gpt": ["Hola"]}, output, source_lang="zh", client=client, open_notes=False)
     assert len(calls) == 3
-    assert output.read_text(encoding="utf-8") == "previous final"
-    assert "NO COMPLETADO" in output.with_suffix(".txt").read_text(encoding="utf-8-sig")
+    assert "Hola{FINAL PASS FALLBACK GPT}" in output.read_text(encoding="utf-8-sig")
+    report = output.with_suffix(".txt").read_text(encoding="utf-8-sig")
+    assert "FALLBACK GPT" in report
+    assert "REQUIERE REVISION" in report
+    assert "NO COMPLETADO" not in report
     assert not list(tmp_path.glob("*.tmp"))
 
 
@@ -125,17 +127,32 @@ def test_failed_review_still_reports_consumed_tokens_and_cost(tmp_path, monkeypa
     client, _ = fake_client([{"subtitles": [], "notes": []}] * 3)
     clock = iter([50.0, 65.0])
     monkeypatch.setattr(fp, "time", NS(perf_counter=lambda: next(clock)))
-    with pytest.raises(RuntimeError):
-        fp.run_final_pass(source, {"gpt": ["Hola"]}, output, source_lang="ja", client=client, open_notes=False)
+    fp.run_final_pass(source, {"gpt": ["Hola"]}, output, source_lang="ja", client=client, open_notes=False)
     report = output.with_suffix(".txt").read_text(encoding="utf-8-sig")
     assert "Tiempo Final Pass: 15.00 s" in report
     assert "entrada=30, salida=15" in report
     assert "$0.000210 USD" in report
 
 
+def test_client_setup_failure_also_uses_gpt_fallback(tmp_path, monkeypatch):
+    source = write_ass(tmp_path / "source.ass", r"{\i1}Hello{\i0}")
+    original = source.read_bytes()
+    output = tmp_path / "final.ass"
+    def unavailable():
+        raise RuntimeError("client unavailable")
+    monkeypatch.setattr(fp, "create_openai_client", unavailable)
+    usage = fp.run_final_pass(source, {"gpt": [r"{\i1}Hola{\i0}"]}, output,
+                              source_lang="ja", open_notes=False)
+    assert r"Default,Alice,0,0,0,,{\i1}Hola{\i0}{FINAL PASS FALLBACK GPT}" in output.read_text(encoding="utf-8-sig")
+    assert source.read_bytes() == original
+    assert usage["requests"] == 0
+    assert "client unavailable" in output.with_suffix(".txt").read_text(encoding="utf-8-sig")
+
+
 def test_cancellation_after_response_preserves_its_consumption(tmp_path, monkeypatch):
     source = write_ass(tmp_path / "source.ass")
     output = tmp_path / "source_final.ass"
+    output.write_text("previous final", encoding="utf-8")
     client, _ = fake_client([answer("Hola")])
     create = client.chat.completions.create
     cancelled = threading.Event()
@@ -150,6 +167,7 @@ def test_cancellation_after_response_preserves_its_consumption(tmp_path, monkeyp
     report = output.with_suffix(".txt").read_text(encoding="utf-8-sig")
     assert "entrada=10, salida=5" in report
     assert "$0.000070 USD" in report
+    assert output.read_text(encoding="utf-8") == "previous final"
 
 
 @pytest.mark.parametrize("no_response", [True, False])
@@ -164,11 +182,7 @@ def test_unknown_consumption_is_reported_as_incomplete(tmp_path, no_response):
             response.usage = None
             return response
         client.chat.completions.create = without_usage
-    if no_response:
-        with pytest.raises(RuntimeError):
-            fp.run_final_pass(source, {"gpt": ["Hola"]}, output, source_lang="EN", client=client, open_notes=False)
-    else:
-        fp.run_final_pass(source, {"gpt": ["Hola"]}, output, source_lang="EN", client=client, open_notes=False)
+    fp.run_final_pass(source, {"gpt": ["Hola"]}, output, source_lang="EN", client=client, open_notes=False)
     report = output.with_suffix(".txt").read_text(encoding="utf-8-sig")
     assert "CONSUMO INCOMPLETO" in report
 
@@ -205,6 +219,71 @@ def test_batches_include_neighbor_context_and_asr_notes(tmp_path):
     assert [r["id"] for r in second["context_before"]] == [19, 20]
 
 
+def test_failed_block_keeps_previous_review_and_continues_with_next_block(tmp_path):
+    source = write_ass(tmp_path / "source.ass")
+    content = source.read_text(encoding="utf-8-sig")
+    source.write_text(content + (content.splitlines()[-1] + "\n") * 40, encoding="utf-8-sig")
+    def block(start, end):
+        return {"subtitles": [{"id": i, "text": f"Revisado {i}", "notes": []}
+                              for i in range(start, end + 1)], "notes": []}
+    client, calls = fake_client([block(1, 20)] + [RuntimeError("timeout")] * 3 + [block(41, 41)])
+    output = tmp_path / "final.ass"
+    usage = fp.run_final_pass(source, {"gpt": [f"GPT {i}" for i in range(1, 42)]}, output,
+                             source_lang="ja", client=client, open_notes=False)
+    _, events = fp._dialogues(output)
+    texts = [ev["parts"][ev["text_idx"]] for ev in events]
+    assert len(texts) == 41
+    assert texts[:20] == [f"Revisado {i}" for i in range(1, 21)]
+    assert texts[20:40] == [f"GPT {i}{{FINAL PASS FALLBACK GPT}}" for i in range(21, 41)]
+    assert texts[40] == "Revisado 41"
+    assert usage["requests"] == len(calls) == 5
+
+
+def test_invalid_subtitle_does_not_discard_valid_neighbors_or_earlier_attempts(tmp_path):
+    source = write_ass(tmp_path / "source.ass")
+    content = source.read_text(encoding="utf-8-sig")
+    source.write_text(content + (content.splitlines()[-1] + "\n") * 2, encoding="utf-8-sig")
+    def mixed(texts):
+        return {"subtitles": [{"id": i, "text": text, "notes": []}
+                              for i, text in enumerate(texts, 1)], "notes": []}
+    client, _ = fake_client([mixed(["Primero", "", ""]),
+                            mixed(["", "Segundo", r"Invalido{\p1}"]),
+                            RuntimeError("timeout")])
+    output = tmp_path / "final.ass"
+    fp.run_final_pass(source, {"gpt": ["Uno", "Dos", "Tres"], "claude": ["Otro"] * 3},
+                      output, source_lang="ja", client=client, open_notes=False)
+    _, events = fp._dialogues(output)
+    assert [ev["parts"][ev["text_idx"]] for ev in events] == [
+        "Primero", "Segundo", "Tres{FINAL PASS FALLBACK GPT}"]
+
+
+def test_failure_without_gpt_does_not_mislabel_another_translation(tmp_path):
+    source = write_ass(tmp_path / "source.ass")
+    output = tmp_path / "final.ass"
+    output.write_text("previous final", encoding="utf-8")
+    client, _ = fake_client([RuntimeError("timeout")] * 3)
+    with pytest.raises(RuntimeError, match="no hay traduccion GPT"):
+        fp.run_final_pass(source, {"deepl": ["Hola"]}, output, source_lang="EN",
+                          client=client, open_notes=False)
+    assert output.read_text(encoding="utf-8") == "previous final"
+
+
+@pytest.mark.parametrize("broken_items", [[], [{"id": 2, "text": "Duplicado", "notes": []}] * 2])
+def test_missing_or_duplicate_id_only_falls_back_affected_subtitle(tmp_path, broken_items):
+    source = write_ass(tmp_path / "source.ass")
+    content = source.read_text(encoding="utf-8-sig")
+    source.write_text(content + content.splitlines()[-1] + "\n", encoding="utf-8-sig")
+    response = {"subtitles": [{"id": 1, "text": "Revisado", "notes": []}] + broken_items,
+                "notes": []}
+    client, _ = fake_client([response] * 3)
+    output = tmp_path / "final.ass"
+    fp.run_final_pass(source, {"gpt": ["Uno", "Dos"]}, output,
+                      source_lang="ja", client=client, open_notes=False)
+    _, events = fp._dialogues(output)
+    assert [ev["parts"][ev["text_idx"]] for ev in events] == [
+        "Revisado", "Dos{FINAL PASS FALLBACK GPT}"]
+
+
 @pytest.mark.parametrize("lang", ["EN", "FR"])
 def test_translator_runs_review_after_deepl(tmp_path, monkeypatch, lang):
     from takoworks.modules.translator import core
@@ -226,7 +305,8 @@ def test_translator_runs_review_after_deepl(tmp_path, monkeypatch, lang):
 
 
 @pytest.mark.parametrize("lang", ["ja", "zh"])
-def test_transcriber_reviews_all_translations_after_last_engine(tmp_path, monkeypatch, capsys, lang):
+@pytest.mark.parametrize("models", ["gpt,claude,gemini,deepseek", "claude"])
+def test_transcriber_reviews_all_translations_after_last_engine(tmp_path, monkeypatch, capsys, lang, models):
     from takoworks.modules.transcriber import core
 
     source = write_ass(tmp_path / "source.ass", "Original{Explicacion semantica}")
@@ -238,17 +318,19 @@ def test_transcriber_reviews_all_translations_after_last_engine(tmp_path, monkey
         monkeypatch.setattr(core, "translate_with_" + engine, translate)
     client, calls = fake_client([answer("Buenas.")])
     def create_client():
-        assert order == ["openai", "claude", "gemini", "deepseek"]
+        assert order == (["openai", "claude", "gemini", "deepseek"] if "gemini" in models
+                         else ["openai", "claude"])
         return client
     monkeypatch.setattr(fp, "create_openai_client", create_client)
     monkeypatch.setattr(fp.subprocess, "Popen", lambda args: None)
     saved = []
     monkeypatch.setattr(core, "persist_costs_to_supabase", lambda *args: saved.append(args[-1]))
     monkeypatch.setattr(core, "_load_price_table", lambda: core.DEFAULT_PRICE_PER_1K)
-    core.main([str(source), "--skip-asr", "--lang", lang, "--series", "Test", "--source-type", "None", "--final-pass"])
+    core.main([str(source), "--skip-asr", "--lang", lang, "--series", "Test", "--source-type", "None",
+               "--final-pass", "--models", models])
     assert (tmp_path / "source_final.ass").exists()
     payload = json.loads(calls[0]["messages"][1]["content"])
-    assert set(payload["subtitles"][0]["translations"]) == {"gpt", "claude", "gemini", "deepseek"}
+    assert set(payload["subtitles"][0]["translations"]) == set(models.split(",")) | {"gpt"}
     assert "Explicacion semantica" in payload["subtitles"][0]["reference_ass"]
     assert saved[0]["gpt"].total_tokens == 0
     assert saved[0]["gpt"].cost_usd == 0

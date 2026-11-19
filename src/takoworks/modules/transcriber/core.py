@@ -3318,6 +3318,9 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
 
     # 2) Traducir
     models = normalize_models_arg(args.models)
+    if args.final_pass and "gpt" not in models:
+        models = ["gpt", *models]
+        print("[Final Pass] Se incluye la traduccion GPT como respaldo ante fallos del revisor.")
     translation_diagnostics: Dict[str, str] = {}
     translations_by_model, usage_by_model, model_timings = process_all_models_with_subs(
         subs,

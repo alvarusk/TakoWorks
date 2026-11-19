@@ -32,6 +32,17 @@ def formatting_tags(text):
     return [tag for tag in TAG_RE.findall(text) if tag.startswith("{\\")]
 
 
+def unsafe_ass(text, required_tags):
+    return (
+        not isinstance(text, str)
+        or formatting_tags(text) != list(required_tags)
+        or "\n" in text or "\r" in text
+        or any(tag not in required_tags for tag in TAG_RE.findall(text))
+        or bool(re.search(r"[{}]", TAG_RE.sub("", text)))
+        or not any(line.strip() for line in visible_lines(text))
+    )
+
+
 def validate_subtitle(text, duration_ms, required_tags=()):
     lines = visible_lines(text)
     problems = []
@@ -113,7 +124,6 @@ def run_final_pass(reference_path, translations, output_path, *, source_lang,
         for engine, texts in translations.items():
             if len(texts) != len(events):
                 raise ValueError(f"{engine}: las traducciones no coinciden con los eventos de referencia.")
-        client = client or create_openai_client()
         rules = Path(__file__).with_suffix(".md").read_text(encoding="utf-8")
         if instructions:
             rules += "\n\nTerminologia e instrucciones de la serie:\n" + instructions
@@ -149,12 +159,14 @@ def run_final_pass(reference_path, translations, output_path, *, source_lang,
                        "context_after": records[offset + 20:offset + 22]}
             messages = [{"role": "system", "content": rules},
                         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
-            accepted = None
+            accepted = {}
+            accepted_notes = []
             last_error = ""
             for attempt in range(3):
                 check_cancel()
                 log(f"[Final Pass] {offset + 1}-{offset + len(batch)}, intento {attempt + 1}/3")
                 try:
+                    client = client or create_openai_client()
                     requests += 1
                     response = client.chat.completions.create(
                         model=model, messages=messages, response_format=_response_format(),
@@ -177,24 +189,29 @@ def run_final_pass(reference_path, translations, output_path, *, source_lang,
                     data = json.loads(raw)
                     items = data["subtitles"]
                     ids = [item["id"] for item in items]
+                    errors = []
                     if ids != [r["id"] for r in targets] or len(set(ids)) != len(ids):
-                        raise ValueError("IDs ausentes, repetidos o fuera de orden")
+                        errors.append("IDs ausentes, repetidos o fuera de orden")
+                    by_id = {item["id"]: item for item in items if ids.count(item["id"]) == 1}
                     if not isinstance(data["notes"], list) or not all(isinstance(n, str) for n in data["notes"]):
                         raise ValueError("Notas globales invalidas")
-                    errors = []
-                    for record, item in zip(targets, items):
-                        if not isinstance(item["text"], str) or not isinstance(item["notes"], list) or not all(isinstance(n, str) for n in item["notes"]):
-                            raise ValueError("Texto o notas invalidos")
+                    for record in targets:
+                        item = by_id.get(record["id"])
+                        if item is None:
+                            errors.append(f"Subtitulo {record['id']}: ID ausente o repetido")
+                            continue
+                        if not isinstance(item.get("text"), str) or not isinstance(item.get("notes"), list) or not all(isinstance(n, str) for n in item["notes"]):
+                            errors.append(f"Subtitulo {record['id']}: texto o notas invalidos")
+                            continue
                         problems = validate_subtitle(item["text"], record["duration_ms"], record["required_tags"])
-                        if (formatting_tags(item["text"]) != record["required_tags"]
-                                or "\n" in item["text"] or "\r" in item["text"]
-                                or any(tag not in record["required_tags"] for tag in TAG_RE.findall(item["text"]))
-                                or re.search(r"[{}]", TAG_RE.sub("", item["text"]))
-                                or not any(line.strip() for line in visible_lines(item["text"]))):
-                            raise ValueError(f"Subtitulo {item['id']}: texto vacio o formato ASS alterado")
+                        if unsafe_ass(item["text"], record["required_tags"]):
+                            errors.append(f"Subtitulo {item['id']}: texto vacio o formato ASS alterado")
+                            continue
+                        previous = accepted.get(record["id"])
+                        if previous is None or len(problems) < len(previous[1]):
+                            accepted[record["id"]] = (item, problems)
                         errors.extend(f"Subtitulo {item['id']}: {p}" for p in problems)
-                    if accepted is None or len(errors) < len(accepted[2]):
-                        accepted = (items, data["notes"], errors)
+                    accepted_notes.extend(n for n in data["notes"] if n not in accepted_notes)
                     if not errors:
                         break
                     last_error = "\n".join(errors)
@@ -204,11 +221,29 @@ def run_final_pass(reference_path, translations, output_path, *, source_lang,
                     check_cancel()
                     last_error = str(exc)
                     messages.append({"role": "user", "content": "Respuesta invalida. Repite todo el bloque: " + last_error})
-            if accepted is None:
-                raise RuntimeError(f"Bloque {offset + 1}: no se obtuvo una respuesta valida: {last_error}")
-            items, global_notes, errors = accepted
-            notes.extend(global_notes)
-            for item, record in zip(items, targets):
+            notes.extend(accepted_notes)
+            errors = []
+            for record in targets:
+                candidate = accepted.get(record["id"])
+                if candidate is None:
+                    fallback = translations.get("gpt")
+                    if fallback is None:
+                        raise RuntimeError(
+                            f"Subtitulo {record['id']}: no hay traduccion GPT para fallback: {last_error}"
+                        )
+                    text = fallback[record["id"] - 1]
+                    # Keep GPT's wording while preventing physical ASS event breaks.
+                    text = text.replace("\r\n", r"\N").replace("\r", r"\N").replace("\n", r"\N")
+                    problems = validate_subtitle(text, record["duration_ms"], record["required_tags"])
+                    outputs[record["id"]] = text + "{FINAL PASS FALLBACK GPT}"
+                    unresolved += 1
+                    reason = f"Subtitulo {record['id']}: FALLBACK GPT; fallo del revisor: {last_error}"
+                    notes.append(reason)
+                    notes.extend(f"Subtitulo {record['id']} (fallback GPT): {p}" for p in problems)
+                    log(f"[Final Pass] {reason}")
+                    continue
+                item, problems = candidate
+                errors.extend(f"Subtitulo {record['id']}: {p}" for p in problems)
                 text = item["text"]
                 outputs[item["id"]] = text
                 record["final_text"] = text
@@ -229,7 +264,7 @@ def run_final_pass(reference_path, translations, output_path, *, source_lang,
             os.replace(temp_path, output_path)
         finally:
             temp_path.unlink(missing_ok=True)
-        status = "REQUIERE REVISION: hay limites o cortes pendientes." if unresolved else "Limites tecnicos verificados: 20,00 CPS / 40 CPL / 2 lineas."
+        status = "REQUIERE REVISION: hay fallbacks GPT, limites o cortes pendientes." if unresolved else "Limites tecnicos verificados: 20,00 CPS / 40 CPL / 2 lineas."
         notes.append(status)
         if len(notes) == 3:
             notes.append("Sin dudas ni avisos adicionales del modelo.")
