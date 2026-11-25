@@ -37,6 +37,12 @@ def resolve_purfview(executable=""):
     return str(Path(candidate).resolve())
 
 
+class ProcessError(RuntimeError):
+    def __init__(self, returncode, detail):
+        self.returncode = returncode
+        super().__init__(f"Proceso fallido ({returncode}): {detail}")
+
+
 def run_process(command, cancel_event=None, cwd=None):
     # File-backed output avoids pipe deadlocks while allowing cancellation.
     check_cancel(cancel_event)
@@ -53,7 +59,7 @@ def run_process(command, cancel_event=None, cwd=None):
             if process.returncode:
                 output.seek(0)
                 detail = output.read().decode("utf-8", errors="replace")[-4000:]
-                raise RuntimeError(f"Proceso fallido ({process.returncode}): {detail}")
+                raise ProcessError(process.returncode, detail)
         finally:
             if process.poll() is None:
                 process.terminate()
@@ -94,11 +100,21 @@ def transcribe_purfview(ass_path, video_path, lang, executable, *, pad_ms=0,
             ], cancel_event)
             print(f"[ASR] Audio {number}/{len(events)} preparado.")
         print("[ASR] Purfview Faster Whisper XXL / large-v3-turbo: transcribiendo el lote...")
-        run_process([
-            executable, str(audio_dir), "--language", lang, "--model", "large-v3-turbo",
-            "--task", "transcribe", "--output_format", "txt", "--output_dir", str(output_dir),
-        ], cancel_event, cwd=str(Path(executable).parent))
+        process_error = None
+        try:
+            run_process([
+                executable, str(audio_dir), "--language", lang, "--model", "large-v3-turbo",
+                "--task", "transcribe", "--output_format", "txt", "--output_dir", str(output_dir),
+            ], cancel_event, cwd=str(Path(executable).parent))
+        except ProcessError as exc:
+            # Some builds fail during shutdown after writing the entire batch.
+            process_error = exc
+        check_cancel(cancel_event)
+        if process_error is not None and any(
+                not (output_dir / f"line_{index:06d}.txt").is_file() for index, _ in events):
+            raise process_error
         for index, event in events:
+            check_cancel(cancel_event)
             path = output_dir / f"line_{index:06d}.txt"
             if not path.is_file():
                 raise RuntimeError(f"Faster Whisper XXL no genero el texto de la linea ASS {index + 1}.")
@@ -106,6 +122,9 @@ def transcribe_purfview(ass_path, video_path, lang, executable, *, pad_ms=0,
             if "{" in text or "}" in text or "\\" in text:
                 raise ValueError(f"ASR devolvio etiquetas ASS inesperadas en la linea {index + 1}.")
             event.text = " ".join(text.splitlines())
+        if process_error is not None:
+            print(f"[ASR] Advertencia: Purfview termino con codigo {process_error.returncode}, "
+                  f"pero se recuperaron y validaron los {len(events)} archivos de texto del lote.")
     return subs
 
 

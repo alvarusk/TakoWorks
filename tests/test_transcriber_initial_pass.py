@@ -49,7 +49,8 @@ def pdf_file(tmp_path):
 
 
 @pytest.mark.parametrize("lang", ["ja", "zh"])
-def test_purfview_batches_only_target_events_and_preserves_metadata(monkeypatch, tmp_path, lang):
+@pytest.mark.parametrize("exit_code", [0, 3221226505])
+def test_purfview_batches_only_target_events_and_preserves_metadata(monkeypatch, tmp_path, lang, exit_code, capsys):
     subs = episode()
     source = tmp_path / "input.ass"
     subs.save(str(source))
@@ -69,6 +70,8 @@ def test_purfview_batches_only_target_events_and_preserves_metadata(monkeypatch,
             output = Path(command[command.index("--output_dir") + 1])
             for clip in clips:
                 (output / f"{clip.stem}.txt").write_text("spoken\nwords", encoding="utf-8-sig")
+            if exit_code:
+                raise initial.ProcessError(exit_code, "Operation finished in: 0:05:46")
 
     monkeypatch.setattr(initial, "run_process", run)
     result = initial.transcribe_purfview(source, video, lang, str(executable), pad_ms=200)
@@ -83,6 +86,50 @@ def test_purfview_batches_only_target_events_and_preserves_metadata(monkeypatch,
             expected["text"] = "spoken words"
         assert after.as_dict() == expected
     assert source.read_bytes() == original_bytes
+    log = capsys.readouterr().out
+    assert ("Advertencia" in log) == bool(exit_code)
+    if exit_code:
+        assert str(exit_code) in log
+
+
+@pytest.mark.parametrize("output_kind", ["missing", "invalid", "unreadable", "cancelled"])
+def test_failed_purfview_requires_complete_valid_outputs(monkeypatch, tmp_path, output_kind):
+    source = tmp_path / "input.ass"
+    episode().save(str(source))
+    original_bytes = source.read_bytes()
+    executable, video = tmp_path / "xxl.exe", tmp_path / "video.mkv"
+    executable.touch()
+    video.touch()
+    cancel = threading.Event()
+    failure = initial.ProcessError(3221226505, "native failure")
+
+    def run(command, cancel_event=None, cwd=None):
+        if command[0] == "ffmpeg":
+            return
+        output = Path(command[command.index("--output_dir") + 1])
+        (output / "line_000000.txt").write_text("spoken", encoding="utf-8")
+        if output_kind != "missing":
+            (output / "line_000003.txt").write_bytes(
+                b"\xff" if output_kind == "unreadable" else
+                b"{unsafe}" if output_kind == "invalid" else b"spoken")
+        if output_kind == "cancelled":
+            cancel.set()
+        raise failure
+
+    monkeypatch.setattr(initial, "run_process", run)
+    expected = {"missing": initial.ProcessError, "invalid": ValueError,
+                "unreadable": UnicodeDecodeError, "cancelled": InterruptedError}[output_kind]
+    with pytest.raises(expected) as exc:
+        initial.transcribe_purfview(source, video, "ja", str(executable), cancel_event=cancel)
+    if output_kind == "missing":
+        assert exc.value is failure
+    assert source.read_bytes() == original_bytes
+
+
+def test_run_process_preserves_exit_code_and_diagnostics():
+    with pytest.raises(initial.ProcessError, match="diagnostic") as exc:
+        initial.run_process([sys.executable, "-c", "import sys; print('diagnostic'); sys.exit(3)"])
+    assert exc.value.returncode == 3
 
 
 def test_missing_asr_output_stops_instead_of_misaligning_lines(monkeypatch, tmp_path):
