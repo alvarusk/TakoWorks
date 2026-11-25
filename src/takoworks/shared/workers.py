@@ -36,11 +36,11 @@ class TaskRunner:
 
     def cancel(self) -> None:
         self._cancel_event.set()
-        self._console_write("[!] Cancel solicitado…")
+        self._console_write("[!] Cancellation requested...")
 
     def start(self, title: str, fn: TaskFn, on_done: Optional[DoneFn] = None) -> TaskHandle:
         if self._active:
-            self._console_write("[!] Ya hay una tarea en ejecución.")
+            self._console_write("[!] A task is already running.")
             return TaskHandle(self._cancel_event)
 
         self._active = True
@@ -57,7 +57,10 @@ class TaskRunner:
                 fn(self._cancel_event, log)
                 self._q.put(("done", ""))
             except Exception as exc:
-                if self._cancel_event.is_set() and "Cancelado" in str(exc):
+                if self._cancel_event.is_set() and (
+                    isinstance(exc, InterruptedError) or any(
+                        word in str(exc) for word in ("Cancelled", "cancelled", "Cancelado"))
+                ):
                     self._q.put(("done", ""))
                     return
                 self._q.put(("error", traceback.format_exc()))

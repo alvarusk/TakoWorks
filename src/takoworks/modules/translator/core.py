@@ -436,7 +436,7 @@ def translate_ass_file(
 
         for ev in dialogue_events:
             if cancel_event is not None and cancel_event.is_set():
-                raise RuntimeError("Cancelado")
+                raise RuntimeError("Cancelled")
             text_idx = ev.get("text_idx")
             if text_idx is None or text_idx < 0 or text_idx >= len(ev.get("parts", [])):
                 continue
@@ -455,7 +455,7 @@ def translate_ass_file(
         translated_payloads: List[str] = []
         for batch in batches:
             if cancel_event is not None and cancel_event.is_set():
-                raise RuntimeError("Cancelado")
+                raise RuntimeError("Cancelled")
             batch_translated = client.translate_batch(
                 batch,
                 glossary_id=glossary_id,

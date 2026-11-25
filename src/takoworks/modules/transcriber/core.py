@@ -129,8 +129,8 @@ DISPLAY_NAMES = {
     "deepseek": "DeepSeek V4.1 Flash",
     "romanization": "Romanization (DeepSeek V4.1 Flash)",
     "final_pass": "Final Pass",
-    "verification_gpt": "Cotejo PDF (OpenAI)",
-    "verification_gemini": "Cotejo PDF (Gemini)",
+    "verification_gpt": "PDF verification (OpenAI)",
+    "verification_gemini": "PDF verification (Gemini)",
 }
 
 # Alias aceptados en --models (CLI/GUI). Se normalizan a claves internas:
@@ -396,8 +396,8 @@ def estimate_cost(model_key: str, prompt_tokens: int, completion_tokens: int) ->
 
     if (in_price <= 0 or out_price <= 0) and model_key not in _WARNED_PRICING:
         print(
-            f"[Costes] Precios por token no configurados para {DISPLAY_NAMES.get(model_key, model_key)}. "
-            f"Define COST_{model_key.upper()}_INPUT_PER_1K y COST_{model_key.upper()}_OUTPUT_PER_1K para costes reales."
+            f"[Costs] Token prices not configured for {DISPLAY_NAMES.get(model_key, model_key)}. "
+            f"Set COST_{model_key.upper()}_INPUT_PER_1K and COST_{model_key.upper()}_OUTPUT_PER_1K to estimate costs."
         )
         _WARNED_PRICING.add(model_key)
 
@@ -409,7 +409,7 @@ def _warn_missing_usage(model_key: str) -> None:
         return
     display = DISPLAY_NAMES.get(model_key, model_key)
     print(
-        f"[Costes] {display} no devolvió metadatos de uso; se asume coste=0. "
+        f"[Costs] {display} no devolvió metadatos de uso; se asume coste=0. "
         "Revisa la versión del SDK o las opciones de la API si quieres token counts reales."
     )
     _WARNED_MISSING_USAGE.add(model_key)
@@ -502,9 +502,9 @@ def _save_translation_debug_response(
         os.makedirs(debug_dir, exist_ok=True)
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(payload, fh, ensure_ascii=False, indent=2, default=str)
-        print(f"[DEBUG {DISPLAY_NAMES.get(model_key, model_key)}] Respuesta guardada en {path}")
+        print(f"[DEBUG {DISPLAY_NAMES.get(model_key, model_key)}] Response saved to {path}")
     except Exception as e:
-        print(f"[DEBUG {DISPLAY_NAMES.get(model_key, model_key)}] No se pudo guardar respuesta bruta: {e}")
+        print(f"[DEBUG {DISPLAY_NAMES.get(model_key, model_key)}] Could not save raw response: {e}")
 
 
 def _log_translation_count_issue(
@@ -572,17 +572,17 @@ def log_cost_summary(run_id: str, usage_by_model: Dict[str, ApiUsage], series_na
     if not usage_by_model:
         return
 
-    print(f"[Costes] Resumen tokens/coste para {series_name or 'serie-desconocida'} / {episode} (run {run_id}):")
+    print(f"[Costs] Token/cost summary for {series_name or 'unknown-series'} / {episode} (run {run_id}):")
     for key in sorted(usage_by_model.keys()):
         usage = usage_by_model[key]
         display = DISPLAY_NAMES.get(key, key)
         print(
-            f"[Costes] {display}: prompt={usage.prompt_tokens} completion={usage.completion_tokens} "
+            f"[Costs] {display}: prompt={usage.prompt_tokens} completion={usage.completion_tokens} "
             f"total={usage.total_tokens} cost_usd=${usage.cost_usd:.4f}"
         )
     total_tokens = sum(u.total_tokens for u in usage_by_model.values())
     total_cost = sum(u.cost_usd for u in usage_by_model.values())
-    print(f"[Costes] TOTAL: tokens={total_tokens} cost_usd=${total_cost:.4f}")
+    print(f"[Costs] TOTAL: tokens={total_tokens} cost_usd=${total_cost:.4f}")
 
 
 def log_time_cost_breakdown(
@@ -592,7 +592,7 @@ def log_time_cost_breakdown(
     usage_by_model: Dict[str, ApiUsage],
     total_elapsed: float,
 ) -> None:
-    print("[Tiempo/coste] Desglose final:")
+    print("[Time/cost] Final breakdown:")
 
     asr_seconds = phase_timings.get("asr", 0.0)
     punctuation_seconds = phase_timings.get("punctuation", 0.0)
@@ -603,10 +603,10 @@ def log_time_cost_breakdown(
     displayed_cost = context_note_usage.cost_usd
 
     print(f"ASR: {_format_elapsed(asr_seconds)}; {_format_cost(0.0)}")
-    print(f"Puntuación: {_format_elapsed(punctuation_seconds)}; {_format_cost(0.0)}")
+    print(f"Punctuation: {_format_elapsed(punctuation_seconds)}; {_format_cost(0.0)}")
     print(f"Embedding ASS: {_format_elapsed(embedding_seconds)}; {_format_cost(0.0)}")
-    print(f"Prompts explicativos: {_format_elapsed(context_seconds)}; {_format_cost(context_note_usage.cost_usd)}")
-    print(f"Romanización: {_format_elapsed(roman_seconds)}; {_format_cost(0.0)}")
+    print(f"Context notes: {_format_elapsed(context_seconds)}; {_format_cost(context_note_usage.cost_usd)}")
+    print(f"Romanization: {_format_elapsed(roman_seconds)}; {_format_cost(0.0)}")
 
     for key in ("gpt", "claude", "gemini", "deepseek", "final_pass"):
         if key not in model_timings and key not in usage_by_model:
@@ -620,7 +620,7 @@ def log_time_cost_breakdown(
     other_seconds = max(0.0, total_elapsed - displayed_seconds)
     if other_seconds >= 0.05:
         displayed_seconds += other_seconds
-        print(f"Otros pasos: {_format_elapsed(other_seconds)}; {_format_cost(0.0)}")
+        print(f"Other steps: {_format_elapsed(other_seconds)}; {_format_cost(0.0)}")
 
     print(f"Total: {_format_elapsed(displayed_seconds)}; {_format_cost(displayed_cost)}")
 
@@ -633,7 +633,7 @@ def log_time_cost_breakdown_v2(
     usage_by_model: Dict[str, ApiUsage],
     total_elapsed: float,
 ) -> None:
-    print("[Tiempo/coste] Desglose final:")
+    print("[Time/cost] Final breakdown:")
 
     asr_seconds = phase_timings.get("asr", 0.0)
     punctuation_seconds = phase_timings.get("punctuation", 0.0)
@@ -644,9 +644,9 @@ def log_time_cost_breakdown_v2(
     displayed_cost = context_note_usage.cost_usd + romanization_usage.cost_usd
 
     print(f"ASR: {_format_elapsed(asr_seconds)}; {_format_cost(0.0)}")
-    print(f"Puntuación: {_format_elapsed(punctuation_seconds)}; {_format_cost(0.0)}")
+    print(f"Punctuation: {_format_elapsed(punctuation_seconds)}; {_format_cost(0.0)}")
     print(f"Embedding ASS: {_format_elapsed(embedding_seconds)}; {_format_cost(0.0)}")
-    print(f"Prompts explicativos: {_format_elapsed(context_seconds)}; {_format_cost(context_note_usage.cost_usd)}")
+    print(f"Context notes: {_format_elapsed(context_seconds)}; {_format_cost(context_note_usage.cost_usd)}")
     print(f"Romanization: {_format_elapsed(roman_seconds)}; {_format_cost(romanization_usage.cost_usd)}")
 
     for key in ("verification_gpt", "verification_gemini", "gpt", "claude", "gemini", "deepseek", "final_pass"):
@@ -661,7 +661,7 @@ def log_time_cost_breakdown_v2(
     other_seconds = max(0.0, total_elapsed - displayed_seconds)
     if other_seconds >= 0.05:
         displayed_seconds += other_seconds
-        print(f"Otros pasos: {_format_elapsed(other_seconds)}; {_format_cost(0.0)}")
+        print(f"Other steps: {_format_elapsed(other_seconds)}; {_format_cost(0.0)}")
 
     print(f"Total: {_format_elapsed(displayed_seconds)}; {_format_cost(displayed_cost)}")
 
@@ -676,10 +676,10 @@ def persist_costs_to_supabase(
     if not usage_by_model:
         return
     if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-        print("[Costes] SUPABASE_URL/SUPABASE_SERVICE_KEY no definidos; se omite guardado remoto.")
+        print("[Costs] SUPABASE_URL/SUPABASE_SERVICE_KEY not set; skipping remote storage.")
         return
     if requests is None:
-        print("[Costes] Libreria requests no disponible; no se envian datos a Supabase.")
+        print("[Costs] The requests library is unavailable; skipping Supabase upload.")
         return
 
     base_url = SUPABASE_URL.rstrip("/")
@@ -715,11 +715,11 @@ def persist_costs_to_supabase(
     try:
         resp = requests.post(url, headers=headers, json=rows, timeout=15)
         if resp.status_code not in (200, 201):
-            print(f"[Costes] Error al escribir en Supabase ({resp.status_code}): {resp.text}")
+            print(f"[Costs] Could not write to Supabase ({resp.status_code}): {resp.text}")
         else:
-            print(f"[Costes] Costes guardados en Supabase ({len(rows)} filas).")
+            print(f"[Costs] Costs saved to Supabase ({len(rows)} rows).")
     except Exception as e:
-        print(f"[Costes] No se pudo enviar a Supabase: {e}")
+        print(f"[Costs] Could not send data to Supabase: {e}")
 
 # ============================================================
 #  ESTADO GLOBAL PARA ANÁLISIS
@@ -740,9 +740,9 @@ def _ensure_ja_tagger() -> Optional[Tagger]:
         _JA_TAGGER_FAILED = True
         if not _WARNED_JA_TAGGER:
             print(
-                "[JA] No se pudo iniciar Tagger (fugashi/UniDic). "
-                "Se usa kakasi simple para la romanizacion. "
-                f"Detalle: {e}"
+                "[JA] Could not initialize Tagger (fugashi/UniDic). "
+                "Using basic kakasi for romanization. "
+                f"Details: {e}"
             )
             _WARNED_JA_TAGGER = True
         _ja_tagger = None
@@ -780,9 +780,9 @@ def refine_japanese_punctuation_free(lines: List[str]) -> List[str]:
         from .insert_punctuation import process_long_text
     except Exception as e:
         print(
-            "[Puntuación ja] No se pudo cargar insert_punctuation.py o sus pesos "
-            "(weight/punctuation_position_model.pth); se usa texto original. "
-            f"Detalle: {e}"
+            "[Punctuation ja] Could not load insert_punctuation.py or its weights "
+            "(weight/punctuation_position_model.pth); using original text. "
+            f"Details: {e}"
         )
         return lines
 
@@ -891,7 +891,7 @@ def refine_chinese_punctuation_free(lines: List[str]) -> List[str]:
     try:
         _get_zh_punct_components()
     except Exception as e:
-        print(f"[Puntuación zh] zhpr/transformers no disponibles ({e}); se usa texto original.")
+        print(f"[Punctuation zh] zhpr/transformers unavailable ({e}); using original text.")
         return lines
 
     out: List[str] = []
@@ -917,7 +917,7 @@ def refine_punctuation_free(lines: List[str], lang: str) -> List[str]:
         return refine_japanese_punctuation_free(lines)
 
     if lang == "zh":
-        print("[Puntuación zh] Pulido desactivado (se usa la salida del modelo de voz).")
+        print("[Punctuation zh] Refinement disabled (using speech model output).")
         return lines
 
     return lines
@@ -970,10 +970,10 @@ def _get_transformers_pipeline():
         from transformers import pipeline as hf_pipeline
     except Exception as e:
         raise RuntimeError(
-            "No se pudo cargar transformers.pipeline. "
-            "En la version empaquetada, verifica que el bundle incluya "
-            "torchcodec y su metadata de paquete. "
-            f"Detalle: {e}"
+            "Could not load transformers.pipeline. "
+            "For the packaged version, check that the bundle includes "
+            "torchcodec and its package metadata. "
+            f"Details: {e}"
         ) from e
     return hf_pipeline
 
@@ -1025,7 +1025,7 @@ def build_asr_pipeline(lang: str):
         )
 
     else:
-        raise ValueError(f"Idioma no soportado: {lang}. Usa 'ja' o 'zh'.")
+        raise ValueError(f"Unsupported language: {lang}. Use 'ja' or 'zh'.")
 
     return asr
 
@@ -1373,7 +1373,7 @@ def romanize_with_deepseek(
                     continue
                 print(
                     f"[DeepSeek romanization] Romanization failed; using local romanization for this block. "
-                    f"Detalle: {e}"
+                    f"Details: {e}"
                 )
 
         if response is None:
@@ -1768,7 +1768,7 @@ def build_user_prompt(chunk_lines: List[str], lang: str, series_name: str, sourc
 
 def get_openai_client() -> OpenAI:
     if not OPENAI_API_KEY:
-        raise RuntimeError("Falta OPENAI_API_KEY (env o api_keys en config.local.json).")
+        raise RuntimeError("Missing OPENAI_API_KEY (environment or api_keys in config.local.json).")
     return OpenAI(
         api_key=OPENAI_API_KEY,
         timeout=OPENAI_TIMEOUT_S,
@@ -1844,7 +1844,7 @@ def analyze_contextual_note_with_claude(
         block.text for block in message.content if getattr(block, "type", None) == "text"
     ).strip()
     if not content:
-        raise RuntimeError("Claude no devolvió texto para la nota contextual.")
+        raise RuntimeError("Claude returned no text for the context note.")
 
     usage = ApiUsage(engine="context_note", model_name=CONTEXT_NOTE_MODEL)
     msg_usage = getattr(message, "usage", None)
@@ -1887,7 +1887,7 @@ def analyze_contextual_note_with_claude(
             block.text for block in repair_message.content if getattr(block, "type", None) == "text"
         ).strip()
         if not repair_content:
-            raise RuntimeError("Claude no devolvió texto en la corrección de la nota contextual.")
+            raise RuntimeError("Claude returned no text for the context note correction.")
 
         repair_usage = getattr(repair_message, "usage", None)
         if repair_usage:
@@ -1918,7 +1918,7 @@ def analyze_contextual_note_with_claude(
             # Never turn a failed repair into a plausible-looking but empty
             # fallback note. build_contextual_notes logs the failure and keeps
             # the subtitle note empty, so it can be retried explicitly.
-            raise RuntimeError("Claude devolvió una explicación genérica tras la corrección.")
+            raise RuntimeError("Claude returned a generic explanation after correction.")
         note = repaired_note or note
     if lang == "zh":
         note = ensure_chinese_pinyin(note)
@@ -1933,19 +1933,19 @@ def _gemini_context_note_rejection_reason(
     finish_reason = getattr(candidates[0], "finish_reason", None) if candidates else None
     reason = str(finish_reason or "").upper()
     if "MAX_TOKENS" in reason or reason.endswith("LENGTH"):
-        return "respuesta truncada por límite de tokens"
+        return "response truncated by token limit"
 
     raw_text = (raw or "").strip()
     if not raw_text:
-        return "respuesta vacía"
+        return "empty response"
 
     explanation = note.split("Vocabulario:", 1)[0].strip()
     if explanation in {"Explicación:", "Explicacion:"}:
-        return "explicación vacía"
+        return "empty explanation"
     if _is_generic_context_note(note, lang):
-        return "explicación genérica"
+        return "generic explanation"
     if lang == "ja" and _japanese_vocabulary_needs_repair(note):
-        return "vocabulario japonés duplicado o mal formado"
+        return "duplicate or malformed Japanese vocabulary"
     return None
 
 
@@ -2010,7 +2010,7 @@ def analyze_contextual_note_with_gemini(
                 wait_s = (5, 15, 30)[attempt - 1]
                 print(
                     f"[Context note] Gemini no disponible (intento {attempt}/3). "
-                    f"Reintentando en {wait_s} s..."
+                    f"Retrying in {wait_s} s..."
                 )
                 time.sleep(wait_s)
 
@@ -2094,11 +2094,11 @@ def analyze_contextual_note_with_gemini(
         )
         if rejection_reason:
             print(
-                f"[Context note DEBUG] Rechazo en línea {index + 1} "
+                f"[Context note DEBUG] Rejection on line {index + 1} "
                 f"({rejection_reason}): {raw[:300]!r}"
             )
             raise RuntimeError(
-                f"Gemini devolvió una respuesta inválida tras el reintento: {rejection_reason}."
+                f"Gemini returned an invalid response after retry: {rejection_reason}."
             )
 
     target_line = (lines[index] or "").strip()
@@ -2133,11 +2133,11 @@ def analyze_contextual_note_with_gemini(
                 note = note + "\nVocabulario:\n" + "\n".join(vocab_lines)
         except Exception as exc:
             print(
-                f"[Context note DEBUG] Vocabulario omitido en línea {index + 1}: {exc}"
+                f"[Context note DEBUG] Vocabulary omitted on line {index + 1}: {exc}"
             )
 
     if not note:
-        raise RuntimeError("Gemini no devolvió texto para la nota contextual.")
+        raise RuntimeError("Gemini returned no text for the context note.")
     if lang == "zh":
         note = ensure_chinese_pinyin(note)
     return note, usage
@@ -2198,24 +2198,24 @@ def build_contextual_notes(
 
 def get_deepseek_client() -> OpenAI:
     if not DEEPSEEK_API_KEY:
-        raise RuntimeError("Falta DEEPSEEK_API_KEY. Define la variable de entorno.")
+        raise RuntimeError("Missing DEEPSEEK_API_KEY. Set the environment variable.")
     return OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
 
 
 def get_claude_client() -> anthropic.Anthropic:
     if not ANTHROPIC_API_KEY:
-        raise RuntimeError("Falta ANTHROPIC_API_KEY. Define la variable de entorno.")
+        raise RuntimeError("Missing ANTHROPIC_API_KEY. Set the environment variable.")
     return anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 
 def get_gemini_model(lang: str, series_name: str, source_type: str, terminology_instructions: str = ""):
     if not GEMINI_API_KEY:
-        raise RuntimeError("Falta GEMINI_API_KEY. Define la variable de entorno.")
+        raise RuntimeError("Missing GEMINI_API_KEY. Set the environment variable.")
     system_prompt = build_system_prompt(lang, series_name, source_type, terminology_instructions)
     if google_genai is not None:
         client = google_genai.Client(api_key=GEMINI_API_KEY)
         return "google-genai", client, system_prompt
-    raise RuntimeError("No está disponible el SDK de Gemini. Instala google-genai.")
+    raise RuntimeError("Gemini SDK is unavailable. Install google-genai.")
 
 
 # ============================================================
@@ -2315,7 +2315,7 @@ def translate_with_openai(
                     use_response_format = False
                     print(
                         f"[{DISPLAY_NAMES['gpt']}] The model/SDK rejected response_format for block "
-                        f"{start + 1}-{end_line}; se reintenta sin JSON schema."
+                        f"{start + 1}-{end_line}; retrying without JSON schema."
                     )
                     if attempt < OPENAI_BLOCK_ATTEMPTS:
                         continue
@@ -2324,13 +2324,13 @@ def translate_with_openai(
                     print(
                         f"[{DISPLAY_NAMES['gpt']}] Error/transitorio o timeout en bloque "
                         f"{start + 1}-{end_line} tras {elapsed:.1f} s: {e}. "
-                        f"Reintentando en {wait_s} s..."
+                        f"Retrying in {wait_s} s..."
                     )
                     time.sleep(wait_s)
                 else:
                     print(
                         f"[{DISPLAY_NAMES['gpt']}] Error al traducir; se omite GPT en este bloque. "
-                        f"Detalle: {e}"
+                        f"Details: {e}"
                     )
 
         if response is None:
@@ -2571,8 +2571,8 @@ def translate_with_claude(
                 if attempt < MODEL_BLOCK_ATTEMPTS:
                     wait_s = min(9, 2 * attempt)
                     print(
-                        f"[Claude] Respuesta vacía en bloque {start + 1}-{end_line}. "
-                        f"Reintentando en {wait_s} s..."
+                        f"[Claude] Empty response in block {start + 1}-{end_line}. "
+                        f"Retrying in {wait_s} s..."
                     )
                     time.sleep(wait_s)
                     continue
@@ -2779,14 +2779,14 @@ def translate_with_gemini(
                 if attempt < MODEL_BLOCK_ATTEMPTS:
                     wait_s = min(9, 2 * attempt)
                     print(
-                        f"[Gemini] Respuesta incompleta, bloqueada o sin texto (finish_reason={finish_reason}). "
-                        f"Reintentando en {wait_s} s..."
+                        f"[Gemini] Incomplete, blocked, or empty response (finish_reason={finish_reason}). "
+                        f"Retrying in {wait_s} s..."
                     )
                     print(f"[Gemini DEBUG] safety_ratings={safety}")
                     time.sleep(wait_s)
                     continue
-                print(f"[Gemini] Respuesta incompleta, bloqueada o sin texto (finish_reason={finish_reason}). "
-                      "Se devuelven las líneas originales para este bloque.")
+                print(f"[Gemini] Incomplete, blocked, or empty response (finish_reason={finish_reason}). "
+                      "Returning the original lines for this block.")
                 print(f"[Gemini DEBUG] safety_ratings={safety}")
                 break
 
@@ -2929,7 +2929,7 @@ def generate_html(
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write("<!DOCTYPE html><html><head><meta charset='utf-8'>")
-        f.write("<title>Resumen de subtítulos</title>")
+        f.write("<title>Subtitle summary</title>")
         f.write(
             "<style>"
             "body{font-family:Segoe UI,Arial,sans-serif;font-size:13px;}"
@@ -2941,12 +2941,12 @@ def generate_html(
             "</style>"
         )
         f.write("</head><body>")
-        f.write("<h2>Resumen de subtítulos</h2>")
+        f.write("<h2>Subtitle summary</h2>")
         f.write("<table><thead><tr>")
         headers = [
-            "Texto original",
+            "Original text",
             "Romaji/Pinyin",
-            "Nota contextual",
+            "Context note",
             "GPT",
             "Claude",
             "Gemini",
@@ -2976,7 +2976,7 @@ def generate_html(
 
             f.write("<tr>")
             for col_idx, v in enumerate(row_vals):
-                if col_idx == 2 and v:  # columna "Nota contextual"
+                if col_idx == 2 and v:  # columna "Context note"
                     cell_html = format_morph_cell_html(v)
                     f.write("<td>" + cell_html + "</td>")
                 else:
@@ -2985,7 +2985,7 @@ def generate_html(
 
         f.write("</tbody></table></body></html>")
 
-    print(f"[+] HTML generado: {output_path}")
+    print(f"[+] HTML generated: {output_path}")
 
 
 # ============================================================
@@ -3052,8 +3052,8 @@ def process_all_models_with_subs(
             gpt_out = os.path.join(out_dir, f"{base_name}_gpt.ass")
             apply_translations_and_save_subs(subs, gpt_trans, gpt_out)
         else:
-            print(f"[{DISPLAY_NAMES['gpt']}] No se escribe archivo (motivo: {gpt_skip}).")
-        print(f"[{DISPLAY_NAMES['gpt']}] Tiempo total: {elapsed:.1f} s\n")
+            print(f"[{DISPLAY_NAMES['gpt']}] No file written (reason: {gpt_skip}).")
+        print(f"[{DISPLAY_NAMES['gpt']}] Total time: {elapsed:.1f} s\n")
 
     if "claude" in models:
         print(f"=== {DISPLAY_NAMES['claude']} ===")
@@ -3072,8 +3072,8 @@ def process_all_models_with_subs(
             claude_out = os.path.join(out_dir, f"{base_name}_claude.ass")
             apply_translations_and_save_subs(subs, claude_trans, claude_out)
         else:
-            print(f"[{DISPLAY_NAMES['claude']}] No se escribe archivo (motivo: {claude_skip}).")
-        print(f"[{DISPLAY_NAMES['claude']}] Tiempo total: {elapsed:.1f} s\n")
+            print(f"[{DISPLAY_NAMES['claude']}] No file written (reason: {claude_skip}).")
+        print(f"[{DISPLAY_NAMES['claude']}] Total time: {elapsed:.1f} s\n")
 
     if "gemini" in models:
         print(f"=== {DISPLAY_NAMES['gemini']} ===")
@@ -3092,8 +3092,8 @@ def process_all_models_with_subs(
             gemini_out = os.path.join(out_dir, f"{base_name}_gemini.ass")
             apply_translations_and_save_subs(subs, gemini_trans, gemini_out)
         else:
-            print(f"[{DISPLAY_NAMES['gemini']}] No se escribe archivo (motivo: {gemini_skip}).")
-        print(f"[{DISPLAY_NAMES['gemini']}] Tiempo total: {elapsed:.1f} s\n")
+            print(f"[{DISPLAY_NAMES['gemini']}] No file written (reason: {gemini_skip}).")
+        print(f"[{DISPLAY_NAMES['gemini']}] Total time: {elapsed:.1f} s\n")
 
     if "deepseek" in models:
         print(f"=== {DISPLAY_NAMES['deepseek']} ===")
@@ -3112,11 +3112,11 @@ def process_all_models_with_subs(
             deepseek_out = os.path.join(out_dir, f"{base_name}_deepseek.ass")
             apply_translations_and_save_subs(subs, deepseek_trans, deepseek_out)
         else:
-            print(f"[{DISPLAY_NAMES['deepseek']}] No se escribe archivo (motivo: {deepseek_skip}).")
-        print(f"[{DISPLAY_NAMES['deepseek']}] Tiempo total: {elapsed:.1f} s\n")
+            print(f"[{DISPLAY_NAMES['deepseek']}] No file written (reason: {deepseek_skip}).")
+        print(f"[{DISPLAY_NAMES['deepseek']}] Total time: {elapsed:.1f} s\n")
 
     if skipped:
-        print("[Modelos] Saltados parcial/total:", ", ".join(f"{DISPLAY_NAMES[k]} ({v})" for k, v in skipped.items()))
+        print("[Models] Partially/fully skipped:", ", ".join(f"{DISPLAY_NAMES[k]} ({v})" for k, v in skipped.items()))
     if translation_diagnostics is not None:
         translation_diagnostics.update(skipped)
 
@@ -3256,7 +3256,7 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
     run_id = str(uuid.uuid4())
 
     if not args.skip_asr and not video_in:
-        raise SystemExit("Falta video_in (obligatorio si NO usas --skip-asr).")
+        raise SystemExit("Missing video_in (required unless --skip-asr is set).")
 
     # Idioma, serie y tipo de material
     if args.lang:
@@ -3286,11 +3286,11 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
         if args.reference_pdf:
             validate_reference_pdf(args.reference_pdf)
             if not OPENAI_API_KEY or not GEMINI_API_KEY or google_genai is None:
-                raise ValueError("El doble cotejo necesita las claves de OpenAI y Gemini y google-genai.")
+                raise ValueError("Both verification passes require OpenAI and Gemini API keys and google-genai.")
         check_cancel(cancel_event)
         stage_dir = os.path.join(out_dir, f"{base_name}_initial_{run_id[:8]}")
         os.makedirs(stage_dir, exist_ok=False)
-        print(f"[+] Archivos del flujo inicial: {stage_dir}")
+        print(f"[+] Initial workflow files: {stage_dir}")
         if args.skip_asr:
             subs = pysubs2.load(ass_in, encoding="utf-8")
         elif args.asr_engine == "purfview":
@@ -3374,7 +3374,7 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
     models = normalize_models_arg(args.models)
     if args.final_pass and "gpt" not in models:
         models = ["gpt", *models]
-        print("[Final Pass] Se incluye la traduccion GPT como respaldo ante fallos del revisor.")
+        print("[Final Pass] Including the GPT translation as a fallback if the reviewer fails.")
     translation_diagnostics: Dict[str, str] = {}
     translations_by_model, usage_by_model, model_timings = process_all_models_with_subs(
         subs,
@@ -3397,7 +3397,7 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
             os.path.join(out_dir, f"{base_name}_final.ass"),
             source_lang=lang, model=OPENAI_MODEL,
             instructions=terminology_instructions, cancel_event=cancel_event,
-            source_notes=[f"Traduccion {key}: {reason}; puede faltar texto traducido."
+            source_notes=[f"Translation {key}: {reason}; translated text may be missing."
                           for key, reason in translation_diagnostics.items()],
         )
         extra_usage = ApiUsage(engine="final_pass", model_name=OPENAI_MODEL)

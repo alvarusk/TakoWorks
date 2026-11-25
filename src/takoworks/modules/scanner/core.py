@@ -108,7 +108,7 @@ JP_CHAR_RE = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
 
 def _check_cancel(cancel_event) -> None:
     if cancel_event is not None and cancel_event.is_set():
-        raise RuntimeError("Cancelado")
+        raise RuntimeError("Cancelled")
 
 
 def safe_name(name: str) -> str:
@@ -166,7 +166,7 @@ def _gcloud_cmd(args: List[str]) -> Tuple[object, bool]:
     exe = _gcloud_exe()
     if not exe:
         raise RuntimeError(
-            "No se encontro gcloud. Agrega gcloud al PATH o define TAKOWORKS_GCLOUD_EXE."
+            "gcloud not found. Add gcloud to PATH or set TAKOWORKS_GCLOUD_EXE."
         )
     if exe.lower().endswith((".cmd", ".bat")):
         cmdline = subprocess.list2cmdline([exe, *args])
@@ -267,7 +267,7 @@ def _gcv_wait_for_output(output_prefix: str, log: LogFn, cancel_event=None) -> L
             if stable >= GCV_STABLE_POLLS:
                 return sorted(files)
         time.sleep(GCV_POLL_SECONDS)
-    raise RuntimeError("Timeout esperando salida de Google Cloud Vision.")
+    raise RuntimeError("Timed out waiting for Google Cloud Vision output.")
 
 
 def _gcv_download_json(output_prefix: str, local_dir: Path, log: LogFn, cancel_event=None) -> List[Path]:
@@ -375,7 +375,7 @@ def _gcv_detect_document_text(img_path: Path, log: LogFn, cancel_event=None) -> 
             err = resp.get("error", {}) if isinstance(resp.get("error", {}), dict) else {}
             msg = (err.get("message", "") or "").strip()
             if msg:
-                log(f"[GCV][WARN] detect-document sin texto ({img_path.name}): {msg}")
+                log(f"[GCV][WARN] detect-document returned no text ({img_path.name}): {msg}")
                 break
     return ""
 
@@ -480,9 +480,9 @@ def _gcv_ocr_images(
         for pi in range(total_pages):
             _check_cancel(cancel_event)
             page_num = pi + 1
-            log(f"[GCV] Pagina {page_num}/{total_pages}")
+            log(f"[GCV] Page {page_num}/{total_pages}")
             if page_num in suppress_pages:
-                log(f"[GCV] Pagina {page_num} suprimida.")
+                log(f"[GCV] Page {page_num} suppressed.")
                 continue
 
             bgr_full = _render_page_bgr(doc, pi, OCR_DPI)
@@ -773,8 +773,8 @@ def _write_excel_with_fallback(df: pd.DataFrame, out_xlsx: Path, log: LogFn) -> 
         out_csv = out_xlsx.with_suffix(".csv")
         try:
             df.to_csv(out_csv, index=False, encoding="utf-8-sig")
-            log(f"Excel no disponible (falta openpyxl). CSV: {out_csv}")
-            log("Instala openpyxl para recuperar salida .xlsx: pip install openpyxl")
+            log(f"Excel unavailable (openpyxl is missing). CSV: {out_csv}")
+            log("Install openpyxl to enable .xlsx output: pip install openpyxl")
         except Exception as csv_err:
             log(f"ERROR CSV fallback: {csv_err}")
         return None
@@ -811,9 +811,9 @@ def _write_gcv_outputs(
     dialogue_rows = _gcv_dialogue_rows(source_lines)
     if not dialogue_rows:
         if make_raw:
-            log("Sin resultados en dialogos -> OCR bruto generado.")
+            log("No dialogue results -> raw OCR generated.")
         else:
-            log("Sin resultados -> no se generan salidas.")
+            log("No results -> no output files generated.")
         return out
 
     df_dialog = pd.DataFrame(dialogue_rows)
@@ -857,10 +857,10 @@ def run_gcloud_scanner(
         return abs(l - 0.0) <= eps and abs(r - 1.0) <= eps and abs(t - 0.0) <= eps and abs(b - 1.0) <= eps
 
     if not _gcloud_exe():
-        raise RuntimeError("No se encontro gcloud. Agrega gcloud al PATH o define TAKOWORKS_GCLOUD_EXE.")
+        raise RuntimeError("gcloud not found. Add gcloud to PATH or set TAKOWORKS_GCLOUD_EXE.")
     pdf_path = Path(input_path)
     if not pdf_path.is_file() or pdf_path.suffix.lower() != ".pdf":
-        raise RuntimeError("Selecciona un PDF valido.")
+        raise RuntimeError("Select a valid PDF.")
 
     out_dir_p = Path(out_dir)
     out_dir_p.mkdir(parents=True, exist_ok=True)
@@ -972,7 +972,7 @@ def cv_imwrite_u(path: Path, img: np.ndarray) -> None:
 
     success, buf = cv2.imencode(ext, img)
     if not success:
-        raise RuntimeError(f"cv2.imencode falló para {path.name}")
+        raise RuntimeError(f"cv2.imencode failed for {path.name}")
     path.write_bytes(buf.tobytes())
 
 
@@ -1591,7 +1591,7 @@ def _post_edit_and_persist_md(md_path: Path, log: LogFn) -> str:
         try:
             md_path.write_text(edited, encoding="utf-8", errors="replace")
         except Exception as e:
-            log(f"[WARN] No pude reescribir MD poseditado ({md_path.name}): {e}")
+            log(f"[WARN] Could not rewrite edited Markdown ({md_path.name}): {e}")
     return edited
 
 
@@ -1632,7 +1632,7 @@ def _ocr_one_column_to_rows(
     actor_override: Optional[str] = None,
 ) -> List[dict]:
     if not col_img_path.exists():
-        log(f"[WARN] Imagen no encontrada: {col_img_path}")
+        log(f"[WARN] Image not found: {col_img_path}")
         return []
 
     outdir_col = md_dir / safe_name(col_img_path.stem)
@@ -1650,7 +1650,7 @@ def _ocr_one_column_to_rows(
         try:
             md_path.write_text(md_text, encoding="utf-8", errors="replace")
         except Exception as e:
-            log(f"[WARN] No pude escribir MD DeepSeek ({md_path.name}): {e}")
+            log(f"[WARN] Could not write DeepSeek Markdown ({md_path.name}): {e}")
             return None
         return md_path
 
@@ -1668,14 +1668,14 @@ def _ocr_one_column_to_rows(
             err = (proc.stderr or "").strip()
             if err:
                 log(err)
-            log(f"[WARN] YomiToku error ({proc.returncode}) en {img_path.name}")
+            log(f"[WARN] YomiToku error ({proc.returncode}) for {img_path.name}")
             return []
 
         candidates = list(outdir.rglob("*.md"))
         if not candidates:
             candidates = [p for p in md_dir.rglob("*.md") if re.search(rf"_p{page_num:03d}s{sec:03d}", p.name)]
         if not candidates:
-            log(f"[WARN] No MD para {img_path.name}")
+            log(f"[WARN] No Markdown for {img_path.name}")
             return []
 
         md_path = max(candidates, key=lambda p: p.stat().st_mtime)
@@ -1696,11 +1696,11 @@ def _ocr_one_column_to_rows(
                 ocr_img_path = md_dir / f"{col_img_path.stem}_ocr.png"
                 cv_imwrite_u(ocr_img_path, scaled)
     except Exception as e:
-        log(f"[WARN] No pude preparar imagen para OCR ({col_img_path.name}): {e}")
+        log(f"[WARN] Could not prepare image for OCR ({col_img_path.name}): {e}")
 
     lines = _run_ocr(ocr_img_path, outdir_col)
     if not lines:
-        log(f"[Claude] Fallback OCR en p{page_num:03d}s{sec:03d} ({col_img_path.name})")
+        log(f"[Claude] Fallback OCR for p{page_num:03d}s{sec:03d} ({col_img_path.name})")
         try:
             from ..transcriber import core as trans_core
             client = trans_core.get_claude_client()
@@ -1738,7 +1738,7 @@ def _ocr_one_column_to_rows(
                 block = "\n".join(merged)
                 lines = parse_text_only_lines(block)
         except Exception as e:
-            log(f"[WARN] Claude fallback fallido ({col_img_path.name}): {e}")
+            log(f"[WARN] Claude fallback failed ({col_img_path.name}): {e}")
 
     out_rows: List[dict] = []
     for ln in lines:
@@ -1781,7 +1781,7 @@ def _ocr_actor_strip(
         err = (proc.stderr or "").strip()
         if err:
             log(err)
-        log(f"[WARN] YomiToku actor error ({proc.returncode}) en {actor_img_path.name}")
+        log(f"[WARN] YomiToku actor error ({proc.returncode}) for {actor_img_path.name}")
         return ""
 
     candidates = list(outdir.rglob("*.md"))
@@ -1838,7 +1838,7 @@ def _process_legacy_page(
     cols = slice_columns_from_image(bgr, lines_x)
     if not cols and not has_visible_ink_image(bgr):
         if drop_empty:
-            log(f"[SKIP] Pagina {page_num}: vacia.")
+            log(f"[SKIP] Page {page_num}: empty.")
         return [], False
     if not cols and has_visible_ink_image(bgr):
         cols = [(1, bgr)]
@@ -1970,7 +1970,7 @@ def excel_to_ass_with_styles(
     actor_col = _pick_col(df, "actor", "Actor", "NAME", "Name")
     text_col = _pick_col(df, "texto", "Texto", "text", "Text")
     if not text_col:
-        raise RuntimeError("No encuentro columna Texto/text en el Excel.")
+        raise RuntimeError("No Texto/text column found in the Excel file.")
 
     out_ass = out_dir_p / (xlsx_p.stem + "_GenMain.ass")
 
@@ -2056,7 +2056,7 @@ def run_scanner(
 
     pdfs = [p for p in pdfs if p.is_file() and p.suffix.lower() == ".pdf"]
     if not pdfs:
-        raise RuntimeError("No encontré PDFs para procesar.")
+        raise RuntimeError("No PDFs found to process.")
 
     results: Dict[str, ScanOutputs] = {}
 
@@ -2113,7 +2113,7 @@ def _process_one_pdf(
         if total_pages <= 0:
             return
         pct = int(round((page_idx / float(total_pages)) * 100.0))
-        log(f"[{pct:3d}%] Pagina {page_idx}/{total_pages}")
+        log(f"[{pct:3d}%] Page {page_idx}/{total_pages}")
 
     # Intermedios se guardan junto al PDF por compatibilidad con tus carpetas existentes
     base_dir = pdf_path.parent
@@ -2127,7 +2127,7 @@ def _process_one_pdf(
     if reuse_md:
         md_files = [p for p in md_dir.rglob("*.md") if re.search(r"_p\d{3}s\d{3}", p.name)]
         if md_files:
-            log(f"Reuse MD: {len(md_files)} MD encontrados -> reconstruyendo sin OCR.")
+            log(f"Reuse Markdown: {len(md_files)} files found -> rebuilding without OCR.")
             _log_progress(100, 100)
             df = _df_from_md_files(md_files, log=log)
             return _write_outputs(pdf_path, out_dir, df, make_excel, make_ass, make_txt, log, cancel_event)
@@ -2136,7 +2136,7 @@ def _process_one_pdf(
     if reuse_images:
         col_images = sorted(images_dir.glob(f"{stem}_p???s???.png"))
         if col_images:
-            log(f"Reuse imágenes: {len(col_images)} columnas encontradas.")
+            log(f"Reuse images: {len(col_images)} columns found.")
             _log_progress(100, 100)
             md_index = _index_md_by_page_section(md_dir)
             rows: List[dict] = []
@@ -2167,7 +2167,7 @@ def _process_one_pdf(
         return _write_outputs(pdf_path, out_dir, df, make_excel, make_ass, make_txt, log, cancel_event)
 
     if not crop_rect or any(v is None for v in crop_rect):
-        raise RuntimeError("Faltan cortes de recorte. Abre la vista previa y marca el rectangulo.")
+        raise RuntimeError("Missing crop boundaries. Open the preview and mark the rectangle.")
 
     doc = fitz.open(str(pdf_path))
     try:
@@ -2179,7 +2179,7 @@ def _process_one_pdf(
             page_num = pi + 1
             _log_progress(page_num, total_pages)
             if page_num in suppress_pages:
-                log(f"[SKIP] Pagina {page_num}: suprimida.")
+                log(f"[SKIP] Page {page_num}: suppressed.")
                 continue
             page_crop = crop_rect_by_page.get(page_num, crop_rect)
             rows_page, has_content = _process_legacy_page(
@@ -2223,7 +2223,7 @@ def _write_outputs(
     out = ScanOutputs()
 
     if df is None or df.empty:
-        log("Sin resultados -> no se generan salidas.")
+        log("No results -> no output files generated.")
         return out
 
     df = df.sort_values(["pagina", "seccion"], kind="stable").reset_index(drop=True)

@@ -11,6 +11,7 @@
 - Use `apply_patch` for file edits
 - Prefer ASCII comments and keep code comments concise unless they clarify non-obvious logic
 - Keep CLI and GUI behavior backward compatible unless the task explicitly requests a change
+- Keep all UI labels, dialogs, progress messages, and logs in English. Subtitle content keeps its requested language.
 
 ## Useful Commands
 - Run tests: `pytest -q`

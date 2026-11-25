@@ -29,7 +29,7 @@ def main(argv=None) -> int:
     try:
         from takoworks.__main__ import main as takoworks_main  # type: ignore
     except Exception as e:
-        print("[ERROR] No se pudo importar TakoWorks:", e)
+        print("[ERROR] Could not import TakoWorks:", e)
         return 4
 
     return int(takoworks_main(["--tab", "Translator", "--ass", ass_path]) or 0)

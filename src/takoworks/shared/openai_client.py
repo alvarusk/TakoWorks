@@ -14,5 +14,5 @@ def create_openai_client():
     if not key:
         key = str(load_config().get("api_keys", {}).get("openai", "") or "").strip()
     if not key:
-        raise RuntimeError("Falta OPENAI_API_KEY (entorno o configuracion de TakoWorks).")
+        raise RuntimeError("Missing OPENAI_API_KEY (environment or TakoWorks settings).")
     return OpenAI(api_key=key, timeout=180, max_retries=2)

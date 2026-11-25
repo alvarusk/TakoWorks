@@ -37,7 +37,7 @@ original como referencia directa y contrasta las traducciones.
 
 Devuelve JSON con subtitles (objetos id, text, notes) y notes (avisos globales).
 Incluye exactamente los IDs solicitados, una sola vez cada uno, en orden.
-El contexto es solo de consulta. Redacta las notas en espanol, concretas y utiles:
+El contexto es solo de consulta. Redacta las notas en ingles, concretas y utiles:
 dudas de sentido, preguntas, decisiones que necesitan revision, referencias
 insuficientes o incompatibilidad entre fidelidad, sintaxis y limites.
 Si no hay incidencias, usa listas notes vacias. No afirmes haber visto el video.

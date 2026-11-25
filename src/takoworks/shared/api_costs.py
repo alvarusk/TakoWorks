@@ -21,7 +21,7 @@ def _read_price(model_key, kind, default):
     try:
         return float(raw)
     except Exception:
-        print(f"[Costes] Valor no valido en {env_name}: {raw}. Se usa {default}.")
+        print(f"[Costs] Invalid value in {env_name}: {raw}. Using {default}.")
         return default
 
 
@@ -32,7 +32,7 @@ def load_price_table():
         if isinstance(raw, dict):
             cfg_costs = raw
     except Exception as exc:
-        print(f"[Costes] No se pudo leer cost_per_1k de config.json: {exc}")
+        print(f"[Costs] Could not read cost_per_1k from config.json: {exc}")
     table = {}
     for key, defaults in DEFAULT_PRICE_PER_1K.items():
         entry = cfg_costs.get(key, {})

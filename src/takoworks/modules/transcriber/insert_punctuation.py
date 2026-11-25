@@ -15,7 +15,7 @@ def _get_components():
         from transformers import BertTokenizer, BertModel  # type: ignore
     except ImportError as exc:
         raise RuntimeError(
-            "Falta torch/transformers para restaurar puntuación (pip install torch transformers)."
+            "Missing torch/transformers for punctuation restoration (pip install torch transformers)."
         ) from exc
     global _TORCH
     _TORCH = torch

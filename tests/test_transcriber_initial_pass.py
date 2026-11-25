@@ -60,7 +60,7 @@ def test_purfview_batches_only_target_events_and_preserves_metadata(monkeypatch,
     video.touch()
     commands = []
 
-    def run(command, cancel_event=None, cwd=None):
+    def run(command, cancel_event=None, cwd=None, **kwargs):
         commands.append(command)
         if command[0] == "ffmpeg":
             Path(command[-1]).touch()
@@ -69,7 +69,9 @@ def test_purfview_batches_only_target_events_and_preserves_metadata(monkeypatch,
             assert [p.stem for p in sorted(clips)] == ["line_000000", "line_000003"]
             output = Path(command[command.index("--output_dir") + 1])
             for clip in clips:
-                (output / f"{clip.stem}.txt").write_text("spoken\nwords", encoding="utf-8-sig")
+                (output / f"{clip.stem}.txt").write_text(
+                    "[00:00.000 --> 00:01.100] spoken\n[00:01.100 --> 00:02.200] words",
+                    encoding="utf-8-sig")
             if exit_code:
                 raise initial.ProcessError(exit_code, "Operation finished in: 0:05:46")
 
@@ -87,9 +89,12 @@ def test_purfview_batches_only_target_events_and_preserves_metadata(monkeypatch,
         assert after.as_dict() == expected
     assert source.read_bytes() == original_bytes
     log = capsys.readouterr().out
-    assert ("Advertencia" in log) == bool(exit_code)
+    assert ("Warning" in log) == bool(exit_code)
     if exit_code:
         assert str(exit_code) in log
+    assert "Output ready 2/2" in log
+    assert "Transcription complete: 2/2 lines validated" in log
+    assert "excluding audio preparation" in log
 
 
 @pytest.mark.parametrize("output_kind", ["missing", "invalid", "unreadable", "cancelled"])
@@ -103,7 +108,7 @@ def test_failed_purfview_requires_complete_valid_outputs(monkeypatch, tmp_path, 
     cancel = threading.Event()
     failure = initial.ProcessError(3221226505, "native failure")
 
-    def run(command, cancel_event=None, cwd=None):
+    def run(command, cancel_event=None, cwd=None, **kwargs):
         if command[0] == "ffmpeg":
             return
         output = Path(command[command.index("--output_dir") + 1])
@@ -132,6 +137,61 @@ def test_run_process_preserves_exit_code_and_diagnostics():
     assert exc.value.returncode == 3
 
 
+def test_process_output_is_available_before_exit_and_can_be_cancelled():
+    cancel = threading.Event()
+    lines = []
+
+    def output(line):
+        lines.append(line)
+        cancel.set()
+
+    with pytest.raises(InterruptedError):
+        initial.run_process(
+            [sys.executable, "-c", "import time; print('live progress', flush=True); time.sleep(30)"],
+            cancel_event=cancel, on_output=output)
+    assert lines == ["live progress"]
+
+
+def test_process_output_decodes_split_utf8_and_final_line():
+    lines = []
+    initial.run_process([sys.executable, "-c",
+        "import sys,time; data=bytes([227,129,130]); "
+        "sys.stdout.buffer.write(data[:1]); sys.stdout.buffer.flush(); time.sleep(.3); "
+        "sys.stdout.buffer.write(data[1:]+b'\\r\\nlast'); sys.stdout.buffer.flush()"], on_output=lines.append)
+    assert lines == ["\u3042", "last"]
+
+
+def test_purfview_reports_current_audio_completion_and_elapsed_time(monkeypatch, tmp_path, capsys):
+    now = [0.0]
+    monkeypatch.setattr(initial.time, "monotonic", lambda: now[0])
+    progress = initial._PurfviewProgress(initial.eligible_events(episode()), tmp_path)
+    progress.output(r"Starting to process: C:\audio\line_000000.wav")
+    now[0] = 2.0
+    progress.output("Subtitles are written to text directory.")
+    (tmp_path / "line_000000.txt").touch()
+    progress.poll(final=True)
+    progress.output(r"Starting to process: C:\audio\line_000003.wav")
+    now[0] = 8.0
+    progress.poll()
+    log = capsys.readouterr().out
+    assert "Transcribing audio 1/2 (ASS line 1)" in log
+    assert "Transcribing audio 2/2 (ASS line 4)" in log
+    assert log.count("Output ready 1/2") == 1
+    assert "audio time 2.0 s" in log
+    assert "current ASS line 4; elapsed 8.0 s" in log
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("[00:00.000 --> 00:01.400] spoken", "spoken"),
+    ("[00:00.000 --> 00:00.700] one [00:01.100 --> 00:01.300] two", "one two"),
+    ("[00:00:00,000 --> 00:00:01,400] spoken\nnext", "spoken next"),
+    ("[applause] 12:00 [123]", "[applause] 12:00 [123]"),
+    ("[00:00.000 --> 00:01.000]", ""),
+])
+def test_asr_timestamp_cleanup_is_specific(raw, expected):
+    assert initial.clean_asr_text(raw) == expected
+
+
 def test_missing_asr_output_stops_instead_of_misaligning_lines(monkeypatch, tmp_path):
     source = tmp_path / "input.ass"
     episode().save(str(source))
@@ -139,7 +199,7 @@ def test_missing_asr_output_stops_instead_of_misaligning_lines(monkeypatch, tmp_
     executable.touch()
     video.touch()
     monkeypatch.setattr(initial, "run_process", lambda *a, **kw: None)
-    with pytest.raises(RuntimeError, match="linea ASS 1"):
+    with pytest.raises(RuntimeError, match="ASS line 1"):
         initial.transcribe_purfview(source, video, "ja", str(executable))
 
 
@@ -159,6 +219,7 @@ def test_cancelled_asr_does_not_start_process(monkeypatch, tmp_path):
 @pytest.mark.parametrize("change", [
     {"id": 4}, {"text": ""}, {"text": "{hidden}"}, {"text": "a\\Nb"},
     {"text": "a\nb"}, {"uncertain": True}, {"page": 0}, {"page": True}, {"reason": ""},
+    {"text": "[00:00.000 --> 00:01.000] speech"},
 ])
 def test_review_rejects_unsafe_or_unsupported_changes(change):
     line = dict(id=1, text="corrected", uncertain=False, reason="PDF", page=1)
@@ -215,7 +276,7 @@ def test_bad_review_retries_then_stops_and_keeps_billed_usage(monkeypatch, tmp_p
         return '{"lines": []}'
 
     monkeypatch.setattr(initial, "_review_request", request)
-    with pytest.raises(RuntimeError, match="Cotejo gpt fallido"):
+    with pytest.raises(RuntimeError, match="Verification gpt failed"):
         initial.verify_with_pdf(subs, pdf_file(tmp_path), "ja", tmp_path, usage_by_model=usage)
     assert subs[0].text == "raw"
     assert usage["verification_gpt"].prompt_tokens == 45
@@ -262,9 +323,80 @@ def test_multiple_blocks_keep_exact_ids_and_pass_context(monkeypatch, tmp_path):
     monkeypatch.setattr(initial, "_review_request", request)
     initial.verify_with_pdf(subs, pdf_file(tmp_path), "ja", tmp_path)
     assert [(engine, len(payload["lines"])) for engine, payload in calls] == [
-        ("gpt", 40), ("gpt", 1), ("gemini", 40), ("gemini", 1)]
+        ("gpt", 40), ("gpt", 1), ("gemini", 10), ("gemini", 10),
+        ("gemini", 10), ("gemini", 10), ("gemini", 1)]
     assert calls[1][1]["lines"][0]["id"] == len(subs)
     assert all(event.text.endswith("_gpt_gemini") for _, event in initial.eligible_events(subs))
+
+
+def test_gemini_truncation_splits_blocks_without_repeating_accepted_lines(monkeypatch, tmp_path):
+    fake_clients(monkeypatch)
+    subs = episode()
+    for index in range(8):
+        subs.append(core.pysubs2.SSAEvent(start=4000 + index * 1000, end=5000 + index * 1000,
+                                        text=f"line {index}", style="Gen_Main"))
+    calls = []
+
+    def request(core, engine, client, document, system, prompt, count, usage):
+        payload = json.loads(prompt)
+        rows = payload["lines"]
+        calls.append((engine, len(rows)))
+        assert not {r["id"] for r in rows} & {r["id"] for r in payload["context_only"]}
+        usage.prompt_tokens += 1
+        if engine == "gemini" and len(rows) > 3:
+            raise initial.ReviewResponseError({"finish_reason": "MAX_TOKENS", "block_reason": "NONE"})
+        return corrected(rows, "_" + engine)
+
+    monkeypatch.setattr(initial, "_review_request", request)
+    initial.verify_with_pdf(subs, pdf_file(tmp_path), "ja", tmp_path)
+    assert calls == [("gpt", 10), ("gemini", 10), ("gemini", 5), ("gemini", 2),
+                     ("gemini", 3), ("gemini", 5), ("gemini", 2), ("gemini", 3)]
+    report = json.loads((tmp_path / "verification.json").read_text(encoding="utf-8"))
+    assert sum(a.get("action") == "split" for a in report["attempts"]) == 3
+    accepted = [r["id"] for a in report["attempts"] if a["engine"] == "gemini" and "lines" in a for r in a["lines"]]
+    assert accepted == [i + 1 for i, _ in initial.eligible_events(subs)]
+    assert report["usage"]["verification_gemini"]["prompt_tokens"] == 7
+    assert all(e.text.endswith("_gpt_gemini") for _, e in initial.eligible_events(subs))
+    assert (tmp_path / "verification_gemini.ass").is_file()
+
+
+def test_gemini_content_block_stops_without_repeated_or_split_requests(monkeypatch, tmp_path):
+    fake_clients(monkeypatch)
+    calls = []
+
+    def request(core, engine, client, document, system, prompt, count, usage):
+        calls.append(engine)
+        if engine == "gemini":
+            raise initial.ReviewResponseError({"finish_reason": "SAFETY", "block_reason": "NONE"})
+        return corrected(json.loads(prompt)["lines"], "_gpt")
+
+    monkeypatch.setattr(initial, "_review_request", request)
+    with pytest.raises(RuntimeError, match="Verification gemini failed"):
+        initial.verify_with_pdf(episode(), pdf_file(tmp_path), "ja", tmp_path)
+    assert calls == ["gpt", "gemini"]
+    assert (tmp_path / "verification_gpt.ass").is_file()
+    assert not (tmp_path / "verification_gemini.ass").exists()
+
+
+def test_verification_removes_old_asr_timestamps_before_both_requests(monkeypatch, tmp_path):
+    fake_clients(monkeypatch)
+    subs = episode()
+    subs[0].text = "[00:00.000 --> 00:00.700] one [00:00.700 --> 00:01.000] two"
+    original = copy.deepcopy(subs)
+
+    def request(core, engine, client, document, system, prompt, count, usage):
+        rows = json.loads(prompt)["lines"]
+        assert rows[0]["asr"] == rows[0]["current"] == "one two"
+        return json.dumps({"lines": [dict(id=r["id"], text=r["current"], uncertain=True,
+                                         reason="No change", page=0) for r in rows]})
+
+    monkeypatch.setattr(initial, "_review_request", request)
+    initial.verify_with_pdf(subs, pdf_file(tmp_path), "ja", tmp_path)
+    for name in ("verification_gpt.ass", "verification_gemini.ass"):
+        result = core.pysubs2.load(str(tmp_path / name))
+        assert result[0].text == "one two"
+        assert result[0].start == original[0].start and result[0].end == original[0].end
+        assert result[1:3] == original[1:3]
 
 
 def test_provider_requests_reuse_translation_models_and_count_thoughts(monkeypatch):
@@ -287,7 +419,57 @@ def test_provider_requests_reuse_translation_models_and_count_thoughts(monkeypat
     initial._review_request(core, "gemini", client, NS(uri="https://example.com/pdf"), "system", "prompt", 2, usage)
     assert calls[1]["model"] == core.GEMINI_MODEL
     assert calls[1]["config"].response_mime_type == "application/json"
+    assert calls[1]["config"].thinking_config.thinking_level.lower() == "low"
     assert usage.completion_tokens == 27 and usage.cost_usd == 1.27
+
+
+@pytest.mark.parametrize("finish_reason,block_reason", [
+    ("MAX_TOKENS", None), ("SAFETY", None), (None, "PROHIBITED_CONTENT"),
+])
+def test_gemini_rejection_reports_actual_reason_and_partial_text(monkeypatch, finish_reason, block_reason):
+    monkeypatch.setattr(core, "estimate_cost", lambda *args: .3)
+    response = NS(
+        usage_metadata=NS(prompt_token_count=50, candidates_token_count=20, thoughts_token_count=5),
+        prompt_feedback=NS(block_reason=block_reason, block_reason_message="Prompt rejected" if block_reason else None),
+        candidates=[NS(finish_reason=finish_reason, finish_message="Generation stopped",
+                       content=NS(parts=[NS(text="private thought", thought=True), NS(text='{"lines":')]))]
+                   if finish_reason else [],
+    )
+    client = NS(models=NS(generate_content=lambda **kw: response))
+    usage = core.ApiUsage(engine="verification_gemini", model_name="model")
+    with pytest.raises(initial.ReviewResponseError) as exc:
+        initial._review_request(core, "gemini", client, NS(uri="https://example.com/pdf"), "sys", "p", 1, usage)
+    error = exc.value
+    assert error.diagnostics["finish_reason"] == (finish_reason or "UNKNOWN")
+    assert error.diagnostics["block_reason"] == (block_reason or "NONE")
+    assert error.diagnostics["tokens"]["thoughts_token_count"] == 5
+    assert (finish_reason or block_reason) in str(error)
+    assert error.raw == ('{"lines":' if finish_reason else "")
+    assert usage.completion_tokens == 25 and usage.cost_usd == .3
+
+
+def test_gemini_diagnostics_survive_retries_in_report(monkeypatch, tmp_path, capsys):
+    fake_clients(monkeypatch)
+    diagnostics = {"finish_reason": "MAX_TOKENS", "block_reason": "NONE"}
+
+    def request(core, engine, client, document, system, prompt, count, usage):
+        if engine == "gpt":
+            return corrected(json.loads(prompt)["lines"], "_gpt")
+        raise initial.ReviewResponseError(diagnostics, '{"lines":')
+
+    monkeypatch.setattr(initial, "_review_request", request)
+    with pytest.raises(RuntimeError, match="Verification gemini failed"):
+        initial.verify_with_pdf(episode(), pdf_file(tmp_path), "ja", tmp_path)
+    report = json.loads((tmp_path / "verification.json").read_text(encoding="utf-8"))
+    failures = [attempt for attempt in report["attempts"] if attempt["engine"] == "gemini"]
+    assert len(failures) == 4
+    assert failures[0]["action"] == "split"
+    assert all(attempt["diagnostics"] == diagnostics and attempt["raw"] == '{"lines":' for attempt in failures)
+    assert (tmp_path / "verification_gpt.ass").is_file()
+    assert not (tmp_path / "verification_gemini.ass").exists()
+    log = capsys.readouterr().out
+    assert "[Verification gemini] Invalid block; retry 2/3" in log
+    assert "MAX_TOKENS" in log
 
 
 @pytest.mark.parametrize("engine", ["gpt", "gemini"])

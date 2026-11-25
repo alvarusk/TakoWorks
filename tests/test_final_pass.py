@@ -52,10 +52,10 @@ def test_limits_measure_rendered_text_and_exact_boundaries():
     assert fp.validate_subtitle(text, 4000, [r"{\i1}", r"{\i0}"]) == []
     assert any("CPS" in p for p in fp.validate_subtitle(text, 3990, [r"{\i1}", r"{\i0}"]))
     assert any("CPL" in p for p in fp.validate_subtitle("x" * 41, 10000))
-    assert any("lineas" in p for p in fp.validate_subtitle(r"Uno\NDos\NTres", 10000))
-    assert any("funcional" in p for p in fp.validate_subtitle(r"Vamos a\Ncomer", 2000))
-    assert any("Duracion" in p for p in fp.validate_subtitle("Hola", 0))
-    assert any("Llaves" in p for p in fp.validate_subtitle(r"Hola{\i1", 1000))
+    assert any("lines" in p for p in fp.validate_subtitle(r"Uno\NDos\NTres", 10000))
+    assert any("function word" in p for p in fp.validate_subtitle(r"Vamos a\Ncomer", 2000))
+    assert any("duration" in p for p in fp.validate_subtitle("Hola", 0))
+    assert any("braces" in p for p in fp.validate_subtitle(r"Hola{\i1", 1000))
 
 
 def test_final_pass_repairs_limits_preserves_metadata_and_opens_notes(tmp_path, monkeypatch):
@@ -84,9 +84,9 @@ def test_final_pass_repairs_limits_preserves_metadata_and_opens_notes(tmp_path, 
     assert r"Default,Alice,0,0,0,,{\i1}Hola.{\i0}" in result
     report = output.with_suffix(".txt").read_text(encoding="utf-8-sig")
     assert "Revisar el tratamiento" in report
-    assert "Limites tecnicos verificados" in report
-    assert "Tiempo Final Pass: 12.50 s" in report
-    assert "Coste estimado Final Pass: $0.000140 USD" in report
+    assert "Technical limits verified" in report
+    assert "Final Pass time: 12.50 s" in report
+    assert "Estimated Final Pass cost: $0.000140 USD" in report
     if fp.os.name == "nt":
         assert opened == [["notepad.exe", str(output.with_suffix(".txt").resolve())]]
 
@@ -100,7 +100,7 @@ def test_unresolved_limits_are_reported_without_truncating(tmp_path):
     assert "Hola." in output.read_text(encoding="utf-8-sig")
     report = output.with_suffix(".txt").read_text(encoding="utf-8-sig")
     assert "50.00 CPS" in report
-    assert "REQUIERE REVISION" in report
+    assert "REVIEW REQUIRED" in report
     assert "No se puede abreviar" in report
 
 
@@ -116,8 +116,8 @@ def test_api_or_structural_failure_uses_marked_gpt_fallback(tmp_path, result):
     assert "Hola{FINAL PASS FALLBACK GPT}" in output.read_text(encoding="utf-8-sig")
     report = output.with_suffix(".txt").read_text(encoding="utf-8-sig")
     assert "FALLBACK GPT" in report
-    assert "REQUIERE REVISION" in report
-    assert "NO COMPLETADO" not in report
+    assert "REVIEW REQUIRED" in report
+    assert "NOT COMPLETED" not in report
     assert not list(tmp_path.glob("*.tmp"))
 
 
@@ -129,8 +129,8 @@ def test_failed_review_still_reports_consumed_tokens_and_cost(tmp_path, monkeypa
     monkeypatch.setattr(fp, "time", NS(perf_counter=lambda: next(clock)))
     fp.run_final_pass(source, {"gpt": ["Hola"]}, output, source_lang="ja", client=client, open_notes=False)
     report = output.with_suffix(".txt").read_text(encoding="utf-8-sig")
-    assert "Tiempo Final Pass: 15.00 s" in report
-    assert "entrada=30, salida=15" in report
+    assert "Final Pass time: 15.00 s" in report
+    assert "input=30, output=15" in report
     assert "$0.000210 USD" in report
 
 
@@ -161,11 +161,11 @@ def test_cancellation_after_response_preserves_its_consumption(tmp_path, monkeyp
         cancelled.set()
         return response
     client.chat.completions.create = cancel_after_response
-    with pytest.raises(RuntimeError, match="Cancelado"):
+    with pytest.raises(RuntimeError, match="Cancelled"):
         fp.run_final_pass(source, {"gpt": ["Hola"]}, output, source_lang="EN", client=client,
                           cancel_event=cancelled, open_notes=False)
     report = output.with_suffix(".txt").read_text(encoding="utf-8-sig")
-    assert "entrada=10, salida=5" in report
+    assert "input=10, output=5" in report
     assert "$0.000070 USD" in report
     assert output.read_text(encoding="utf-8") == "previous final"
 
@@ -184,7 +184,7 @@ def test_unknown_consumption_is_reported_as_incomplete(tmp_path, no_response):
         client.chat.completions.create = without_usage
     fp.run_final_pass(source, {"gpt": ["Hola"]}, output, source_lang="EN", client=client, open_notes=False)
     report = output.with_suffix(".txt").read_text(encoding="utf-8-sig")
-    assert "CONSUMO INCOMPLETO" in report
+    assert "INCOMPLETE USAGE" in report
 
 
 def test_cancellation_writes_notes_without_calling_api(tmp_path):
@@ -193,12 +193,12 @@ def test_cancellation_writes_notes_without_calling_api(tmp_path):
     client, calls = fake_client([])
     cancelled = threading.Event()
     cancelled.set()
-    with pytest.raises(RuntimeError, match="Cancelado"):
+    with pytest.raises(RuntimeError, match="Cancelled"):
         fp.run_final_pass(source, {"gpt": ["Hola"]}, output, source_lang="EN", client=client,
                           cancel_event=cancelled, open_notes=False)
     assert calls == []
     assert not output.exists()
-    assert "Cancelado" in output.with_suffix(".txt").read_text(encoding="utf-8-sig")
+    assert "Cancelled" in output.with_suffix(".txt").read_text(encoding="utf-8-sig")
 
 
 def test_batches_include_neighbor_context_and_asr_notes(tmp_path):
@@ -262,7 +262,7 @@ def test_failure_without_gpt_does_not_mislabel_another_translation(tmp_path):
     output = tmp_path / "final.ass"
     output.write_text("previous final", encoding="utf-8")
     client, _ = fake_client([RuntimeError("timeout")] * 3)
-    with pytest.raises(RuntimeError, match="no hay traduccion GPT"):
+    with pytest.raises(RuntimeError, match="no GPT translation available"):
         fp.run_final_pass(source, {"deepl": ["Hola"]}, output, source_lang="EN",
                           client=client, open_notes=False)
     assert output.read_text(encoding="utf-8") == "previous final"
@@ -301,7 +301,7 @@ def test_translator_runs_review_after_deepl(tmp_path, monkeypatch, lang):
     payload = json.loads(calls[0]["messages"][1]["content"])
     assert payload["source_lang"] == lang
     assert payload["subtitles"][0]["translations"] == {"deepl": "Buenas."}
-    assert any("Tiempo Final Pass:" in line and "$0.000070 USD" in line for line in logs)
+    assert any("Final Pass time:" in line and "$0.000070 USD" in line for line in logs)
 
 
 @pytest.mark.parametrize("lang", ["ja", "zh"])
@@ -339,7 +339,7 @@ def test_transcriber_reviews_all_translations_after_last_engine(tmp_path, monkey
     assert saved[0]["final_pass"].cost_usd == pytest.approx(0.00007)
     log = capsys.readouterr().out
     assert "Final Pass: prompt=10 completion=5 total=15" in log
-    assert "[Costes] TOTAL: tokens=15" in log
+    assert "[Costs] TOTAL: tokens=15" in log
     assert any(line.startswith("Final Pass:") and ";" in line for line in log.splitlines())
 
 

@@ -50,7 +50,7 @@ def parse_json_translations_result(raw_content: str, fallback_lines: List[str]) 
         used_fallback = False
 
         if normalized:
-            print("[AVISO] Nº de traducciones != nº de lineas. Se ajusta al minimo en comun.")
+            print("[Warning] Translation count differs from line count. Using the smaller count.")
             if raw_count > expected_count:
                 cooked = cooked[:expected_count]
             else:
@@ -236,7 +236,7 @@ def parse_json_romanizations_result(raw_content: str, fallback_lines: List[str])
         used_fallback = False
 
         if normalized:
-            print("[AVISO] N\u00ba de romanizaciones != n\u00ba de lineas. Se ajusta al minimo en comun.")
+            print("[Warning] Romanization count differs from line count. Using the smaller count.")
             if raw_count > expected_count:
                 cooked = cooked[:expected_count]
             else:
