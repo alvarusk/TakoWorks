@@ -3153,7 +3153,7 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
                         help="ASR engine; purfview uses large-v3-turbo on non-comment Gen_ lines.")
     parser.add_argument("--purfview-exe", default="", help="Path to faster-whisper-xxl.exe.")
     parser.add_argument("--reference-pdf", default="",
-                        help="Episode PDF: verify with OpenAI, then Gemini, before annotations.")
+                        help="Episode PDF: verify transcript and actors with OpenAI, then Gemini, before annotations.")
     parser.add_argument(
         "--out-dir",
         help="Folder where the output files (.ass, .html) will be saved. "
@@ -3321,8 +3321,10 @@ def main(argv: Optional[List[str]] = None, *, cancel_event=None):
                 context_note_usage=context_note_usage, phase_timings=phase_timings,
                 do_romanization=do_romanization, do_context_note=do_context_note,
             )
-        asr_out = os.path.join(stage_dir, "annotated.ass")
+        asr_suffix = "_ja_asr" if lang == "ja" else "_zh_asr"
+        asr_out = os.path.join(out_dir, f"{base_name}{asr_suffix}.ass")
         subs.save(asr_out, encoding="utf-8-sig")
+        print(f"[+] Intermediate ASR file: {asr_out}\n")
 
     # 1) Obtener subs de partida
     elif args.skip_asr:

@@ -26,7 +26,9 @@ def episode():
 
 def corrected(rows, suffix):
     return json.dumps({"lines": [dict(id=row["id"], text=row["current"] + suffix,
-                                     uncertain=False, reason="PDF evidence", page=2) for row in rows]})
+                                     uncertain=False, reason="PDF evidence", page=2,
+                                     actor=row.get("actor", ""), actor_uncertain=True,
+                                     actor_reason="Speaker not identified", actor_page=0) for row in rows]})
 
 
 def fake_clients(monkeypatch):
@@ -222,15 +224,116 @@ def test_cancelled_asr_does_not_start_process(monkeypatch, tmp_path):
     {"text": "[00:00.000 --> 00:01.000] speech"},
 ])
 def test_review_rejects_unsafe_or_unsupported_changes(change):
-    line = dict(id=1, text="corrected", uncertain=False, reason="PDF", page=1)
+    line = dict(id=1, text="corrected", uncertain=False, reason="PDF", page=1,
+                actor="", actor_uncertain=True, actor_reason="Unknown speaker", actor_page=0)
     line.update(change)
     with pytest.raises(ValueError):
         initial.parse_review(json.dumps({"lines": [line]}), [{"id": 1, "current": "source"}])
 
 
 def test_uncertain_review_can_preserve_an_empty_line():
-    raw = json.dumps({"lines": [dict(id=7, text="", uncertain=True, reason="No match", page=0)]})
+    raw = json.dumps({"lines": [dict(id=7, text="", uncertain=True, reason="No match", page=0,
+                                    actor="", actor_uncertain=True, actor_reason="No match", actor_page=0)]})
     assert initial.parse_review(raw, [{"id": 7, "current": ""}])[0]["uncertain"]
+
+
+def actor_review_line(actor, **changes):
+    line = dict(id=1, text="raw", uncertain=True, reason="Transcript unchanged", page=0,
+                actor=actor, actor_uncertain=False, actor_reason="Speaker label in PDF", actor_page=2)
+    line.update(changes)
+    return line
+
+
+@pytest.mark.parametrize("actor,expected", [
+    ("Keroro;Giroro", "Keroro; Giroro"),
+    (" Keroro ;  Giroro ", "Keroro; Giroro"),
+])
+def test_two_speakers_have_exact_separator(actor, expected):
+    row = dict(id=1, current="raw", actor="2", source_actor="2", speaker_count=2)
+    raw = json.dumps({"lines": [actor_review_line(actor)]})
+    result = initial.parse_review(raw, [row])
+    assert result[0]["actor"] == expected
+    assert result[0]["text"] == "raw" and result[0]["uncertain"]
+
+
+@pytest.mark.parametrize("change", [
+    {"actor": "Keroro"}, {"actor": "Keroro; Giroro; Tamama"},
+    {"actor": "Keroro; keroro"}, {"actor": "Keroro; "}, {"actor": "2"},
+    {"actor": "Keroro, Giroro"}, {"actor": "Keroro\nGiroro"},
+    {"actor": "Keroro; Gi\x00roro"}, {"actor": "Keroro; Gi\troro"},
+    {"actor": "Keroro; {Giroro}"}, {"actor": r"Keroro; Gi\N roro"},
+    {"actor": "\u30b1\u30ed\u30ed; \u30ae\u30ed\u30ed"},
+    {"actor": None}, {"actor_uncertain": 1}, {"actor_page": 0},
+    {"actor_page": True}, {"actor_page": -1}, {"actor_reason": ""},
+    {"actor_uncertain": True},
+])
+def test_actor_verification_rejects_unsafe_unsupported_or_wrong_count(change):
+    line = actor_review_line("Keroro; Giroro")
+    line.update(change)
+    with pytest.raises(ValueError):
+        initial.parse_review(json.dumps({"lines": [line]}),
+                             [dict(id=1, current="raw", actor="2", speaker_count=2)])
+
+
+def test_uncertain_actor_preserves_two_speaker_marker():
+    line = actor_review_line("2", actor_uncertain=True, actor_page=0,
+                             actor_reason="Second voice cannot be identified")
+    result = initial.parse_review(json.dumps({"lines": [line]}),
+                                  [dict(id=1, current="raw", actor="2", speaker_count=2)])
+    assert result[0]["actor"] == "2"
+
+
+@pytest.mark.parametrize("actor", ["Profesor", "Azumaya Koyuki", "Señor Martínez"])
+def test_new_actor_can_be_spanish_or_romanized(actor):
+    result = initial.parse_review(json.dumps({"lines": [actor_review_line(actor)]}),
+                                  [dict(id=1, current="raw", actor="", speaker_count=1)])
+    assert result[0]["actor"] == actor
+
+
+def test_verification_assigns_md_actors_and_preserves_original_speaker_count(monkeypatch, tmp_path):
+    fake_clients(monkeypatch)
+    subs = episode()
+    subs[0].name = ""
+    subs[3].name = "2"
+    original = copy.deepcopy(subs)
+    instructions = "| Original | Spanish |\n| --- | --- |\n| ケロロ | Keroro |\n| ギロロ | Giroro |"
+    calls = []
+
+    def request(core, engine, client, document, system, prompt, count, usage):
+        payload = json.loads(prompt)
+        calls.append((engine, payload))
+        assert instructions in system
+        assert payload["lines"][1]["source_actor"] == "2"
+        assert payload["lines"][1]["speaker_count"] == 2
+        if engine == "gemini":
+            assert payload["lines"][0]["actor"] == "Keroro"
+            assert payload["lines"][1]["actor"] == "Keroro; Giroro"
+        return json.dumps({"lines": [dict(id=row["id"], text=row["current"], uncertain=True,
+            reason="Transcript unchanged", page=0,
+            actor="ケロロ" if n == 0 else ("ケロロ;ギロロ" if engine == "gpt" else "Giroro; Keroro"),
+            actor_uncertain=False, actor_reason="PDF identifies the speakers in dialogue order", actor_page=2)
+            for n, row in enumerate(payload["lines"])]})
+
+    monkeypatch.setattr(initial, "_review_request", request)
+    initial.verify_with_pdf(subs, pdf_file(tmp_path), "ja", tmp_path, instructions=instructions)
+    assert [engine for engine, _ in calls] == ["gpt", "gemini"]
+    for filename, actors in (("verification_gpt.ass", ("Keroro", "Keroro; Giroro")),
+                             ("verification_gemini.ass", ("Keroro", "Giroro; Keroro"))):
+        saved = core.pysubs2.load(str(tmp_path / filename))
+        assert saved[0].name == actors[0] and saved[3].name == actors[1]
+        for i, (before, after) in enumerate(zip(original, saved)):
+            expected = before.as_dict()
+            if i in (0, 3):
+                expected["name"] = actors[0 if i == 0 else 1]
+            assert after.as_dict() == expected
+    report = json.loads((tmp_path / "verification.json").read_text(encoding="utf-8"))
+    assert report["source_actors"][1] == dict(id=4, actor="2", speaker_count=2)
+    assert report["attempts"][-1]["lines"][1]["actor"] == "Giroro; Keroro"
+
+
+def test_review_schema_requires_actor_evidence():
+    item = initial.review_schema(2)["properties"]["lines"]["items"]
+    assert {"actor", "actor_uncertain", "actor_reason", "actor_page"} <= set(item["required"])
 
 
 def test_two_passes_use_previous_corrections_and_keep_non_targets(monkeypatch, tmp_path):
@@ -388,7 +491,8 @@ def test_verification_removes_old_asr_timestamps_before_both_requests(monkeypatc
         rows = json.loads(prompt)["lines"]
         assert rows[0]["asr"] == rows[0]["current"] == "one two"
         return json.dumps({"lines": [dict(id=r["id"], text=r["current"], uncertain=True,
-                                         reason="No change", page=0) for r in rows]})
+                                         reason="No change", page=0, actor=r["actor"],
+                                         actor_uncertain=True, actor_reason="No match", actor_page=0) for r in rows]})
 
     monkeypatch.setattr(initial, "_review_request", request)
     initial.verify_with_pdf(subs, pdf_file(tmp_path), "ja", tmp_path)
@@ -487,7 +591,8 @@ def test_truncated_requests_are_billed_before_rejection(monkeypatch, engine):
     assert usage.total_tokens == 75 and usage.cost_usd == .3
 
 
-def test_cli_chains_initial_workflow_before_annotations_and_counts_costs_once(monkeypatch, tmp_path):
+@pytest.mark.parametrize("lang", ["ja", "zh"])
+def test_cli_chains_initial_workflow_before_annotations_and_counts_costs_once(monkeypatch, tmp_path, lang):
     source = tmp_path / "input.ass"
     episode().save(str(source))
     original_bytes = source.read_bytes()
@@ -525,19 +630,20 @@ def test_cli_chains_initial_workflow_before_annotations_and_counts_costs_once(mo
 
     def final_review(source_path, translations, output_path, **kwargs):
         calls.append("final")
-        assert Path(source_path).name == "annotated.ass"
+        assert Path(source_path) == tmp_path / f"input_{lang}_asr.ass"
         assert core.pysubs2.load(source_path)[0].text == "corrected twice"
         return dict(prompt_tokens=5, completion_tokens=2, cost_usd=.1, elapsed_seconds=.01)
 
     monkeypatch.setattr(final_pass, "run_final_pass", final_review)
     core.main([str(source), "video.mkv", "--asr-engine", "purfview", "--reference-pdf", str(pdf),
-               "--lang", "ja", "--series", "Series", "--source-type", "None", "--models", "",
+               "--lang", lang, "--series", "Series", "--source-type", "None", "--models", "",
                "--do-roman-morph", "--html", "--final-pass"])
     assert calls == ["asr", "verify", "annotations", "translations", "final", "html"]
     assert len(persisted) == 2
     assert persisted[0]["verification_gpt"].cost_usd == .2
     assert set(persisted[1]) == {"final_pass"}
     assert source.read_bytes() == original_bytes
+    assert not list(tmp_path.glob("*_initial_*/annotated.ass"))
 
 
 def test_cli_persists_verification_costs_when_verification_fails(monkeypatch, tmp_path):

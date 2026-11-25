@@ -143,7 +143,7 @@ class TranscriberPanel(ttk.Frame):
         self.purfview_entry.pack(side="left", fill="x", expand=True, padx=6)
         self.purfview_btn = ttk.Button(exe_row, text="Browse", command=self._pick_purfview)
         self.purfview_btn.pack(side="left")
-        ttk.Checkbutton(initial, text="Verify episode PDF: OpenAI, then Gemini (translation models)",
+        ttk.Checkbutton(initial, text="Verify transcript and actors against PDF: OpenAI, then Gemini",
                         variable=self.v_verify_pdf, command=self._toggle_video).pack(anchor="w", padx=8)
         pdf_row = ttk.Frame(initial); pdf_row.pack(fill="x", padx=8, pady=3)
         ttk.Label(pdf_row, text="Episode PDF").pack(side="left")
